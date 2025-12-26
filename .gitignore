@@ -1,0 +1,141 @@
+# ===========================
+# Python
+# ===========================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# ===========================
+# Virtual Environments
+# ===========================
+venv/
+.venv/
+env/
+.env/
+ENV/
+env.bak/
+venv.bak/
+
+# ===========================
+# IDE / Editors
+# ===========================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+.settings/
+*.sublime-project
+*.sublime-workspace
+
+# ===========================
+# Jupyter Notebooks
+# ===========================
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# ===========================
+# Environment Variables
+# ===========================
+.env
+.env.local
+.env.*.local
+*.env
+
+# ===========================
+# OS Generated Files
+# ===========================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# ===========================
+# ML / Data Science Specific
+# ===========================
+
+# Model weights and checkpoints (large files)
+*.pth
+*.pt
+*.h5
+*.hdf5
+*.ckpt
+*.onnx
+*.safetensors
+*.pkl
+*.pickle
+
+# Datasets and raw data (large directories)
+raw_data/
+data/
+datasets/
+
+# Model outputs and predictions
+outputs/
+
+# Temporary wheels
+temp_wheels/
+
+# TensorBoard logs
+runs/
+logs/
+tensorboard/
+
+# Weights & Biases
+wandb/
+
+# MLflow
+mlruns/
+
+# ===========================
+# Colab / Notebooks
+# ===========================
+colab/
+
+# ===========================
+# Testing
+# ===========================
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# ===========================
+# Documentation
+# ===========================
+docs/_build/
+site/
+
+# ===========================
+# Misc
+# ===========================
+*.log
+*.tmp
+*.temp
+*.bak
+*.cache
+.cache/
