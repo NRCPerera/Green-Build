@@ -21,16 +21,10 @@ from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 from skimage.morphology import skeletonize
-
-# Import model architectures
 import segmentation_models_pytorch as smp
 from torchvision.models.detection import maskrcnn_resnet50_fpn
 from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
 from torchvision.models.detection.mask_rcnn import MaskRCNNPredictor
-
-# ============================================================================
-# Configuration
-# ============================================================================
 
 # Model paths
 UNET_MODEL_PATH = "./models/best_unet_cubicasa.pth"
@@ -57,15 +51,9 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# ============================================================================
-# Global Model Storage
-# ============================================================================
 
 models: Dict[str, nn.Module] = {}
 
-# ============================================================================
-# Response Schemas
-# ============================================================================
 
 class ItemCount(BaseModel):
     """Count of detected items by type."""
@@ -103,9 +91,6 @@ class ErrorResponse(BaseModel):
     error_code: str
 
 
-# ============================================================================
-# Model Loading Utilities
-# ============================================================================
 
 def load_unet_model(model_path: str, device: torch.device) -> nn.Module:
     """
@@ -123,16 +108,15 @@ def load_unet_model(model_path: str, device: torch.device) -> nn.Module:
     # Initialize U-Net++ with EfficientNet-B4 encoder
     model = smp.UnetPlusPlus(
         encoder_name="efficientnet-b4",
-        encoder_weights=None,  # We're loading pretrained weights
+        encoder_weights=None, 
         in_channels=3,
-        classes=1,  # Binary segmentation for walls
-        activation=None  # Raw logits for flexibility
+        classes=1,  
+        activation=None  
     )
     
     try:
         state_dict = torch.load(model_path, map_location=device, weights_only=True)
         
-        # Handle potential DataParallel wrapper
         if list(state_dict.keys())[0].startswith("module."):
             state_dict = {k.replace("module.", ""): v for k, v in state_dict.items()}
         
@@ -153,23 +137,12 @@ def load_unet_model(model_path: str, device: torch.device) -> nn.Module:
 
 
 def get_mask_rcnn_model(num_classes: int) -> nn.Module:
-    """
-    Create a Mask R-CNN model with custom number of classes.
-    
-    Args:
-        num_classes: Number of classes (including background)
-        
-    Returns:
-        Mask R-CNN model architecture
-    """
-    # Load pretrained Mask R-CNN
+  
     model = maskrcnn_resnet50_fpn(pretrained=False)
     
-    # Replace the box predictor
     in_features = model.roi_heads.box_predictor.cls_score.in_features
     model.roi_heads.box_predictor = FastRCNNPredictor(in_features, num_classes)
     
-    # Replace the mask predictor
     in_features_mask = model.roi_heads.mask_predictor.conv5_mask.in_channels
     hidden_layer = 256
     model.roi_heads.mask_predictor = MaskRCNNPredictor(
@@ -182,16 +155,7 @@ def get_mask_rcnn_model(num_classes: int) -> nn.Module:
 
 
 def load_rcnn_model(model_path: str, device: torch.device) -> nn.Module:
-    """
-    Load the Mask R-CNN model for door/window detection.
-    
-    Args:
-        model_path: Path to the pretrained model weights
-        device: Torch device (CPU/CUDA)
-        
-    Returns:
-        Loaded Mask R-CNN model in eval mode
-    """
+
     logger.info(f"Loading Mask R-CNN model from {model_path}")
     
     model = get_mask_rcnn_model(NUM_RCNN_CLASSES)
@@ -199,7 +163,6 @@ def load_rcnn_model(model_path: str, device: torch.device) -> nn.Module:
     try:
         state_dict = torch.load(model_path, map_location=device, weights_only=True)
         
-        # Handle potential DataParallel wrapper
         if list(state_dict.keys())[0].startswith("module."):
             state_dict = {k.replace("module.", ""): v for k, v in state_dict.items()}
         
@@ -219,17 +182,8 @@ def load_rcnn_model(model_path: str, device: torch.device) -> nn.Module:
         raise
 
 
-# ============================================================================
-# Image Preprocessing
-# ============================================================================
-
 def get_preprocessing_transform() -> A.Compose:
-    """
-    Create albumentations preprocessing pipeline.
-    
-    Returns:
-        Albumentations Compose transform
-    """
+
     return A.Compose([
         A.Resize(height=INFERENCE_SIZE[0], width=INFERENCE_SIZE[1]),
         A.Normalize(
@@ -241,79 +195,40 @@ def get_preprocessing_transform() -> A.Compose:
 
 
 def preprocess_image(image: np.ndarray) -> Tuple[torch.Tensor, np.ndarray]:
-    """
-    Preprocess image for model inference.
-    
-    Args:
-        image: Input BGR image from OpenCV
-        
-    Returns:
-        Tuple of (preprocessed tensor, resized original image)
-    """
-    # Convert BGR to RGB
+
     image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     
-    # Apply albumentations transforms
     transform = get_preprocessing_transform()
     transformed = transform(image=image_rgb)
     image_transformed = transformed["image"]
     
-    # Also get resized image without normalization for visualization
     resize_transform = A.Resize(height=INFERENCE_SIZE[0], width=INFERENCE_SIZE[1])
     resized = resize_transform(image=image_rgb)["image"]
     
-    # Convert to tensor: HWC -> CHW
     image_tensor = torch.from_numpy(image_transformed).permute(2, 0, 1).float()
     
     return image_tensor, resized
 
 
 def preprocess_for_rcnn(image: np.ndarray) -> torch.Tensor:
-    """
-    Preprocess image specifically for Mask R-CNN.
-    Mask R-CNN expects images in [0, 1] range, not normalized.
-    
-    Args:
-        image: Input BGR image from OpenCV
-        
-    Returns:
-        Preprocessed tensor for Mask R-CNN
-    """
-    # Convert BGR to RGB
+ 
     image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     
-    # Resize
+    
     image_resized = cv2.resize(image_rgb, INFERENCE_SIZE)
     
-    # Convert to tensor and normalize to [0, 1]
     image_tensor = torch.from_numpy(image_resized).permute(2, 0, 1).float() / 255.0
     
     return image_tensor
 
 
-# ============================================================================
-# Inference Functions
-# ============================================================================
-
 def run_unet_inference(model: nn.Module, image_tensor: torch.Tensor) -> np.ndarray:
-    """
-    Run U-Net++ inference to get wall segmentation mask.
-    
-    Args:
-        model: Loaded U-Net++ model
-        image_tensor: Preprocessed image tensor
-        
-    Returns:
-        Binary wall segmentation mask
-    """
+
     with torch.no_grad():
-        # Add batch dimension
         input_tensor = image_tensor.unsqueeze(0).to(DEVICE)
         
-        # Forward pass
         output = model(input_tensor)
         
-        # Apply sigmoid and threshold
         mask = torch.sigmoid(output).squeeze().cpu().numpy()
         binary_mask = (mask > 0.5).astype(np.uint8)
         
@@ -324,24 +239,12 @@ def run_rcnn_inference(
     model: nn.Module, 
     image_tensor: torch.Tensor
 ) -> List[Dict[str, Any]]:
-    """
-    Run Mask R-CNN inference to detect doors and windows.
-    
-    Args:
-        model: Loaded Mask R-CNN model
-        image_tensor: Preprocessed image tensor
-        
-    Returns:
-        List of detection dictionaries with boxes, labels, scores, and masks
-    """
+
     with torch.no_grad():
-        # Add batch dimension and move to device
         input_tensor = image_tensor.unsqueeze(0).to(DEVICE)
         
-        # Forward pass
         outputs = model(input_tensor)
         
-    # Process detections
     detections = []
     if len(outputs) > 0:
         output = outputs[0]
@@ -351,7 +254,6 @@ def run_rcnn_inference(
         scores = output["scores"].cpu().numpy()
         masks = output["masks"].cpu().numpy()
         
-        # Filter by confidence threshold
         for i, score in enumerate(scores):
             if score >= DETECTION_CONFIDENCE_THRESHOLD:
                 detections.append({
@@ -364,16 +266,12 @@ def run_rcnn_inference(
     return detections
 
 
-# ============================================================================
-# Quantity Calculation Functions
-# ============================================================================
-
 def calculate_wall_length(binary_mask: np.ndarray, scale_ppm: float) -> float:
     """
-    Calculate wall centerline length using skeletonization.
+    Calculate wall centerline length from binary mask.
     
     Args:
-        binary_mask: Binary segmentation mask of walls
+        binary_mask: Binary wall segmentation mask
         scale_ppm: Pixels per meter scale factor
         
     Returns:
@@ -409,7 +307,7 @@ def calculate_detection_areas(
         scale_ppm: Pixels per meter scale factor
         
     Returns:
-        Tuple of (total deduction area in m², item counts)
+        Tuple of (total deduction area in square meters, item counts)
     """
     total_area_m2 = 0.0
     door_count = 0
@@ -434,10 +332,10 @@ def calculate_detection_areas(
         # Count by type
         if label == 1:  # Door
             door_count += 1
-            logger.info(f"Door detected: {width_m:.2f}m x {height_m:.2f}m = {area_m2:.2f}m²")
+            logger.info(f"Door detected: {width_m:.2f}m x {height_m:.2f}m = {area_m2:.2f} sq.m")
         elif label == 2:  # Window
             window_count += 1
-            logger.info(f"Window detected: {width_m:.2f}m x {height_m:.2f}m = {area_m2:.2f}m²")
+            logger.info(f"Window detected: {width_m:.2f}m x {height_m:.2f}m = {area_m2:.2f} sq.m")
     
     item_counts = ItemCount(doors=door_count, windows=window_count)
     
@@ -477,9 +375,9 @@ def compute_quantity_takeoff(
     logger.info(f"Quantity Takeoff Summary:")
     logger.info(f"  - Wall Length: {wall_length_m:.2f}m")
     logger.info(f"  - Wall Height: {wall_height:.2f}m")
-    logger.info(f"  - Gross Area: {wall_gross_area_m2:.2f}m²")
-    logger.info(f"  - Deductions: {deductions_area_m2:.2f}m²")
-    logger.info(f"  - Net Area: {wall_net_area_m2:.2f}m²")
+    logger.info(f"  - Gross Area: {wall_gross_area_m2:.2f} sq.m")
+    logger.info(f"  - Deductions: {deductions_area_m2:.2f} sq.m")
+    logger.info(f"  - Net Area: {wall_net_area_m2:.2f} sq.m")
     logger.info(f"  - Doors: {item_counts.doors}, Windows: {item_counts.windows}")
     
     return QuantityTakeoffResponse(
