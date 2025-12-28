@@ -1,14 +1,3 @@
-/**
- * Green Build - Quantity Takeoff System
- * 
- * Professional construction estimation interface using AI-powered analysis.
- * 
- * Architecture: MVC
- * - Models: Data structures (src/models)
- * - Views: UI components (src/views)
- * - Controllers: Logic hooks (src/controllers)
- */
-
 import { Form } from 'antd';
 import { Layout, ConfigProvider, Row, Col, message } from 'antd';
 import customTheme from './views/theme';
