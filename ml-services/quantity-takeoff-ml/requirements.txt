@@ -4,6 +4,10 @@
 # Deep Learning
 torch>=2.0.0
 torchvision>=0.15.0
+segmentation-models-pytorch>=0.3.3
+
+# Scientific Computing
+scikit-image>=0.21.0
 
 # Image Processing
 opencv-python>=4.8.0
