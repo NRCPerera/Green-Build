@@ -1,6 +1,8 @@
-/* Green Build - Quantity Takeoff System
- * ======================================
- * Professional Construction Estimation UI
+/**
+ * Green Build - Quantity Takeoff System
+ * 
+ * Main stylesheet for the construction estimation interface.
+ * Uses CSS custom properties for theme consistency and easy maintenance.
  */
 
 /* Google Fonts Import */
@@ -15,20 +17,20 @@
   --warning-color: #faad14;
   --error-color: #ff4d4f;
   --info-color: #1890ff;
-  
+
   --bg-primary: #0f172a;
   --bg-secondary: #1e293b;
   --bg-tertiary: #334155;
   --bg-card: rgba(30, 41, 59, 0.8);
-  
+
   --text-primary: #f1f5f9;
   --text-secondary: #94a3b8;
   --text-muted: #64748b;
-  
+
   --border-color: rgba(0, 217, 255, 0.2);
   --border-radius: 12px;
   --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  
+
   --glow-primary: 0 0 20px rgba(0, 217, 255, 0.3);
   --glow-success: 0 0 20px rgba(82, 196, 26, 0.3);
   --shadow-card: 0 4px 24px rgba(0, 0, 0, 0.4);
@@ -41,7 +43,8 @@
   box-sizing: border-box;
 }
 
-html, body {
+html,
+body {
   height: 100%;
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -50,7 +53,7 @@ html, body {
 
 body {
   background: var(--bg-primary);
-  background-image: 
+  background-image:
     radial-gradient(ellipse at 20% 0%, rgba(0, 217, 255, 0.15) 0%, transparent 50%),
     radial-gradient(ellipse at 80% 100%, rgba(124, 58, 237, 0.1) 0%, transparent 50%),
     linear-gradient(180deg, var(--bg-primary) 0%, #0c1222 100%);
@@ -252,6 +255,7 @@ body {
     opacity: 0;
     transform: translateY(20px);
   }
+
   to {
     opacity: 1;
     transform: translateY(0);
@@ -287,7 +291,7 @@ body {
   background: transparent !important;
 }
 
-.boq-table .ant-table-thead > tr > th {
+.boq-table .ant-table-thead>tr>th {
   background: rgba(0, 217, 255, 0.1) !important;
   border-bottom: 1px solid var(--border-color) !important;
   color: var(--primary-color) !important;
@@ -297,12 +301,12 @@ body {
   letter-spacing: 0.5px;
 }
 
-.boq-table .ant-table-tbody > tr > td {
+.boq-table .ant-table-tbody>tr>td {
   border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
   padding: 16px 12px !important;
 }
 
-.boq-table .ant-table-tbody > tr:hover > td {
+.boq-table .ant-table-tbody>tr:hover>td {
   background: rgba(0, 217, 255, 0.05) !important;
 }
 
@@ -386,7 +390,7 @@ body {
 }
 
 /* Ant Design Overrides */
-.ant-form-item-label > label {
+.ant-form-item-label>label {
   color: var(--text-primary) !important;
   font-weight: 500;
 }
@@ -446,11 +450,11 @@ body {
   .app-header {
     padding: 0 16px;
   }
-  
+
   .app-content {
     padding: 16px;
   }
-  
+
   .header-nav {
     display: none;
   }
@@ -460,7 +464,7 @@ body {
   .logo-text {
     font-size: 18px;
   }
-  
+
   .summary-card .ant-statistic-content {
     font-size: 20px !important;
   }
@@ -468,18 +472,24 @@ body {
 
 /* Animations */
 @keyframes pulse {
-  0%, 100% {
+
+  0%,
+  100% {
     opacity: 1;
   }
+
   50% {
     opacity: 0.6;
   }
 }
 
 @keyframes glow {
-  0%, 100% {
+
+  0%,
+  100% {
     box-shadow: 0 0 5px var(--primary-color);
   }
+
   50% {
     box-shadow: 0 0 20px var(--primary-color);
   }
