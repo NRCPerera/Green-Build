@@ -29,6 +29,7 @@ import {
     SafetyCertificateOutlined
 } from '@ant-design/icons';
 import { generateBOQData } from '../../models/boqModel';
+import { generateManualBOQData } from '../../models/manualInputModel';
 import { getTableColumns } from './tableConfig.jsx';
 
 const { Title, Text, Paragraph } = Typography;
@@ -42,8 +43,22 @@ const { Title, Text, Paragraph } = Typography;
  * @param {string|null} props.error - Error message if analysis failed
  * @param {Function} props.onErrorClose - Handler for closing error alert
  */
-const ResultsPanel = ({ results, loading, error, onErrorClose }) => {
+const ResultsPanel = ({ results, loading, error, onErrorClose, manualInputs, manualCosts, hasManualInputs }) => {
     const columns = getTableColumns();
+
+    // Combine ML-detected items with manually-input items
+    const getCombinedBOQData = () => {
+        const mlItems = results ? generateBOQData(results) : [];
+        const manualItems = hasManualInputs ? generateManualBOQData(manualInputs) : [];
+        return [...mlItems, ...manualItems];
+    };
+
+    // Calculate combined total
+    const getCombinedTotal = () => {
+        const mlTotal = results?.costs?.estimates?.basic_finish || 0;
+        const manualTotal = manualCosts?.total || 0;
+        return mlTotal + manualTotal;
+    };
 
     return (
         <>
@@ -78,6 +93,17 @@ const ResultsPanel = ({ results, loading, error, onErrorClose }) => {
             {/* Results display */}
             {results && !loading && (
                 <>
+                    {/* Warning if image may not be a valid floor plan */}
+                    {results.quantities.warning && (
+                        <Alert
+                            message="Image Validation Warning"
+                            description={results.quantities.warning}
+                            type="warning"
+                            showIcon
+                            style={{ marginBottom: '24px' }}
+                        />
+                    )}
+
                     {/* Summary statistics cards */}
                     <Card className="summary-card glass-card" style={{ marginBottom: '24px' }}>
                         <Row gutter={[16, 16]}>
@@ -137,10 +163,11 @@ const ResultsPanel = ({ results, loading, error, onErrorClose }) => {
                     >
                         <Table
                             columns={columns}
-                            dataSource={generateBOQData(results)}
+                            dataSource={getCombinedBOQData()}
                             pagination={false}
                             size="middle"
                             className="boq-table"
+                            rowClassName={(record) => record.type === 'manual' ? 'manual-item-row' : ''}
                             summary={() => (
                                 <Table.Summary fixed>
                                     <Table.Summary.Row className="summary-row">
