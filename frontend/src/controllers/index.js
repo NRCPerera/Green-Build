@@ -6,3 +6,4 @@
 
 export { default as useFloorPlanUpload } from './useFloorPlanUpload';
 export { default as useFileUpload } from './useFileUpload';
+export { default as useManualInput } from './useManualInput';

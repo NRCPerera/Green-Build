@@ -1,8 +1,8 @@
 import { Form } from 'antd';
 import { Layout, ConfigProvider, Row, Col, message } from 'antd';
 import customTheme from './views/theme';
-import { Header, Footer, UploadForm, ResultsPanel } from './views/components';
-import { useFloorPlanUpload, useFileUpload } from './controllers';
+import { Header, Footer, UploadForm, ResultsPanel, ManualInputPanel } from './views/components';
+import { useFloorPlanUpload, useFileUpload, useManualInput } from './controllers';
 
 const { Content } = Layout;
 
@@ -26,6 +26,13 @@ function App() {
     beforeUpload,
     getFile
   } = useFileUpload();
+
+  const {
+    inputs: manualInputs,
+    updateInput: updateManualInput,
+    costs: manualCosts,
+    hasInputs: hasManualInputs
+  } = useManualInput();
 
   const handleSubmit = async (values) => {
     if (!hasFile) {
@@ -54,6 +61,11 @@ function App() {
                   beforeUpload={beforeUpload}
                   onSubmit={handleSubmit}
                 />
+                <ManualInputPanel
+                  inputs={manualInputs}
+                  onUpdate={updateManualInput}
+                  costs={manualCosts}
+                />
               </Col>
               <Col xs={24} lg={14} xl={16}>
                 <ResultsPanel
@@ -61,6 +73,9 @@ function App() {
                   loading={loading}
                   error={error}
                   onErrorClose={clearError}
+                  manualInputs={manualInputs}
+                  manualCosts={manualCosts}
+                  hasManualInputs={hasManualInputs}
                 />
               </Col>
             </Row>

@@ -83,6 +83,10 @@ class QuantityTakeoffResponse(BaseModel):
         ..., 
         description="Count of detected doors and windows"
     )
+    warning: str = Field(
+        default=None,
+        description="Warning message if the image may not be a valid floor plan"
+    )
 
 
 class ErrorResponse(BaseModel):
@@ -266,7 +270,34 @@ def run_rcnn_inference(
     return detections
 
 
-def calculate_wall_length(binary_mask: np.ndarray, scale_ppm: float) -> float:
+def validate_floor_plan_mask(binary_mask: np.ndarray) -> Tuple[bool, float]:
+    """
+    Validate if the detected mask looks like a valid floor plan.
+    
+    A valid floor plan typically has wall pixels covering 2-30% of the image.
+    Too little suggests no floor plan, too much suggests noise or wrong image type.
+    
+    Args:
+        binary_mask: Binary wall segmentation mask
+        
+    Returns:
+        Tuple of (is_valid, coverage_percentage)
+    """
+    total_pixels = binary_mask.size
+    wall_pixels = binary_mask.sum()
+    coverage = (wall_pixels / total_pixels) * 100
+    
+    # Floor plans typically have 2-30% wall coverage
+    # Less than 1% suggests no floor plan detected
+    # More than 40% suggests noise or wrong image type
+    is_valid = 1.0 <= coverage <= 40.0
+    
+    logger.info(f"Mask coverage: {coverage:.2f}% (valid: {is_valid})")
+    
+    return is_valid, coverage
+
+
+def calculate_wall_length(binary_mask: np.ndarray, scale_ppm: float) -> Tuple[float, bool]:
     """
     Calculate wall centerline length from binary mask.
     
@@ -275,11 +306,17 @@ def calculate_wall_length(binary_mask: np.ndarray, scale_ppm: float) -> float:
         scale_ppm: Pixels per meter scale factor
         
     Returns:
-        Wall length in meters
+        Tuple of (wall length in meters, is_valid_floor_plan)
     """
     if binary_mask.sum() == 0:
-        logger.warning("Empty wall mask detected")
-        return 0.0
+        logger.warning("Empty wall mask detected - image may not be a floor plan")
+        return 0.0, False
+    
+    # Validate if this looks like a floor plan
+    is_valid, coverage = validate_floor_plan_mask(binary_mask)
+    
+    if not is_valid:
+        logger.warning(f"Image may not be a valid floor plan (coverage: {coverage:.1f}%)")
     
     # Skeletonize the mask to get centerline
     skeleton = skeletonize(binary_mask.astype(bool))
@@ -292,7 +329,7 @@ def calculate_wall_length(binary_mask: np.ndarray, scale_ppm: float) -> float:
     
     logger.info(f"Wall skeleton pixels: {skeleton_pixels}, Length: {wall_length_m:.2f}m")
     
-    return wall_length_m
+    return wall_length_m, is_valid
 
 
 def calculate_detection_areas(
@@ -360,8 +397,13 @@ def compute_quantity_takeoff(
     Returns:
         QuantityTakeoffResponse with all calculated values
     """
-    # Calculate wall centerline length
-    wall_length_m = calculate_wall_length(wall_mask, scale_ppm)
+    # Calculate wall centerline length and validate if it looks like a floor plan
+    wall_length_m, is_valid_floor_plan = calculate_wall_length(wall_mask, scale_ppm)
+    
+    # Generate warning if image doesn't look like a floor plan
+    warning_message = None
+    if not is_valid_floor_plan:
+        warning_message = "The uploaded image may not be a valid floor plan. Results may be inaccurate."
     
     # Calculate gross wall surface area
     wall_gross_area_m2 = wall_length_m * wall_height
@@ -379,13 +421,16 @@ def compute_quantity_takeoff(
     logger.info(f"  - Deductions: {deductions_area_m2:.2f} sq.m")
     logger.info(f"  - Net Area: {wall_net_area_m2:.2f} sq.m")
     logger.info(f"  - Doors: {item_counts.doors}, Windows: {item_counts.windows}")
+    if warning_message:
+        logger.warning(f"  - Warning: {warning_message}")
     
     return QuantityTakeoffResponse(
         wall_total_length_m=round(wall_length_m, 3),
         wall_gross_surface_area_m2=round(wall_gross_area_m2, 3),
         deductions_area_m2=round(deductions_area_m2, 3),
         wall_net_surface_area_m2=round(wall_net_area_m2, 3),
-        item_counts=item_counts
+        item_counts=item_counts,
+        warning=warning_message
     )
 
 

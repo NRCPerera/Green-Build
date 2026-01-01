@@ -498,3 +498,33 @@ body {
 .processing-glow {
   animation: glow 2s ease-in-out infinite;
 }
+
+/* Manual Input Panel Styles */
+.manual-input-card {
+  margin-top: 16px;
+}
+
+.manual-input-card .ant-collapse {
+  background: transparent;
+}
+
+.manual-input-card .ant-collapse-header {
+  color: var(--text-primary) !important;
+  padding: 12px 0 !important;
+}
+
+.manual-input-card .ant-collapse-content {
+  background: transparent !important;
+}
+
+.manual-input-card .ant-input-number {
+  width: 100%;
+}
+
+.manual-item-row {
+  background: rgba(124, 58, 237, 0.1) !important;
+}
+
+.manual-item-row:hover td {
+  background: rgba(124, 58, 237, 0.15) !important;
+}
