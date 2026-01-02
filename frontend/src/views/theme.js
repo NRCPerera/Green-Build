@@ -1,10 +1,3 @@
-/**
- * Application Theme Configuration
- * 
- * Defines the visual theme for the Ant Design component library.
- * Uses a dark theme with cyan accent colors for a modern appearance.
- */
-
 import { theme } from 'antd';
 
 const customTheme = {

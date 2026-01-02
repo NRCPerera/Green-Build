@@ -1,12 +1,3 @@
-/**
- * =============================================================================
- * SUSTAINABILITY MODULE VIEW
- * =============================================================================
- * 
- * Module 3: Lifecycle & Carbon Analysis
- * REQUIRES: Quantity data from Module 1
- */
-
 import { useState } from 'react';
 import useSustainabilityController from '../../../controllers/useSustainabilityController';
 

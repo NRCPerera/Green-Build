@@ -1,53 +1,26 @@
-/**
- * =============================================================================
- * SUSTAINABILITY CONTROLLER
- * =============================================================================
- * 
- * Business logic hook for Module 3: Sustainability (Lifecycle & Carbon).
- * Reads quantityData from global store (set by Module 1).
- */
-
 import { useState, useCallback } from 'react';
 import useProjectStore from '../models/useProjectStore';
 import { sustainabilityApi, parseApiError } from '../models/api';
 
-/**
- * Custom hook for Sustainability module
- * 
- * @returns {Object} Controller state and methods
- */
 const useSustainabilityController = () => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
     const [materials, setMaterials] = useState([]);
 
-    // Global store
     const quantityData = useProjectStore((state) => state.quantityData);
     const sustainabilityResult = useProjectStore((state) => state.sustainabilityResult);
     const setSustainabilityResult = useProjectStore((state) => state.setSustainabilityResult);
 
     const hasQuantityData = quantityData !== null;
 
-    /**
-     * Add a material to the list
-     * @param {Object} material - Material object
-     */
     const addMaterial = useCallback((material) => {
         setMaterials((prev) => [...prev, { ...material, id: Date.now() }]);
     }, []);
 
-    /**
-     * Remove a material from the list
-     * @param {number} id - Material ID
-     */
     const removeMaterial = useCallback((id) => {
         setMaterials((prev) => prev.filter((m) => m.id !== id));
     }, []);
 
-    /**
-     * Calculate sustainability metrics
-     * @param {Object} formValues - Form input values
-     */
     const calculateSustainability = useCallback(async (formValues) => {
         if (!hasQuantityData) {
             setError('Quantity data is required. Complete Module 1 first.');
@@ -81,7 +54,6 @@ const useSustainabilityController = () => {
             const errorMessage = parseApiError(err);
             setError(errorMessage);
 
-            // Generate mock result for demo
             const mockResult = generateMockSustainabilityResult(formValues, quantityData, materials);
             setSustainabilityResult(mockResult);
             return { success: true, data: mockResult, mock: true };
@@ -90,19 +62,11 @@ const useSustainabilityController = () => {
         }
     }, [hasQuantityData, quantityData, materials, setSustainabilityResult]);
 
-    /**
-     * Clear results
-     */
     const clearResults = useCallback(() => {
         useProjectStore.getState().resetModule('sustainability');
         setError(null);
     }, []);
 
-    /**
-     * Format carbon value for display
-     * @param {number} carbonKg - Carbon in kg
-     * @returns {string} Formatted string
-     */
     const formatCarbon = (carbonKg) => {
         if (carbonKg >= 1000) {
             return `${(carbonKg / 1000).toFixed(2)} t CO₂e`;
@@ -110,11 +74,6 @@ const useSustainabilityController = () => {
         return `${carbonKg.toFixed(2)} kg CO₂e`;
     };
 
-    /**
-     * Format currency for display
-     * @param {number} amount - Amount
-     * @returns {string} Formatted string
-     */
     const formatCurrency = (amount) => {
         return new Intl.NumberFormat('en-US', {
             style: 'currency',
@@ -140,7 +99,6 @@ const useSustainabilityController = () => {
     };
 };
 
-// Mock result generator
 function generateMockSustainabilityResult(formValues, quantityData, materials) {
     const wallArea = quantityData?.wallNetSurfaceAreaM2 || 100;
     const totalMaterialCarbon = materials.reduce((sum, m) => sum + (m.quantity * 0.5), 0);

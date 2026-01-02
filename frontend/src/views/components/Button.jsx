@@ -1,22 +1,3 @@
-/**
- * =============================================================================
- * REUSABLE BUTTON COMPONENT
- * =============================================================================
- */
-
-/**
- * Button Component with Tailwind CSS styling
- * 
- * @param {Object} props
- * @param {React.ReactNode} props.children - Button content
- * @param {'primary'|'secondary'|'danger'|'ghost'} props.variant - Button style
- * @param {'sm'|'md'|'lg'} props.size - Button size
- * @param {boolean} props.loading - Loading state
- * @param {boolean} props.disabled - Disabled state
- * @param {boolean} props.fullWidth - Full width button
- * @param {string} props.className - Additional Tailwind classes
- * @param {Function} props.onClick - Click handler
- */
 const Button = ({
     children,
     variant = 'primary',

@@ -1,19 +1,3 @@
-/**
- * =============================================================================
- * REUSABLE TABLE COMPONENT
- * =============================================================================
- */
-
-/**
- * Table Component with Tailwind CSS styling
- * 
- * @param {Object} props
- * @param {Array} props.columns - Column definitions [{key, title, render?}]
- * @param {Array} props.data - Data array
- * @param {string} props.className - Additional Tailwind classes
- * @param {boolean} props.striped - Striped rows
- * @param {boolean} props.hoverable - Hover effect on rows
- */
 const Table = ({
     columns = [],
     data = [],

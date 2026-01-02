@@ -1,12 +1,3 @@
-/**
- * =============================================================================
- * DELAY FORECAST MODULE VIEW
- * =============================================================================
- * 
- * Module 4: Timeline & Delays
- * REQUIRES: Quantity data from Module 1
- */
-
 import { useState } from 'react';
 import useDelayController from '../../../controllers/useDelayController';
 
