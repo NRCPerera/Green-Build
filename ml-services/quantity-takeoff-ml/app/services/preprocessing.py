@@ -1,9 +1,3 @@
-"""
-Preprocessing Service
-=====================
-Image preprocessing utilities for ML model inference.
-"""
-
 from typing import Tuple
 
 import albumentations as A
@@ -15,12 +9,6 @@ from ..config import INFERENCE_SIZE
 
 
 def get_preprocessing_transform() -> A.Compose:
-    """
-    Get the preprocessing transform pipeline for U-Net.
-    
-    Returns:
-        Albumentations compose transform
-    """
     return A.Compose([
         A.Resize(height=INFERENCE_SIZE[0], width=INFERENCE_SIZE[1]),
         A.Normalize(
@@ -32,15 +20,6 @@ def get_preprocessing_transform() -> A.Compose:
 
 
 def preprocess_image(image: np.ndarray) -> Tuple[torch.Tensor, np.ndarray]:
-    """
-    Preprocess image for U-Net inference.
-    
-    Args:
-        image: OpenCV BGR image
-        
-    Returns:
-        Tuple of (preprocessed tensor, resized image)
-    """
     image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     
     transform = get_preprocessing_transform()
@@ -56,15 +35,7 @@ def preprocess_image(image: np.ndarray) -> Tuple[torch.Tensor, np.ndarray]:
 
 
 def preprocess_for_rcnn(image: np.ndarray) -> torch.Tensor:
-    """
-    Preprocess image for Mask R-CNN inference.
-    
-    Args:
-        image: OpenCV BGR image
-        
-    Returns:
-        Preprocessed tensor
-    """
+
     image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     
     image_resized = cv2.resize(image_rgb, INFERENCE_SIZE)

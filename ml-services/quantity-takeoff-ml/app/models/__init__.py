@@ -1,7 +1,3 @@
-"""
-Models Package - Pydantic schemas for API requests and responses.
-"""
-
 from .schemas import (
     ItemCount,
     Room,

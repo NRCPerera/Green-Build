@@ -1,9 +1,3 @@
-"""
-Quantity Takeoff Service
-========================
-Core business logic for quantity takeoff calculations.
-"""
-
 import logging
 from typing import Any, Dict, List, Tuple
 
@@ -17,33 +11,18 @@ logger = logging.getLogger(__name__)
 
 
 def validate_floor_plan_mask(binary_mask: np.ndarray) -> Tuple[bool, float]:
-    """
-    Validate if the detected mask looks like a valid floor plan.
-    
-    A valid floor plan typically has wall pixels covering 2-30% of the image.
-    Note: The U-Net model may output inverted masks (space=1, walls=0) for some images.
-    
-    Args:
-        binary_mask: Binary wall segmentation mask
-        
-    Returns:
-        Tuple of (is_valid, coverage_percentage)
-    """
+   
     total_pixels = binary_mask.size
     wall_pixels = binary_mask.sum()
     coverage = (wall_pixels / total_pixels) * 100
     
-    # Check if mask appears to be inverted (coverage > 50%)
-    # In this case, use the inverted coverage for validation
     if coverage > 50:
-        # Mask is likely inverted (space=1, walls=0)
         effective_coverage = 100 - coverage
         is_inverted = True
     else:
         effective_coverage = coverage
         is_inverted = False
     
-    # Valid floor plans typically have walls covering 1-40% of the image
     is_valid = 0.5 <= effective_coverage <= 45.0
     
     if is_inverted:
@@ -55,21 +34,12 @@ def validate_floor_plan_mask(binary_mask: np.ndarray) -> Tuple[bool, float]:
 
 
 def calculate_wall_length(binary_mask: np.ndarray, scale_ppm: float) -> Tuple[float, bool]:
-    """
-    Calculate wall centerline length from binary mask.
-    
-    Args:
-        binary_mask: Binary wall segmentation mask
-        scale_ppm: Pixels per meter scale factor
-        
-    Returns:
-        Tuple of (wall length in meters, is_valid_floor_plan)
-    """
+ 
     if binary_mask.sum() == 0:
         logger.warning("Empty wall mask detected - image may not be a floor plan")
         return 0.0, False
     
-    # Validate if this looks like a floor plan
+
     is_valid, coverage = validate_floor_plan_mask(binary_mask)
     
     if not is_valid:
@@ -78,7 +48,7 @@ def calculate_wall_length(binary_mask: np.ndarray, scale_ppm: float) -> Tuple[fl
     # Skeletonize the mask to get centerline
     skeleton = skeletonize(binary_mask.astype(bool))
     
-    # Count skeleton pixels (this gives approximate length in pixels)
+    # Count skeleton pixels
     skeleton_pixels = np.sum(skeleton)
     
     # Convert to meters
@@ -93,22 +63,13 @@ def calculate_detection_areas(
     detections: List[Dict[str, Any]], 
     scale_ppm: float
 ) -> Tuple[float, ItemCount]:
-    """
-    Calculate total area of detected doors and windows.
-    
-    Args:
-        detections: List of detection dictionaries from Mask R-CNN
-        scale_ppm: Pixels per meter scale factor
-        
-    Returns:
-        Tuple of (total deduction area in square meters, item counts)
-    """
+
     total_area_m2 = 0.0
     door_count = 0
     window_count = 0
     
     for det in detections:
-        box = det["box"]  # [x1, y1, x2, y2]
+        box = det["box"]  
         label = det["label"]
         
         # Calculate bounding box dimensions in pixels
@@ -142,18 +103,7 @@ def compute_quantity_takeoff(
     scale_ppm: float,
     wall_height: float
 ) -> QuantityTakeoffResponse:
-    """
-    Compute full quantity takeoff calculations.
-    
-    Args:
-        wall_mask: Binary wall segmentation mask
-        detections: List of door/window detections
-        scale_ppm: Pixels per meter scale factor
-        wall_height: Wall height in meters
-        
-    Returns:
-        QuantityTakeoffResponse with all calculated values
-    """
+   
     # Calculate wall centerline length and validate if it looks like a floor plan
     wall_length_m, is_valid_floor_plan = calculate_wall_length(wall_mask, scale_ppm)
     

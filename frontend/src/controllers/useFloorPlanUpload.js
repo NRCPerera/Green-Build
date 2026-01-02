@@ -1,10 +1,3 @@
-/**
- * Floor Plan Processing Hook
- * 
- * Custom React hook that manages the state and logic for floor plan uploads.
- * Encapsulates form handling, API calls, and progress tracking.
- */
-
 import { useState, useCallback } from 'react';
 import { message } from 'antd';
 import { uploadFloorPlan, parseApiError } from '../services/apiService';
@@ -73,18 +66,12 @@ const useFloorPlanUpload = () => {
         }
     }, []);
 
-    /**
-     * Clears the current error state.
-     * Used when the user dismisses the error alert.
-     */
+ 
     const clearError = useCallback(() => {
         setError(null);
     }, []);
 
-    /**
-     * Resets all state to initial values.
-     * Used when starting a new analysis.
-     */
+ 
     const reset = useCallback(() => {
         setLoading(false);
         setLoadingProgress(0);
