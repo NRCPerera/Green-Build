@@ -1,7 +1,3 @@
-"""
-Services Package - Business logic for ML inference and calculations.
-"""
-
 from .model_loader import load_unet_model, load_rcnn_model, get_mask_rcnn_model
 from .preprocessing import preprocess_image, preprocess_for_rcnn, get_preprocessing_transform
 from .inference import run_unet_inference, run_rcnn_inference

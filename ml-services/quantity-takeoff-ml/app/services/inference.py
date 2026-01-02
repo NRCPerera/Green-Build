@@ -1,9 +1,3 @@
-"""
-Inference Service
-=================
-ML model inference functions.
-"""
-
 import logging
 from typing import Any, Dict, List
 
@@ -17,16 +11,7 @@ logger = logging.getLogger(__name__)
 
 
 def run_unet_inference(model: nn.Module, image_tensor: torch.Tensor) -> np.ndarray:
-    """
-    Run U-Net inference for wall segmentation.
-    
-    Args:
-        model: Loaded U-Net model
-        image_tensor: Preprocessed image tensor
-        
-    Returns:
-        Binary wall segmentation mask
-    """
+
     with torch.no_grad():
         input_tensor = image_tensor.unsqueeze(0).to(DEVICE)
         
@@ -42,16 +27,7 @@ def run_rcnn_inference(
     model: nn.Module, 
     image_tensor: torch.Tensor
 ) -> List[Dict[str, Any]]:
-    """
-    Run Mask R-CNN inference for door/window detection.
     
-    Args:
-        model: Loaded Mask R-CNN model
-        image_tensor: Preprocessed image tensor
-        
-    Returns:
-        List of detection dictionaries with box, label, score, mask
-    """
     with torch.no_grad():
         input_tensor = image_tensor.unsqueeze(0).to(DEVICE)
         

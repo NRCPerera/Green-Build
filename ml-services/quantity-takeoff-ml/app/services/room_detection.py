@@ -1,9 +1,3 @@
-"""
-Room Detection Service
-======================
-Algorithmic room detection from wall masks.
-"""
-
 import base64
 import logging
 from typing import List
@@ -24,26 +18,6 @@ def detect_rooms(
     scale_ppm: float,
     min_room_area_m2: float = MIN_ROOM_AREA_M2
 ) -> RoomDetectionResult:
-    """
-    Detect rooms from wall mask by finding enclosed spaces.
-    
-    Algorithm:
-    1. Close gaps in the wall mask where doors are detected
-    2. Invert the mask (Walls=0, Space=1)
-    3. Use connected components to find distinct room blobs
-    4. Calculate area for each blob
-    5. Generate a colored visualization with rooms, doors, and windows
-    
-    Args:
-        wall_mask: Binary wall segmentation mask (Walls=1, Space=0)
-        door_boxes: List of door bounding boxes [x1, y1, x2, y2]
-        window_boxes: List of window bounding boxes [x1, y1, x2, y2]
-        scale_ppm: Pixels per meter scale factor (for INFERENCE_SIZE image)
-        min_room_area_m2: Minimum room area to consider (filters noise)
-        
-    Returns:
-        RoomDetectionResult with rooms list and visualization
-    """
     logger.info("Starting room detection...")
     logger.info(f"Wall mask shape: {wall_mask.shape}, Scale PPM: {scale_ppm}")
     logger.info(f"Number of door boxes: {len(door_boxes)}, window boxes: {len(window_boxes)}")
