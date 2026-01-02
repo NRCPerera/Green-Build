@@ -3,11 +3,6 @@ const { calculateCosts } = require('../models/costModel');
 const pythonService = require('../services/pythonService');
 const config = require('../config');
 
-const { deleteFile } = require('../models/fileModel');
-const { calculateCosts } = require('../models/costModel');
-const pythonService = require('../services/pythonService');
-const config = require('../config');
-
 /**
  * Processes an uploaded floor plan image and returns quantity takeoff with cost estimates.
  * This is the main endpoint for the application's core functionality.
