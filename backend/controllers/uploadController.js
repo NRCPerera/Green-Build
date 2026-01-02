@@ -1,10 +1,3 @@
-/**
- * Upload Controller
- * 
- * Handles file upload and processing requests for construction plan analysis.
- * Coordinates between the file model, Python service, and cost model.
- */
-
 const { deleteFile } = require('../models/fileModel');
 const { calculateCosts } = require('../models/costModel');
 const pythonService = require('../services/pythonService');

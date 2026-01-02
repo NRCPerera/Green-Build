@@ -1,10 +1,3 @@
-/**
- * Results Panel Component
- * 
- * Displays the analysis results including summary statistics,
- * BOQ table, room schedule, and cost estimates.
- */
-
 import { useState } from 'react';
 import {
     Card,
@@ -41,9 +34,6 @@ import { getTableColumns } from './tableConfig.jsx';
 
 const { Title, Text, Paragraph } = Typography;
 
-/**
- * Table columns configuration for Room Schedule
- */
 const getRoomScheduleColumns = () => [
     {
         title: 'Room ID',

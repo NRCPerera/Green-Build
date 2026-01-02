@@ -1,9 +1,3 @@
-"""
-Configuration Module
-====================
-Centralized configuration for the Quantity Takeoff ML application.
-"""
-
 import torch
 from pathlib import Path
 

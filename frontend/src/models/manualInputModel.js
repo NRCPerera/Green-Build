@@ -1,39 +1,20 @@
-/**
- * Manual Input Model
- * 
- * Defines the data structure and cost calculation for manually-input items.
- */
-
-// Default values for manual input form
 export const defaultManualInputs = {
-    // Electrical
     outlets: 0,
     switches: 0,
     lightFixtures: 0,
-
-    // Plumbing
     sinks: 0,
     toilets: 0,
     showers: 0,
     bathtubs: 0,
-
-    // HVAC
     acUnits: 0,
-
-    // Structural
     staircases: 0,
-
-    // Flooring
     flooringTileArea: 0,
     flooringWoodArea: 0,
     flooringCarpetArea: 0,
-
-    // Ceiling
     ceilingPlainArea: 0,
     ceilingFalseArea: 0
 };
 
-// Cost rates for manual items (matching backend config)
 export const manualItemRates = {
     outlets: 25.00,
     switches: 20.00,
@@ -51,12 +32,6 @@ export const manualItemRates = {
     ceilingFalseArea: 35.00
 };
 
-/**
- * Calculates the total cost for all manual input items.
- * 
- * @param {Object} inputs - The manual input values
- * @returns {Object} Breakdown of costs and total
- */
 export const calculateManualCosts = (inputs) => {
     const breakdown = {};
     let total = 0;
@@ -79,12 +54,6 @@ export const calculateManualCosts = (inputs) => {
     return { breakdown, total };
 };
 
-/**
- * Generates BOQ entries for manual input items.
- * 
- * @param {Object} inputs - The manual input values
- * @returns {Array} BOQ entries for table display
- */
 export const generateManualBOQData = (inputs) => {
     const items = [];
     let keyCounter = 100;

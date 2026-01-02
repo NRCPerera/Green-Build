@@ -1,9 +1,3 @@
-"""
-Pydantic Schemas
-================
-Data models for API requests and responses.
-"""
-
 from typing import List, Optional
 from pydantic import BaseModel, Field
 

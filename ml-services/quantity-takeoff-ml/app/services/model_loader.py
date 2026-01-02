@@ -1,9 +1,3 @@
-"""
-Model Loader Service
-====================
-Handles loading and initialization of ML models.
-"""
-
 import logging
 import torch
 import torch.nn as nn
@@ -18,16 +12,6 @@ logger = logging.getLogger(__name__)
 
 
 def load_unet_model(model_path: str, device: torch.device) -> nn.Module:
-    """
-    Load the U-Net++ model for wall segmentation.
-    
-    Args:
-        model_path: Path to the pretrained model weights
-        device: Torch device (CPU/CUDA)
-        
-    Returns:
-        Loaded U-Net++ model in eval mode
-    """
     logger.info(f"Loading U-Net++ model from {model_path}")
     
     # Initialize U-Net++ with EfficientNet-B4 encoder
@@ -62,15 +46,6 @@ def load_unet_model(model_path: str, device: torch.device) -> nn.Module:
 
 
 def get_mask_rcnn_model(num_classes: int) -> nn.Module:
-    """
-    Create a Mask R-CNN model with custom number of classes.
-    
-    Args:
-        num_classes: Number of classes including background
-        
-    Returns:
-        Configured Mask R-CNN model
-    """
     model = maskrcnn_resnet50_fpn(pretrained=False)
     
     in_features = model.roi_heads.box_predictor.cls_score.in_features
@@ -88,16 +63,6 @@ def get_mask_rcnn_model(num_classes: int) -> nn.Module:
 
 
 def load_rcnn_model(model_path: str, device: torch.device) -> nn.Module:
-    """
-    Load the Mask R-CNN model for door/window detection.
-    
-    Args:
-        model_path: Path to the pretrained model weights
-        device: Torch device (CPU/CUDA)
-        
-    Returns:
-        Loaded Mask R-CNN model in eval mode
-    """
     logger.info(f"Loading Mask R-CNN model from {model_path}")
     
     model = get_mask_rcnn_model(NUM_RCNN_CLASSES)
