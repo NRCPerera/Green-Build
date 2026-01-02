@@ -528,3 +528,119 @@ body {
 .manual-item-row:hover td {
   background: rgba(124, 58, 237, 0.15) !important;
 }
+
+/* View Options Card */
+.view-options-card {
+  background: linear-gradient(135deg, rgba(0, 217, 255, 0.05) 0%, rgba(124, 58, 237, 0.05) 100%) !important;
+}
+
+.view-options-card .ant-radio-group {
+  display: flex;
+  gap: 8px;
+}
+
+.view-options-card .ant-radio-button-wrapper {
+  background: var(--bg-secondary) !important;
+  border-color: var(--border-color) !important;
+  color: var(--text-secondary) !important;
+  border-radius: 8px !important;
+  padding: 8px 16px !important;
+  height: auto !important;
+  line-height: 1.5 !important;
+  transition: var(--transition);
+}
+
+.view-options-card .ant-radio-button-wrapper:hover {
+  color: var(--primary-color) !important;
+  border-color: var(--primary-color) !important;
+}
+
+.view-options-card .ant-radio-button-wrapper-checked {
+  background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-hover) 100%) !important;
+  border-color: var(--primary-color) !important;
+  color: #000 !important;
+}
+
+.view-options-card .ant-radio-button-wrapper-disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Image Preview Container */
+.image-preview-container .ant-image {
+  display: block;
+}
+
+.image-preview-container .ant-image-img {
+  border: 2px solid var(--border-color);
+  transition: var(--transition);
+}
+
+.image-preview-container .ant-image-img:hover {
+  border-color: var(--primary-color);
+  box-shadow: var(--glow-primary);
+}
+
+/* Room Schedule Table */
+.room-schedule-table .ant-table-tbody > tr > td {
+  background: transparent !important;
+}
+
+.room-schedule-table .ant-table-tbody > tr:nth-child(even) > td {
+  background: rgba(0, 0, 0, 0.1) !important;
+}
+
+/* Tabs Styling */
+.boq-card .ant-tabs-nav {
+  margin-bottom: 16px;
+}
+
+.boq-card .ant-tabs-tab {
+  background: var(--bg-secondary) !important;
+  border-color: var(--border-color) !important;
+  color: var(--text-secondary) !important;
+  border-radius: 8px 8px 0 0 !important;
+  padding: 8px 20px !important;
+  margin: 0 4px 0 0 !important;
+  transition: var(--transition);
+}
+
+.boq-card .ant-tabs-tab:hover {
+  color: var(--primary-color) !important;
+}
+
+.boq-card .ant-tabs-tab-active {
+  background: linear-gradient(135deg, rgba(0, 217, 255, 0.2) 0%, rgba(124, 58, 237, 0.2) 100%) !important;
+  border-color: var(--primary-color) !important;
+}
+
+.boq-card .ant-tabs-tab-active .ant-tabs-tab-btn {
+  color: var(--primary-color) !important;
+}
+
+.boq-card .ant-tabs-ink-bar {
+  background: var(--primary-color) !important;
+}
+
+.boq-card .ant-tabs-content {
+  padding: 16px 0;
+}
+
+/* Room Card Colors */
+.room-card {
+  transition: var(--transition);
+}
+
+.room-card:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--glow-primary);
+}
+
+/* Statistic Refinements */
+.summary-card .ant-statistic {
+  text-align: center;
+}
+
+.summary-card .ant-statistic-content-prefix {
+  margin-right: 8px;
+}

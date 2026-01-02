@@ -52,6 +52,10 @@ const useFloorPlanUpload = () => {
             setLoadingProgress(100);
 
             if (response.success) {
+                // Debug: Log the response data to see room_detection
+                console.log('API Response data:', response.data);
+                console.log('Room detection:', response.data.room_detection);
+
                 setResults(response.data);
                 message.success('Quantity takeoff completed successfully!');
             } else {

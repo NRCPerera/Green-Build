@@ -72,6 +72,14 @@ const processFloorPlan = async (req, res) => {
         try {
             quantities = await pythonService.calculateQuantities(uploadedFilePath, scale, wallHeight);
             console.log('[Upload] Successfully received quantities from ML service');
+
+            // Debug: Log room detection data
+            if (quantities.room_detection) {
+                console.log(`[Upload] Room detection: ${quantities.room_detection.rooms?.length || 0} rooms, ` +
+                    `total area: ${quantities.room_detection.total_floor_area_m2} sq.m`);
+            } else {
+                console.log('[Upload] No room_detection data received from Python');
+            }
         } catch (pythonError) {
             console.error('[Upload] Python service error:', pythonError.message);
 
@@ -133,8 +141,11 @@ const processFloorPlan = async (req, res) => {
                     wall_gross_surface_area_m2: quantities.wall_gross_surface_area_m2,
                     deductions_area_m2: quantities.deductions_area_m2,
                     wall_net_surface_area_m2: quantities.wall_net_surface_area_m2,
-                    item_counts: quantities.item_counts
+                    item_counts: quantities.item_counts,
+                    warning: quantities.warning || null
                 },
+                room_detection: quantities.room_detection || null,
+                detection_overlay_base64: quantities.detection_overlay_base64 || null,
                 costs: costs,
                 input_parameters: {
                     scale_ppm: scale,
@@ -157,7 +168,8 @@ const processFloorPlan = async (req, res) => {
         res.json(response);
 
     } catch (error) {
-        console.error('[Upload] Unexpected error:', error);
+        console.error('[Upload] Unexpected error:', error.message);
+        console.error('[Upload] Error stack:', error.stack);
 
         // Always clean up temporary files when an error occurs
         if (uploadedFilePath) {
@@ -168,7 +180,7 @@ const processFloorPlan = async (req, res) => {
             success: false,
             error: 'Internal server error',
             message: 'An unexpected error occurred while processing your request',
-            details: config.nodeEnv === 'development' ? error.message : undefined
+            details: error.message
         });
     }
 };

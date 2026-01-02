@@ -76,6 +76,7 @@ function App() {
                   manualInputs={manualInputs}
                   manualCosts={manualCosts}
                   hasManualInputs={hasManualInputs}
+                  previewImage={previewImage}
                 />
               </Col>
             </Row>
