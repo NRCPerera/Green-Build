@@ -1,13 +1,3 @@
-/**
- * =============================================================================
- * COST PREDICTION MODULE VIEW
- * =============================================================================
- * 
- * Module 2: Risk & Overruns Analysis
- * Predicts cost overruns using ML models.
- * REQUIRES: Quantity data from Module 1
- */
-
 import { useState } from 'react';
 import useCostController from '../../../controllers/useCostController';
 

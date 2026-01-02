@@ -1,36 +1,17 @@
-/**
- * =============================================================================
- * DELAY FORECAST CONTROLLER
- * =============================================================================
- * 
- * Business logic hook for Module 4: Delay Forecast (Timeline & Delays).
- * Reads quantityData from global store (set by Module 1).
- */
-
 import { useState, useCallback } from 'react';
 import useProjectStore from '../models/useProjectStore';
 import { delayApi, parseApiError } from '../models/api';
 
-/**
- * Custom hook for Delay Forecast module
- * 
- * @returns {Object} Controller state and methods
- */
 const useDelayController = () => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
 
-    // Global store
     const quantityData = useProjectStore((state) => state.quantityData);
     const delayForecast = useProjectStore((state) => state.delayForecast);
     const setDelayForecast = useProjectStore((state) => state.setDelayForecast);
 
     const hasQuantityData = quantityData !== null;
 
-    /**
-     * Predict project delays
-     * @param {Object} formValues - Form input values
-     */
     const predictDelay = useCallback(async (formValues) => {
         if (!hasQuantityData) {
             setError('Quantity data is required. Complete Module 1 first.');
@@ -66,7 +47,6 @@ const useDelayController = () => {
             const errorMessage = parseApiError(err);
             setError(errorMessage);
 
-            // Generate mock result for demo
             const mockResult = generateMockDelayForecast(formValues, quantityData);
             setDelayForecast(mockResult);
             return { success: true, data: mockResult, mock: true };
@@ -75,41 +55,23 @@ const useDelayController = () => {
         }
     }, [hasQuantityData, quantityData, setDelayForecast]);
 
-    /**
-     * Clear forecast results
-     */
     const clearForecast = useCallback(() => {
         useProjectStore.getState().resetModule('delay');
         setError(null);
     }, []);
 
-    /**
-     * Get color class for delay probability
-     * @param {number} probability - Delay probability 0-1
-     * @returns {string} Tailwind color class
-     */
     const getProbabilityColor = (probability) => {
         if (probability >= 0.7) return 'text-red-400';
         if (probability >= 0.4) return 'text-yellow-400';
         return 'text-green-400';
     };
 
-    /**
-     * Get risk level from probability
-     * @param {number} probability - Delay probability 0-1
-     * @returns {string} Risk level
-     */
     const getRiskLevel = (probability) => {
         if (probability >= 0.7) return 'High';
         if (probability >= 0.4) return 'Medium';
         return 'Low';
     };
 
-    /**
-     * Format delay duration
-     * @param {number} months - Delay in months
-     * @returns {string} Formatted string
-     */
     const formatDelay = (months) => {
         if (months < 1) {
             return `${Math.round(months * 4)} weeks`;
@@ -132,7 +94,6 @@ const useDelayController = () => {
     };
 };
 
-// Mock forecast generator
 function generateMockDelayForecast(formValues, quantityData) {
     const gradeFactors = { A: 0.1, B: 0.25, C: 0.45, D: 0.7 };
     const gradeFactor = gradeFactors[formValues.contractorGrade] || 0.3;

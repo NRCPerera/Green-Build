@@ -1,15 +1,3 @@
-/**
- * =============================================================================
- * QUANTITY TAKEOFF MODULE VIEW
- * =============================================================================
- * 
- * Module 1: CV & BOQ Generation
- * This module processes floor plan images using computer vision to extract
- * quantities that drive the other three modules.
- * 
- * Uses the existing Ant Design components for the UI.
- */
-
 import { Form, Row, Col, message } from 'antd';
 import { UploadForm, ResultsPanel, ManualInputPanel } from '../../components';
 import { useFloorPlanUpload, useFileUpload, useManualInput } from '../../../controllers';

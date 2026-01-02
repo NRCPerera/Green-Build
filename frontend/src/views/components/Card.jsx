@@ -1,19 +1,3 @@
-/**
- * =============================================================================
- * REUSABLE CARD COMPONENT
- * =============================================================================
- */
-
-/**
- * Card Component with Tailwind CSS styling
- * 
- * @param {Object} props
- * @param {React.ReactNode} props.children - Card content
- * @param {string} props.title - Optional card title
- * @param {React.ReactNode} props.extra - Optional extra content for header
- * @param {string} props.className - Additional Tailwind classes
- * @param {'default'|'glass'|'bordered'} props.variant - Card style variant
- */
 const Card = ({
     children,
     title,

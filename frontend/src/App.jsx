@@ -1,21 +1,3 @@
-/**
- * =============================================================================
- * MAIN APPLICATION COMPONENT
- * =============================================================================
- * 
- * Smart Construction Management Platform
- * 
- * This app integrates 4 research modules:
- * - Module 1: Quantity Takeoff (CV & BOQ) - DRIVES OTHER MODULES
- * - Module 2: Cost Prediction (Risk & Overruns)
- * - Module 3: Sustainability (Lifecycle & Carbon)
- * - Module 4: Delay Forecast (Timeline & Delays)
- * 
- * Architecture: MVC (Model-View-Controller)
- * State Management: Zustand
- * Styling: Ant Design + Custom CSS
- */
-
 import { useState, useMemo } from 'react';
 import { ConfigProvider } from 'antd';
 import './index.css';
@@ -33,9 +15,6 @@ import DelayForecastView from './views/modules/DelayForecast/index.jsx';
 // Global Store
 import useProjectStore from './models/useProjectStore';
 
-/**
- * Dashboard Component - Overview of all modules
- */
 const DashboardView = () => {
   // Use individual selectors to avoid infinite loops
   const quantityData = useProjectStore((state) => state.quantityData);

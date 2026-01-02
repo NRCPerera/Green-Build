@@ -1,19 +1,3 @@
-/**
- * BOQ Data Model
- * 
- * Transforms raw API response data into formatted BOQ table entries.
- * This model handles the data structure for the Bill of Quantities display.
- */
-
-/**
- * Generates structured BOQ data from API results.
- * Creates an array of items suitable for table display with proper formatting.
- * 
- * @param {Object} results - The results object from the API response
- * @param {Object} results.quantities - Quantity measurements from ML analysis
- * @param {Object} results.costs - Calculated costs and rates
- * @returns {Array} Formatted BOQ entries for table display
- */
 export const generateBOQData = (results) => {
     if (!results) return [];
 
@@ -104,13 +88,9 @@ export const generateBOQData = (results) => {
     ];
 };
 
-/**
- * Default form values for the input form.
- * These provide sensible starting points for typical floor plans.
- */
 export const defaultFormValues = {
-    scale: 100,      // 100 pixels per meter is a common starting point
-    wallHeight: 2.7  // Standard residential wall height in meters
+    scale: 100,
+    wallHeight: 2.7
 };
 
 export default {

@@ -1,47 +1,17 @@
-/**
- * =============================================================================
- * COST PREDICTION CONTROLLER
- * =============================================================================
- * 
- * Business logic hook for Module 2: Cost Prediction.
- * 
- * KEY FEATURE: Pulls quantityData from the global store (set by Module 1),
- * sends it to the Cost Prediction API, and returns prediction results.
- * 
- * REQUIRES: Quantity data must be available in the store.
- */
-
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback } from 'react';
 import useProjectStore from '../models/useProjectStore';
 import { costApi, parseApiError } from '../models/api';
 
-/**
- * Custom hook for Cost Prediction module
- * 
- * @returns {Object} Controller state and methods
- */
 const useCostController = () => {
-    // Local state
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
 
-    // Global store - READ quantity data from Module 1
     const quantityData = useProjectStore((state) => state.quantityData);
     const costPrediction = useProjectStore((state) => state.costPrediction);
     const setCostPrediction = useProjectStore((state) => state.setCostPrediction);
 
-    // Check if quantity data is available
     const hasQuantityData = quantityData !== null;
 
-    /**
-     * Predict cost overruns based on quantity data and form inputs
-     * 
-     * @param {Object} formValues - Additional prediction parameters
-     * @param {number} formValues.projectDurationMonths - Project duration
-     * @param {number} formValues.complexityScore - Project complexity 1-10
-     * @param {string} formValues.contractorGrade - Contractor grade A/B/C/D
-     * @param {number} formValues.weatherRiskFactor - Weather risk 0-1
-     */
     const predictCost = useCallback(async (formValues) => {
         if (!hasQuantityData) {
             setError('Quantity data is required. Complete Module 1 first.');
@@ -52,7 +22,6 @@ const useCostController = () => {
         setError(null);
 
         try {
-            // Build prediction input using quantity data from global store
             const input = {
                 quantityData: {
                     wallArea: quantityData.wallNetSurfaceAreaM2,
@@ -78,7 +47,6 @@ const useCostController = () => {
             const errorMessage = parseApiError(err);
             setError(errorMessage);
 
-            // Generate mock prediction for demo purposes if API fails
             console.warn('[CostController] API failed, generating mock prediction');
             const mockPrediction = generateMockPrediction(formValues, quantityData);
             setCostPrediction(mockPrediction);
@@ -89,26 +57,15 @@ const useCostController = () => {
         }
     }, [hasQuantityData, quantityData, setCostPrediction]);
 
-    /**
-     * Clear prediction results
-     */
     const clearPrediction = useCallback(() => {
         useProjectStore.getState().resetModule('cost');
         setError(null);
     }, []);
 
-    /**
-     * Clear error state
-     */
     const clearError = useCallback(() => {
         setError(null);
     }, []);
 
-    /**
-     * Get color class for risk level
-     * @param {string} riskLevel - 'High', 'Medium', or 'Low'
-     * @returns {string} Tailwind color class
-     */
     const getRiskColor = (riskLevel) => {
         switch (riskLevel) {
             case 'High':
@@ -123,36 +80,19 @@ const useCostController = () => {
     };
 
     return {
-        // State
         loading,
         error,
-
-        // Data from global store
         quantityData,
         prediction: costPrediction,
         hasQuantityData,
         hasPrediction: costPrediction !== null,
-
-        // Actions
         predictCost,
         clearPrediction,
         clearError,
-
-        // Utilities
         getRiskColor,
     };
 };
 
-// =============================================================================
-// HELPER FUNCTIONS
-// =============================================================================
-
-/**
- * Generate a mock prediction for demo purposes
- * @param {Object} formValues - Form input values
- * @param {Object} quantityData - Quantity data from store
- * @returns {Object} Mock prediction result
- */
 function generateMockPrediction(formValues, quantityData) {
     const baseOverrun = (formValues.complexityScore || 5) * 1.5;
     const gradeMultiplier = getGradeMultiplier(formValues.contractorGrade);

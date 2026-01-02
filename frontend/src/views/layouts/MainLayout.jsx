@@ -1,16 +1,3 @@
-/**
- * =============================================================================
- * MAIN DASHBOARD LAYOUT
- * =============================================================================
- * 
- * Responsive dashboard shell using Tailwind CSS.
- * Features:
- * - Fixed sidebar on the left (w-64)
- * - Header (h-16)
- * - Main content area
- * - Module navigation with status indicators
- */
-
 import { useState, useMemo } from 'react';
 import useProjectStore from '../../models/useProjectStore';
 
