@@ -10,9 +10,9 @@ from contextlib import asynccontextmanager
 import torch
 from fastapi import FastAPI
 
-from .config import DEVICE, UNET_MODEL_PATH, RCNN_MODEL_PATH
+from .config import DEVICE, UNET_MODEL_PATH, RCNN_MODEL_PATH, ROOM_MODEL_PATH
 from .models import ErrorResponse
-from .services import load_unet_model, load_rcnn_model
+from .services import load_unet_model, load_rcnn_model, load_room_model
 from .api.endpoints import router, set_models
 
 # Logging setup
@@ -38,6 +38,7 @@ async def lifespan(app: FastAPI):
     try:
         models["unet"] = load_unet_model(str(UNET_MODEL_PATH), DEVICE)
         models["rcnn"] = load_rcnn_model(str(RCNN_MODEL_PATH), DEVICE)
+        models["room"] = load_room_model(str(ROOM_MODEL_PATH), DEVICE)
         
         # Share models with the API endpoints
         set_models(models)

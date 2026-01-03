@@ -10,13 +10,14 @@ import cv2
 import numpy as np
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 
-from ..config import INFERENCE_SIZE
+from ..config import INFERENCE_SIZE, ROOM_MODEL_IMAGE_SIZE
 from ..models import QuantityTakeoffResponse, ErrorResponse
 from ..services import (
     preprocess_image,
     preprocess_for_rcnn,
     run_unet_inference,
     run_rcnn_inference,
+    run_room_inference,
     compute_quantity_takeoff
 )
 
@@ -143,6 +144,21 @@ async def calculate_quantities(
         detections = run_rcnn_inference(models["rcnn"], rcnn_tensor)
         logger.info(f"Detected {len(detections)} objects")
         
+        # Run Room Segmentation inference if model is available
+        room_mask = None
+        if models.get("room") is not None:
+            logger.info("Running Room Segmentation inference...")
+            # Resize image to inference size for room model
+            resized_for_room = cv2.resize(image, INFERENCE_SIZE)
+            room_mask = run_room_inference(
+                models["room"], 
+                resized_for_room,
+                target_size=ROOM_MODEL_IMAGE_SIZE
+            )
+            logger.info(f"Room mask generated: {room_mask.shape}")
+        else:
+            logger.warning("Room model not available, using algorithmic room detection")
+        
         # Create detection overlay visualization on resized image
         from ..services import create_detection_overlay
         resized_for_overlay = cv2.resize(image, INFERENCE_SIZE)
@@ -153,7 +169,8 @@ async def calculate_quantities(
             wall_mask=wall_mask,
             detections=detections,
             scale_ppm=adjusted_scale_ppm,
-            wall_height=wall_height
+            wall_height=wall_height,
+            room_mask=room_mask  # Pass ML-detected room mask
         )
         
         # Add detection overlay to result
