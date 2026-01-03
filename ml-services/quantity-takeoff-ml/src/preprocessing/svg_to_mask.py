@@ -13,14 +13,55 @@ os.makedirs(IMG_OUT, exist_ok=True)
 os.makedirs(MASK_OUT, exist_ok=True)
 os.makedirs(VIZ_OUT, exist_ok=True)
 
-# Class map
+# Class map for exact matches
 CLASS_MAP = {
     "Wall": 1,
     "Door": 2,
     "Window": 3,
-    "Room": 4,
-    "Structure": 1, # CubiCasa often uses "Structure" for walls
+    "Structure": 1,  # CubiCasa often uses "Structure" for walls
+    "Wall External": 1,
+    "Wall Internal": 1,
 }
+
+# Prefix patterns for partial matching (class names that START with these)
+SPACE_PREFIXES = ["Space", "Room"]  # CubiCasa uses "Space LivingRoom", "Space Bedroom", etc.
+DOOR_PREFIXES = ["Door"]
+WINDOW_PREFIXES = ["Window"]
+WALL_PREFIXES = ["Wall"]
+
+def get_class_id(class_name):
+    """
+    Determine the class ID from SVG group class name.
+    CubiCasa uses patterns like 'Space LivingRoom', 'Door Swing Beside', etc.
+    """
+    if not class_name:
+        return 0
+    
+    # Exact match first
+    if class_name in CLASS_MAP:
+        return CLASS_MAP[class_name]
+    
+    # Check for Space/Room prefix (Room class = 4)
+    for prefix in SPACE_PREFIXES:
+        if class_name.startswith(prefix + " ") or class_name == prefix:
+            return 4  # Room
+    
+    # Check for Door prefix
+    for prefix in DOOR_PREFIXES:
+        if class_name.startswith(prefix + " ") or class_name == prefix:
+            return 2  # Door
+    
+    # Check for Window prefix
+    for prefix in WINDOW_PREFIXES:
+        if class_name.startswith(prefix + " ") or class_name == prefix:
+            return 3  # Window
+    
+    # Check for Wall prefix
+    for prefix in WALL_PREFIXES:
+        if class_name.startswith(prefix + " ") or class_name == prefix:
+            return 1  # Wall
+    
+    return 0
 
 def create_empty_mask(w, h):
     return np.zeros((h, w), dtype=np.uint8)
@@ -43,17 +84,10 @@ def parse_svg(svg_path, width, height):
         # Sometimes CubiCasa puts it in 'id'
         id_name = g.get("id")
 
-        target_id = 0
-        
-        # Check if this group matches our map
-        if class_name in CLASS_MAP:
-            target_id = CLASS_MAP[class_name]
-        elif id_name and id_name in CLASS_MAP:
-            target_id = CLASS_MAP[id_name]
-        
-        # Special check for "Structure" which is often walls
-        if class_name == "Structure": 
-            target_id = 1
+        # Try class_name first, then id_name
+        target_id = get_class_id(class_name)
+        if target_id == 0 and id_name:
+            target_id = get_class_id(id_name)
             
         if target_id == 0:
             continue
