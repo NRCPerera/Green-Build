@@ -8,6 +8,10 @@ MODELS_DIR = BASE_DIR / "models"
 # Model paths
 UNET_MODEL_PATH = MODELS_DIR / "best_unet_cubicasa.pth"
 RCNN_MODEL_PATH = MODELS_DIR / "final_maskrcnn_optimized.pth"
+ROOM_MODEL_PATH = MODELS_DIR / "room_segmentation.pth"
+
+# Room segmentation model settings
+ROOM_MODEL_IMAGE_SIZE = 512  # Size the room model was trained on
 
 # Inference settings
 INFERENCE_SIZE = (800, 800)

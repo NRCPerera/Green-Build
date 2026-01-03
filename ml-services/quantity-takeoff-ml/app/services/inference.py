@@ -52,3 +52,51 @@ def run_rcnn_inference(
                 })
     
     return detections
+
+
+def run_room_inference(
+    model: nn.Module, 
+    image: np.ndarray,
+    target_size: int = 512
+) -> np.ndarray:
+    """
+    Run room segmentation inference.
+    
+    Args:
+        model: Trained room segmentation model (U-Net++ with EfficientNet-B3)
+        image: Input image as numpy array (H, W, C) in RGB format
+        target_size: Size to resize image for inference (default 512)
+    
+    Returns:
+        Binary room mask as numpy array (H, W) with same size as input
+    """
+    import cv2
+    import albumentations as A
+    from albumentations.pytorch import ToTensorV2
+    
+    original_h, original_w = image.shape[:2]
+    
+    # Preprocess: same as training
+    transform = A.Compose([
+        A.Resize(target_size, target_size),
+        A.Normalize(),
+        ToTensorV2()
+    ])
+    
+    augmented = transform(image=image)
+    image_tensor = augmented['image'].unsqueeze(0).to(DEVICE)
+    
+    # Run inference
+    with torch.no_grad():
+        output = model(image_tensor)
+        pred = torch.sigmoid(output).squeeze().cpu().numpy()
+    
+    # Threshold to binary
+    binary_mask = (pred > 0.5).astype(np.uint8)
+    
+    # Resize back to original size
+    room_mask = cv2.resize(binary_mask, (original_w, original_h), interpolation=cv2.INTER_NEAREST)
+    
+    logger.info(f"Room inference complete: {room_mask.sum()} room pixels detected")
+    
+    return room_mask

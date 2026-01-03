@@ -264,3 +264,144 @@ def detect_rooms(
         total_floor_area_m2=round(total_floor_area, 2),
         room_map_base64=room_map_base64
     )
+
+
+def detect_rooms_from_ml_mask(
+    room_mask: np.ndarray,
+    door_boxes: List[np.ndarray],
+    window_boxes: List[np.ndarray],
+    scale_ppm: float,
+    min_room_area_m2: float = MIN_ROOM_AREA_M2
+) -> RoomDetectionResult:
+    """
+    Detect rooms from ML-generated binary room mask.
+    
+    Args:
+        room_mask: Binary mask from room segmentation model (1=room, 0=not room)
+        door_boxes: List of door bounding boxes
+        window_boxes: List of window bounding boxes
+        scale_ppm: Scale in pixels per meter
+        min_room_area_m2: Minimum room area threshold
+    
+    Returns:
+        RoomDetectionResult with detected rooms
+    """
+    logger.info("Starting ML-based room detection...")
+    logger.info(f"Room mask shape: {room_mask.shape}, Scale PPM: {scale_ppm}")
+    
+    height, width = room_mask.shape
+    
+    # Ensure mask is binary uint8
+    binary_mask = (room_mask > 0).astype(np.uint8)
+    
+    room_pixels = np.sum(binary_mask)
+    logger.info(f"Room pixels in ML mask: {room_pixels} ({100*room_pixels/(height*width):.1f}%)")
+    
+    # Apply morphological operations to clean up the mask
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+    cleaned_mask = cv2.morphologyEx(binary_mask, cv2.MORPH_OPEN, kernel)
+    cleaned_mask = cv2.morphologyEx(cleaned_mask, cv2.MORPH_CLOSE, kernel)
+    
+    # Find connected components (individual rooms)
+    num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(cleaned_mask, connectivity=8)
+    logger.info(f"Found {num_labels - 1} potential room blobs from ML mask")
+    
+    # Calculate minimum area threshold in pixels
+    min_area_pixels = max(
+        MIN_ROOM_AREA_PIXELS,
+        int(min_room_area_m2 * (scale_ppm ** 2))
+    )
+    
+    # Extract rooms
+    rooms = []
+    for label_id in range(1, num_labels):  # Skip background (0)
+        area_pixels = stats[label_id, cv2.CC_STAT_AREA]
+        area_m2 = area_pixels / (scale_ppm ** 2)
+        
+        # Filter by minimum area
+        if area_pixels < min_area_pixels:
+            logger.info(f"  Blob {label_id}: {area_m2:.2f} sq.m - SKIPPED (too small)")
+            continue
+        
+        # Get bounding box (for visualization only)
+        x = stats[label_id, cv2.CC_STAT_LEFT]
+        y = stats[label_id, cv2.CC_STAT_TOP]
+        w = stats[label_id, cv2.CC_STAT_WIDTH]
+        h = stats[label_id, cv2.CC_STAT_HEIGHT]
+        
+        # Get centroid (for visualization only)
+        cx, cy = centroids[label_id]
+        
+        # Calculate estimated cost
+        estimated_cost = area_m2 * FLOORING_COST_RATE
+        
+        room = Room(
+            room_id=len(rooms) + 1,
+            area_m2=round(area_m2, 2),
+            flooring_cost_estimate=round(estimated_cost, 2)
+        )
+        rooms.append(room)
+        logger.info(f"  Room {room.room_id}: {area_m2:.2f} sq.m at ({cx:.0f}, {cy:.0f})")
+    
+    # Create visualization
+    room_colors = [
+        (76, 175, 80), (33, 150, 243), (255, 152, 0), (156, 39, 176),
+        (0, 188, 212), (255, 87, 34), (63, 81, 181), (139, 195, 74),
+        (255, 193, 7), (121, 85, 72), (96, 125, 139), (233, 30, 99)
+    ]
+    door_color = (0, 255, 255)
+    window_color = (255, 255, 0)
+    
+    # Create room map visualization
+    room_map = np.zeros((height, width, 3), dtype=np.uint8)
+    room_map[:] = (30, 30, 30)  # Dark background
+    
+    # Color each room and draw labels using connected component data
+    room_idx = 0
+    for label_id in range(1, num_labels):
+        area_pixels = stats[label_id, cv2.CC_STAT_AREA]
+        if area_pixels < min_area_pixels:
+            continue  # Skip small blobs
+        
+        color = room_colors[room_idx % len(room_colors)]
+        room_region = labels == label_id
+        room_map[room_region] = color
+        
+        # Get centroid for label placement
+        cx, cy = int(centroids[label_id][0]), int(centroids[label_id][1])
+        room = rooms[room_idx]
+        label_text = f"R{room.room_id}: {room.area_m2:.1f}m²"
+        text_size = cv2.getTextSize(label_text, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1)[0]
+        text_x = max(0, min(cx - text_size[0] // 2, width - text_size[0]))
+        text_y = max(20, min(cy + 5, height - 5))
+        
+        cv2.putText(room_map, label_text, (text_x, text_y),
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+        room_idx += 1
+    
+    # Draw doors
+    for box in door_boxes:
+        x1, y1, x2, y2 = map(int, box)
+        cv2.rectangle(room_map, (x1, y1), (x2, y2), door_color, 2)
+        cv2.putText(room_map, "D", (x1+2, y1+12), cv2.FONT_HERSHEY_SIMPLEX, 0.4, door_color, 1)
+    
+    # Draw windows
+    for box in window_boxes:
+        x1, y1, x2, y2 = map(int, box)
+        cv2.rectangle(room_map, (x1, y1), (x2, y2), window_color, 2)
+        cv2.putText(room_map, "W", (x1+2, y1+12), cv2.FONT_HERSHEY_SIMPLEX, 0.4, window_color, 1)
+    
+    # Encode visualization
+    success, buffer = cv2.imencode('.png', cv2.cvtColor(room_map, cv2.COLOR_RGB2BGR))
+    room_map_base64 = base64.b64encode(buffer).decode('utf-8') if success else None
+    
+    # Calculate total floor area
+    total_floor_area = sum(room.area_m2 for room in rooms)
+    
+    logger.info(f"=== ML room detection complete: {len(rooms)} rooms, total area: {total_floor_area:.2f} sq.m ===")
+    
+    return RoomDetectionResult(
+        rooms=rooms,
+        total_floor_area_m2=round(total_floor_area, 2),
+        room_map_base64=room_map_base64
+    )

@@ -1,11 +1,12 @@
 import logging
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
+import cv2
 import numpy as np
 from skimage.morphology import skeletonize
 
 from ..models import ItemCount, QuantityTakeoffResponse
-from .room_detection import detect_rooms
+from .room_detection import detect_rooms, detect_rooms_from_ml_mask
 
 logger = logging.getLogger(__name__)
 
@@ -101,7 +102,8 @@ def compute_quantity_takeoff(
     wall_mask: np.ndarray,
     detections: List[Dict[str, Any]],
     scale_ppm: float,
-    wall_height: float
+    wall_height: float,
+    room_mask: Optional[np.ndarray] = None
 ) -> QuantityTakeoffResponse:
    
     # Calculate wall centerline length and validate if it looks like a floor plan
@@ -133,13 +135,23 @@ def compute_quantity_takeoff(
         if det["label"] == 2  # Label 2 = Window
     ]
     
-    # Detect rooms from wall mask
-    room_detection = detect_rooms(
-        wall_mask=wall_mask,
-        door_boxes=door_boxes,
-        window_boxes=window_boxes,
-        scale_ppm=scale_ppm
-    )
+    # Use ML-based room detection if room_mask is provided, otherwise use algorithmic approach
+    if room_mask is not None:
+        logger.info("Using ML-based room detection")
+        room_detection = detect_rooms_from_ml_mask(
+            room_mask=room_mask,
+            door_boxes=door_boxes,
+            window_boxes=window_boxes,
+            scale_ppm=scale_ppm
+        )
+    else:
+        logger.info("Using algorithmic room detection (fallback)")
+        room_detection = detect_rooms(
+            wall_mask=wall_mask,
+            door_boxes=door_boxes,
+            window_boxes=window_boxes,
+            scale_ppm=scale_ppm
+        )
     
     logger.info(f"Quantity Takeoff Summary:")
     logger.info(f"  - Wall Length: {wall_length_m:.2f}m")
