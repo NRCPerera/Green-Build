@@ -37,22 +37,39 @@ def detect_rooms(
     # If "wall" coverage is > 50%, the mask is likely inverted (space=1, walls=0)
     if wall_coverage > WALL_COVERAGE_INVERT_THRESHOLD:
         logger.warning(f"Mask appears inverted (coverage {wall_coverage*100:.1f}% > 50%). Auto-inverting for room detection.")
-        inverted_for_rooms = working_mask  # Already space=1
-        wall_mask_for_viz = 1 - wall_mask  # Invert for visualization (walls=1)
         
-        # For door closing, block the door areas (set to 0 to separate rooms)
+        # When inverted: working_mask has space=1 (high coverage), walls=0 (thin lines)
+        # Extract the wall structure (the 0 pixels, which are ~2% of image)
+        wall_structure = (1 - working_mask).astype(np.uint8)
+        wall_mask_for_viz = wall_structure.copy()
+        
+        logger.info(f"Wall structure pixels after inversion: {np.sum(wall_structure)} ({100*np.sum(wall_structure)/total_pixels:.1f}%)")
+        
+        # CRITICAL: Dilate the wall structure to make walls thick enough to separate rooms
+        # The walls in floor plans are often very thin (1-3 pixels), we need them thicker
+        dilate_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (7, 7))
+        thick_walls = cv2.dilate(wall_structure, dilate_kernel, iterations=3)
+        
+        logger.info(f"Thick wall pixels after dilation: {np.sum(thick_walls)} ({100*np.sum(thick_walls)/total_pixels:.1f}%)")
+        
+        # Close gaps in walls to ensure room boundaries are complete
+        close_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5))
+        thick_walls = cv2.morphologyEx(thick_walls, cv2.MORPH_CLOSE, close_kernel)
+        
+        # Block door gaps by adding wall pixels at door locations
         for box in door_boxes:
             x1, y1, x2, y2 = map(int, box)
             x1 = max(0, min(x1, width-1))
             x2 = max(0, min(x2, width-1))
             y1 = max(0, min(y1, height-1))
             y2 = max(0, min(y2, height-1))
-            cv2.rectangle(inverted_for_rooms, (x1, y1), (x2, y2), 0, thickness=-1)
+            cv2.rectangle(thick_walls, (x1, y1), (x2, y2), 1, thickness=-1)
             logger.info(f"Blocking door gap at ({x1},{y1})-({x2},{y2})")
         
-        # Apply erosion to separate touching rooms
-        erode_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
-        inverted_for_rooms = cv2.erode(inverted_for_rooms, erode_kernel, iterations=1)
+        # Now invert the thick walls to get room space (space=1, walls=0)
+        inverted_for_rooms = (1 - thick_walls).astype(np.uint8)
+        
+        logger.info(f"Room space after processing: {np.sum(inverted_for_rooms)} pixels ({100*np.sum(inverted_for_rooms)/total_pixels:.1f}%)")
         
     else:
         logger.info("Mask appears normal (walls=1, space=0). Proceeding with standard processing.")
@@ -79,18 +96,40 @@ def detect_rooms(
         # Invert to get space
         inverted_for_rooms = (1 - working_mask).astype(np.uint8)
     
-    # Add border to exclude exterior regions
-    inverted_for_rooms[0, :] = 0
-    inverted_for_rooms[-1, :] = 0
-    inverted_for_rooms[:, 0] = 0
-    inverted_for_rooms[:, -1] = 0
+    # =======================================================================
+    # EXTERIOR REGION REMOVAL using flood-fill from edges
+    # =======================================================================
+    # Any region connected to the image border is considered exterior
+    # We use flood-fill from a border pixel to identify and mask out exterior
     
-    # Find connected components (distinct room blobs)
+    # Create a padded version to ensure flood-fill can reach all edge-connected regions
+    padded = np.pad(inverted_for_rooms, pad_width=1, mode='constant', constant_values=1)
+    
+    # Flood-fill from the corner (0,0) of the padded image
+    # This will fill all exterior regions (connected to the border)
+    exterior_mask = padded.copy()
+    cv2.floodFill(exterior_mask, None, (0, 0), 0)
+    
+    # Remove padding and invert: exterior_mask now has exterior=0, interior=original
+    exterior_mask = exterior_mask[1:-1, 1:-1]
+    
+    # The flood-fill turned exterior to 0. Combine with original:
+    # Keep only pixels that were 1 in original AND weren't part of exterior
+    # Actually, after flood-fill from padded corner, exterior connected regions become 0
+    # So we just use the result directly
+    interior_only = exterior_mask
+    
+    # Count what we filtered
+    exterior_pixels = np.sum(inverted_for_rooms) - np.sum(interior_only)
+    logger.info(f"Exterior region removed: {exterior_pixels} pixels ({100*exterior_pixels/(height*width):.1f}%)")
+    logger.info(f"Interior space remaining: {np.sum(interior_only)} pixels ({100*np.sum(interior_only)/(height*width):.1f}%)")
+    
+    # Find connected components (distinct room blobs) on interior-only mask
     num_labels, labels, stats, centroids = cv2.connectedComponentsWithStats(
-        inverted_for_rooms, connectivity=4
+        interior_only, connectivity=4
     )
     
-    logger.info(f"Found {num_labels - 1} potential room blobs")
+    logger.info(f"Found {num_labels - 1} potential room blobs (after exterior removal)")
     
     # Process each component and calculate areas
     rooms = []
@@ -131,21 +170,12 @@ def detect_rooms(
         # Use both pixel-based and area-based thresholds
         min_pixels = max(MIN_ROOM_AREA_PIXELS, int(min_room_area_m2 * pixels_per_sqm))
         if area_px < min_pixels:
-            logger.debug(f"Skipping blob {i}: area too small ({area_px} < {min_pixels} px)")
+            logger.info(f"  → Skipping: too small ({area_px} < {min_pixels} px)")
             continue
         
-        # Skip if area is larger than 60% of the total image (likely exterior)
-        if area_px > total_image_area_px * 0.6:
-            logger.debug(f"Skipping blob {i}: likely exterior")
-            continue
-        
-        # Skip if the blob touches all four edges (exterior)
-        touches_left = x == 0
-        touches_top = y == 0
-        touches_right = (x + w) >= width
-        touches_bottom = (y + h) >= height
-        if touches_left and touches_top and touches_right and touches_bottom:
-            logger.debug(f"Skipping blob {i}: touches all edges")
+        # Skip if area is larger than 40% of the total image (safety check for missed exterior)
+        if area_px > total_image_area_px * 0.4:
+            logger.info(f"  → Skipping: too large, likely exterior ({area_px} > 40% of image)")
             continue
         
         # Calculate flooring cost estimate
