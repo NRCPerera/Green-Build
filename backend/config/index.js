@@ -14,6 +14,7 @@ const config = {
 
     // External service URLs
     pythonServiceUrl: process.env.PYTHON_SERVICE_URL || 'http://localhost:8000',
+    costMlServiceUrl: process.env.COST_ML_SERVICE_URL || 'http://localhost:8001',
     frontendUrl: process.env.FRONTEND_URL || '*',
 
     // File upload settings
