@@ -6,8 +6,10 @@
 
 const healthRoutes = require('./healthRoutes');
 const uploadRoutes = require('./uploadRoutes');
+const costPredictionRoutes = require('./costPredictionRoutes');
 
 module.exports = {
     healthRoutes,
-    uploadRoutes
+    uploadRoutes,
+    costPredictionRoutes
 };
