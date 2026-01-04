@@ -87,3 +87,40 @@ def load_rcnn_model(model_path: str, device: torch.device) -> nn.Module:
     except Exception as e:
         logger.error(f"Error loading Mask R-CNN model: {e}")
         raise
+
+
+def load_room_model(model_path: str, device: torch.device) -> nn.Module:
+    """
+    Load the room segmentation model (U-Net++ with EfficientNet-B3 encoder).
+    This model was trained specifically for binary room segmentation.
+    """
+    logger.info(f"Loading Room Segmentation model from {model_path}")
+    
+    # Initialize U-Net++ with EfficientNet-B3 encoder (same as training)
+    model = smp.UnetPlusPlus(
+        encoder_name="efficientnet-b3",
+        encoder_weights=None,  # We'll load our trained weights
+        in_channels=3,
+        classes=1,  # Binary: room or not room
+        activation=None
+    )
+    
+    try:
+        state_dict = torch.load(model_path, map_location=device, weights_only=True)
+        
+        # Handle DataParallel wrapper if present
+        if list(state_dict.keys())[0].startswith("module."):
+            state_dict = {k.replace("module.", ""): v for k, v in state_dict.items()}
+        
+        model.load_state_dict(state_dict)
+        model.to(device)
+        model.eval()
+        logger.info("Room Segmentation model loaded successfully")
+        return model
+        
+    except FileNotFoundError:
+        logger.warning(f"Room model file not found at {model_path}. Room detection will use algorithmic fallback.")
+        return None
+    except Exception as e:
+        logger.error(f"Error loading Room model: {e}")
+        return None
