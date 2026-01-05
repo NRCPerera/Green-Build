@@ -50,11 +50,11 @@ const DashboardView = () => {
       icon: '💰',
       title: 'Cost Prediction',
       description: 'Predict budget overruns and risks',
-      status: costPrediction ? 'completed' : quantityData ? 'ready' : 'locked',
+      status: costPrediction ? 'completed' : 'ready',
       color: 'yellow',
       stats: costPrediction ? [
-        { label: 'Risk Level', value: costPrediction.riskLevel },
-        { label: 'Overrun', value: `${costPrediction.predictedOverrunPercentage}%` },
+        { label: 'Risk Level', value: costPrediction.high_risk_label ? 'HIGH' : 'LOW' },
+        { label: 'Overrun', value: `${costPrediction.predicted_cost_overrun_pct?.toFixed(2)}%` },
       ] : null,
     },
     {
