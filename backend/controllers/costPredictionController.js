@@ -40,13 +40,12 @@ const handleCostPrediction = async (req, res, next) => {
                 headers: {
                     'Content-Type': 'application/json'
                 },
-                timeout: 30000 // 30 second timeout
+                timeout: 30000 
             }
         );
 
         console.log(`[Cost Prediction] ML service response:`, response.data);
 
-        // Return the prediction results
         res.json({
             success: true,
             prediction: {
@@ -61,9 +60,7 @@ const handleCostPrediction = async (req, res, next) => {
     } catch (error) {
         console.error('[Cost Prediction] Error:', error.message);
 
-        // Handle different error types
         if (error.response) {
-            // ML service returned an error response
             const status = error.response.status;
             const detail = error.response.data?.detail || error.message;
 
@@ -74,7 +71,6 @@ const handleCostPrediction = async (req, res, next) => {
                 statusCode: status
             });
         } else if (error.request) {
-            // Request was made but no response received
             return res.status(503).json({
                 success: false,
                 error: 'ML service unavailable',
@@ -82,7 +78,7 @@ const handleCostPrediction = async (req, res, next) => {
                 mlServiceUrl: process.env.COST_ML_SERVICE_URL || 'http://localhost:8001'
             });
         } else {
-            // Something else went wrong
+           
             return res.status(500).json({
                 success: false,
                 error: 'Prediction failed',
