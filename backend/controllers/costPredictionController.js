@@ -15,7 +15,7 @@ const axios = require('axios');
  */
 const handleCostPrediction = async (req, res, next) => {
     try {
-        const { data } = req.body;
+        const { data, explain = false, top_n = 6 } = req.body;
 
         // Validate request data
         if (!data || typeof data !== 'object') {
@@ -27,15 +27,15 @@ const handleCostPrediction = async (req, res, next) => {
         }
 
         // Get ML service URL from environment or use default
-        const mlServiceUrl = process.env.COST_ML_SERVICE_URL || 'http://localhost:8001';
+        const mlServiceUrl = process.env.COST_ML_SERVICE_URL || 'http://localhost:8080';
 
         console.log(`[Cost Prediction] Sending request to ML service: ${mlServiceUrl}`);
         console.log(`[Cost Prediction] Project data:`, JSON.stringify(data, null, 2));
 
-        // Call the FastAPI ML service
+        // Call the FastAPI ML service (new /predict endpoint with optional SHAP)
         const response = await axios.post(
-            `${mlServiceUrl}/predict/raw`,
-            { data },
+            `${mlServiceUrl}/predict`,
+            { data, explain, top_n },
             {
                 headers: {
                     'Content-Type': 'application/json'
@@ -45,14 +45,16 @@ const handleCostPrediction = async (req, res, next) => {
         );
 
         console.log(`[Cost Prediction] ML service response:`, response.data);
+        const prediction = response.data?.prediction || response.data;
 
         res.json({
             success: true,
             prediction: {
-                predicted_cost_overrun_pct: response.data.predicted_cost_overrun_pct,
-                overrun_probability: response.data.overrun_probability,
-                high_risk_label: response.data.high_risk_label,
-                threshold: response.data.threshold
+                predicted_cost_overrun_pct: prediction.predicted_cost_overrun_pct,
+                overrun_probability: prediction.overrun_probability,
+                high_risk_label: prediction.high_risk_label,
+                threshold: prediction.threshold,
+                shap_explanation: prediction.shap_explanation ?? null
             },
             timestamp: new Date().toISOString()
         });
