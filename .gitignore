@@ -22,16 +22,7 @@ wheels/
 .installed.cfg
 *.egg
 
-# ===========================
-# Virtual Environments
-# ===========================
-venv/
-.venv/
-env/
-.env/
-ENV/
-env.bak/
-venv.bak/
+
 
 # ===========================
 # IDE / Editors
@@ -77,24 +68,10 @@ desktop.ini
 # ML / Data Science Specific
 # ===========================
 
-# Model weights and checkpoints (large files)
-*.pth
-*.pt
-*.h5
-*.hdf5
-*.ckpt
-*.onnx
-*.safetensors
-*.pkl
-*.pickle
-
 # Datasets and raw data (large directories)
 raw_data/
 data/
 datasets/
-
-# Model outputs and predictions
-outputs/
 
 # Temporary wheels
 temp_wheels/
