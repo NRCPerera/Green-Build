@@ -3,22 +3,42 @@ import useCostController from '../../../controllers/useCostController';
 
 const CostPredictionView = () => {
     const [formValues, setFormValues] = useState({
-        projectDurationMonths: 12,
-        complexityScore: 5,
-        contractorGrade: 'B',
-        weatherRiskFactor: 0.3,
+        Floors: 1,
+        Area_SQFT: 1000,
+        Year_of_Tender: 2022,
+        Rate_per_SQFT: 26000,
+        Initial_Contract_Value: 0,
+        Initial_period_construction: 14,
+        Design_Completeness: 0.55,
+        Project_Complexity_Score: 0.1,
+        Time_overrun_months: 6,
+        Construction_Duration_Actual: 20,
+        Inflation_Rate: 0.13,
+        Material_Price_Index: 125,
+        Exchange_Rate: 390,
+        Interest_Rate: 0.16,
+        Contractor_Experience_Years: 3,
+        Contractor_Previous_Projects: 5,
+        Change_Order_Frequency: 0.35,
+        Amount_Variations: 4200,
+        Amount_S_Change: 21021,
+        Amount_PF: 10000,
+        Adjusted_Contract_Sum: 580,
+        Cost_Overrun_Amount: 320000,
+        Type_of_Project: 'Apartment',
+        Province: 'Western',
+        District: 'Gampaha',
+        Season_of_Start: 'Monsoon',
+        Grade_of_contractor: 'C1',
     });
 
     const {
         loading,
         error,
-        quantityData,
         prediction,
-        hasQuantityData,
         hasPrediction,
         predictCost,
         clearPrediction,
-        getRiskColor,
     } = useCostController();
 
     const handleSubmit = async (e) => {
@@ -41,132 +61,151 @@ const CostPredictionView = () => {
                 </div>
             </div>
 
-            {/* Dependency Check */}
-            {!hasQuantityData ? (
-                <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-6">
-                    <div className="flex items-center gap-4">
-                        <span className="text-2xl">⚠️</span>
-                        <div>
-                            <p className="text-yellow-400 font-medium">Quantity Data Required</p>
-                            <p className="text-gray-400 text-sm mt-1">
-                                Please complete the Quantity Takeoff (Module 1) first. Cost predictions require
-                                wall area and item counts from floor plan analysis.
-                            </p>
-                        </div>
-                    </div>
+            {/* Model Info */}
+            <div className="bg-primary-500/10 border border-primary-500/30 rounded-xl p-4">
+                <div className="flex items-center gap-3">
+                    <span className="w-2 h-2 rounded-full bg-primary-400 animate-pulse" />
+                    <p className="text-primary-400">
+                        ANN Regression Model • Input: 25 Features • Output: Cost Overrun Prediction
+                    </p>
                 </div>
-            ) : (
-                <div className="bg-primary-500/10 border border-primary-500/30 rounded-xl p-4">
-                    <div className="flex items-center gap-3">
-                        <span className="w-2 h-2 rounded-full bg-primary-400 animate-pulse" />
-                        <p className="text-primary-400">
-                            Using: Wall Area {quantityData?.wallNetSurfaceAreaM2?.toFixed(1)} m²,
-                            {quantityData?.itemCounts?.doors || 0} doors,
-                            {quantityData?.itemCounts?.windows || 0} windows
-                        </p>
-                    </div>
-                </div>
-            )}
+            </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
                 {/* Input Form */}
                 <div className="lg:col-span-1">
-                    <form onSubmit={handleSubmit} className="bg-dark-800/50 border border-white/5 rounded-2xl p-6 space-y-5">
-                        <h3 className="text-lg font-semibold text-white flex items-center gap-2">
+                    <form onSubmit={handleSubmit} className="bg-dark-800/50 border border-white/5 rounded-2xl p-6 space-y-4 max-h-[600px] overflow-y-auto">
+                        <h3 className="text-lg font-semibold text-white flex items-center gap-2 sticky top-0 bg-dark-800/50">
                             <span className="px-2 py-0.5 bg-yellow-500/20 text-yellow-400 text-xs rounded-full">Inputs</span>
-                            Prediction Parameters
+                            Project Parameters
                         </h3>
 
+                        {/* Project Info */}
                         <div>
-                            <label className="block text-sm font-medium text-gray-300 mb-2">
-                                Project Duration (months)
-                            </label>
-                            <input
-                                type="number"
-                                value={formValues.projectDurationMonths}
-                                onChange={(e) => setFormValues({ ...formValues, projectDurationMonths: parseInt(e.target.value) || 12 })}
-                                min="1"
-                                max="60"
-                                disabled={!hasQuantityData}
-                                className="w-full px-4 py-3 bg-dark-700 border border-white/10 rounded-xl text-white 
-                         focus:outline-none focus:ring-2 focus:ring-yellow-500 disabled:opacity-50"
-                            />
-                        </div>
-
-                        <div>
-                            <label className="block text-sm font-medium text-gray-300 mb-2">
-                                Complexity Score (1-10)
-                            </label>
-                            <input
-                                type="range"
-                                value={formValues.complexityScore}
-                                onChange={(e) => setFormValues({ ...formValues, complexityScore: parseInt(e.target.value) })}
-                                min="1"
-                                max="10"
-                                disabled={!hasQuantityData}
-                                className="w-full h-2 bg-dark-700 rounded-lg appearance-none cursor-pointer disabled:opacity-50"
-                            />
-                            <div className="flex justify-between text-xs text-gray-500 mt-1">
-                                <span>Simple</span>
-                                <span className="text-yellow-400 font-medium">{formValues.complexityScore}</span>
-                                <span>Complex</span>
-                            </div>
-                        </div>
-
-                        <div>
-                            <label className="block text-sm font-medium text-gray-300 mb-2">
-                                Contractor Grade
-                            </label>
+                            <label className="block text-xs font-medium text-gray-400 mb-1">Type of Project</label>
                             <select
-                                value={formValues.contractorGrade}
-                                onChange={(e) => setFormValues({ ...formValues, contractorGrade: e.target.value })}
-                                disabled={!hasQuantityData}
-                                className="w-full px-4 py-3 bg-dark-700 border border-white/10 rounded-xl text-white 
-                         focus:outline-none focus:ring-2 focus:ring-yellow-500 disabled:opacity-50"
+                                value={formValues.Type_of_Project}
+                                onChange={(e) => setFormValues({ ...formValues, Type_of_Project: e.target.value })}
+                                className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
                             >
-                                <option value="A">Grade A - Top Tier</option>
-                                <option value="B">Grade B - Experienced</option>
-                                <option value="C">Grade C - Standard</option>
-                                <option value="D">Grade D - Basic</option>
+                                <option>Apartment</option>
+                                <option>Commercial</option>
+                                <option>Industrial</option>
+                                <option>Infrastructure</option>
                             </select>
                         </div>
 
                         <div>
-                            <label className="block text-sm font-medium text-gray-300 mb-2">
-                                Weather Risk Factor
-                            </label>
+                            <label className="block text-xs font-medium text-gray-400 mb-1">Grade of Contractor</label>
+                            <select
+                                value={formValues.Grade_of_contractor}
+                                onChange={(e) => setFormValues({ ...formValues, Grade_of_contractor: e.target.value })}
+                                className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                            >
+                                <option>A1</option>
+                                <option>A2</option>
+                                <option>B1</option>
+                                <option>B2</option>
+                                <option>C1</option>
+                                <option>C2</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label className="block text-xs font-medium text-gray-400 mb-1">Province</label>
+                            <select
+                                value={formValues.Province}
+                                onChange={(e) => setFormValues({ ...formValues, Province: e.target.value })}
+                                className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                            >
+                                <option>Western</option>
+                                <option>Central</option>
+                                <option>Southern</option>
+                                <option>Eastern</option>
+                                <option>Northern</option>
+                            </select>
+                        </div>
+
+                        <div>
+                            <label className="block text-xs font-medium text-gray-400 mb-1">Floors</label>
                             <input
-                                type="range"
-                                value={formValues.weatherRiskFactor * 100}
-                                onChange={(e) => setFormValues({ ...formValues, weatherRiskFactor: parseInt(e.target.value) / 100 })}
-                                min="0"
-                                max="100"
-                                disabled={!hasQuantityData}
-                                className="w-full h-2 bg-dark-700 rounded-lg appearance-none cursor-pointer disabled:opacity-50"
+                                type="number"
+                                value={formValues.Floors}
+                                onChange={(e) => setFormValues({ ...formValues, Floors: parseInt(e.target.value) || 1 })}
+                                min="1"
+                                className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
                             />
-                            <div className="flex justify-between text-xs text-gray-500 mt-1">
-                                <span>Low</span>
-                                <span className="text-yellow-400 font-medium">{(formValues.weatherRiskFactor * 100).toFixed(0)}%</span>
-                                <span>High</span>
-                            </div>
+                        </div>
+
+                        <div>
+                            <label className="block text-xs font-medium text-gray-400 mb-1">Area (SQFT)</label>
+                            <input
+                                type="number"
+                                value={formValues.Area_SQFT}
+                                onChange={(e) => setFormValues({ ...formValues, Area_SQFT: parseFloat(e.target.value) || 1000 })}
+                                min="1"
+                                className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-xs font-medium text-gray-400 mb-1">Rate per SQFT</label>
+                            <input
+                                type="number"
+                                value={formValues.Rate_per_SQFT}
+                                onChange={(e) => setFormValues({ ...formValues, Rate_per_SQFT: parseFloat(e.target.value) || 26000 })}
+                                min="0"
+                                className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-xs font-medium text-gray-400 mb-1">Contractor Experience (Years)</label>
+                            <input
+                                type="number"
+                                value={formValues.Contractor_Experience_Years}
+                                onChange={(e) => setFormValues({ ...formValues, Contractor_Experience_Years: parseInt(e.target.value) || 3 })}
+                                min="0"
+                                className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-xs font-medium text-gray-400 mb-1">Initial Duration (months)</label>
+                            <input
+                                type="number"
+                                value={formValues.Initial_period_construction}
+                                onChange={(e) => setFormValues({ ...formValues, Initial_period_construction: parseInt(e.target.value) || 14 })}
+                                min="1"
+                                className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                            />
+                        </div>
+
+                        <div>
+                            <label className="block text-xs font-medium text-gray-400 mb-1">Inflation Rate</label>
+                            <input
+                                type="number"
+                                value={formValues.Inflation_Rate}
+                                onChange={(e) => setFormValues({ ...formValues, Inflation_Rate: parseFloat(e.target.value) || 0.13 })}
+                                min="0"
+                                step="0.01"
+                                className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                            />
                         </div>
 
                         {error && (
-                            <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
-                                <p className="text-sm text-red-400">{error}</p>
+                            <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-sm">
+                                <p className="text-red-400">{error}</p>
                             </div>
                         )}
 
                         <button
                             type="submit"
-                            disabled={loading || !hasQuantityData}
-                            className={`
-                w-full px-6 py-3 rounded-xl font-semibold transition-all duration-200
-                ${loading || !hasQuantityData
+                            disabled={loading}
+                            className={`w-full px-6 py-3 rounded-xl font-semibold transition-all duration-200 ${loading
                                     ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
                                     : 'bg-gradient-to-r from-yellow-500 to-orange-500 text-white hover:from-yellow-400 hover:to-orange-400'
-                                }
-              `}
+                                }`}
                         >
                             {loading ? 'Predicting...' : 'Predict Cost Overrun'}
                         </button>
@@ -174,65 +213,79 @@ const CostPredictionView = () => {
                 </div>
 
                 {/* Results */}
-                <div className="lg:col-span-2">
+                <div className="lg:col-span-3">
                     {hasPrediction ? (
                         <div className="space-y-6">
                             {/* Key Metrics */}
                             <div className="grid grid-cols-3 gap-4">
-                                <div className={`bg-dark-800/50 border rounded-xl p-5 text-center ${getRiskColor(prediction.riskLevel)}`}>
-                                    <p className="text-sm text-gray-400 mb-2">Risk Level</p>
-                                    <p className="text-3xl font-bold">{prediction.riskLevel}</p>
-                                </div>
-                                <div className="bg-dark-800/50 border border-white/5 rounded-xl p-5 text-center">
-                                    <p className="text-sm text-gray-400 mb-2">Predicted Overrun</p>
-                                    <p className={`text-3xl font-bold ${prediction.predictedOverrunPercentage > 10 ? 'text-red-400' : 'text-green-400'}`}>
-                                        {prediction.predictedOverrunPercentage}%
+                                <div className={`bg-dark-800/50 border rounded-xl p-5 text-center ${prediction.high_risk_label ? 'border-red-500/50 bg-red-500/10' : 'border-white/5 bg-green-500/10'}`}>
+                                    <p className="text-sm text-gray-400 mb-2">Risk Status</p>
+                                    <p className={`text-3xl font-bold ${prediction.high_risk_label ? 'text-red-400' : 'text-green-400'}`}>
+                                        {prediction.high_risk_label ? '⚠️ HIGH' : '✓ LOW'}
                                     </p>
                                 </div>
                                 <div className="bg-dark-800/50 border border-white/5 rounded-xl p-5 text-center">
-                                    <p className="text-sm text-gray-400 mb-2">Risk Score</p>
-                                    <p className="text-3xl font-bold text-white">{prediction.riskScore}/100</p>
-                                    <div className="w-full h-1.5 bg-dark-700 rounded-full mt-2 overflow-hidden">
+                                    <p className="text-sm text-gray-400 mb-2">Cost Overrun %</p>
+                                    <p className={`text-3xl font-bold ${prediction.predicted_cost_overrun_pct > 10 ? 'text-red-400' : 'text-green-400'}`}>
+                                        {prediction.predicted_cost_overrun_pct?.toFixed(2)}%
+                                    </p>
+                                </div>
+                                <div className="bg-dark-800/50 border border-white/5 rounded-xl p-5 text-center">
+                                    <p className="text-sm text-gray-400 mb-2">Overrun Probability</p>
+                                    <p className="text-3xl font-bold text-white">{(prediction.overrun_probability * 100)?.toFixed(1)}%</p>
+                                    <div className="w-full h-2 bg-dark-700 rounded-full mt-2 overflow-hidden">
                                         <div
-                                            className={`h-full transition-all ${prediction.riskScore > 60 ? 'bg-red-500' : prediction.riskScore > 30 ? 'bg-yellow-500' : 'bg-green-500'}`}
-                                            style={{ width: `${prediction.riskScore}%` }}
+                                            className={`h-full transition-all ${prediction.overrun_probability > 0.7 ? 'bg-red-500' : prediction.overrun_probability > 0.4 ? 'bg-yellow-500' : 'bg-green-500'}`}
+                                            style={{ width: `${prediction.overrun_probability * 100}%` }}
                                         />
                                     </div>
                                 </div>
                             </div>
 
-                            {/* SHAP Values */}
+                            {/* Prediction Details */}
                             <div className="bg-dark-800/50 border border-white/5 rounded-2xl p-6">
-                                <h3 className="text-lg font-semibold text-white mb-4">📊 Feature Importance (SHAP)</h3>
-                                <div className="space-y-3">
-                                    {prediction.shapValues?.map((shap, index) => (
-                                        <div key={index} className="flex items-center gap-4">
-                                            <span className="w-40 text-sm text-gray-400">{shap.feature}</span>
-                                            <div className="flex-1 h-4 bg-dark-700 rounded-full overflow-hidden">
-                                                <div
-                                                    className={`h-full rounded-full transition-all ${shap.contribution > 0 ? 'bg-red-500/70' : 'bg-green-500/70'}`}
-                                                    style={{ width: `${Math.min(100, Math.abs(shap.contribution) * 10)}%` }}
-                                                />
-                                            </div>
-                                            <span className={`text-sm font-medium w-16 text-right ${shap.contribution > 0 ? 'text-red-400' : 'text-green-400'}`}>
-                                                {shap.contribution > 0 ? '+' : ''}{shap.contribution?.toFixed(1)}%
-                                            </span>
-                                        </div>
-                                    ))}
+                                <h3 className="text-lg font-semibold text-white mb-4">📊 Prediction Details</h3>
+                                <div className="grid grid-cols-2 gap-4 text-sm">
+                                    <div className="p-4 bg-dark-700/50 rounded-lg">
+                                        <p className="text-gray-400 mb-1">Predicted Overrun</p>
+                                        <p className="text-2xl font-bold text-yellow-400">{prediction.predicted_cost_overrun_pct?.toFixed(2)}%</p>
+                                    </div>
+                                    <div className="p-4 bg-dark-700/50 rounded-lg">
+                                        <p className="text-gray-400 mb-1">Risk Probability</p>
+                                        <p className="text-2xl font-bold text-orange-400">{(prediction.overrun_probability * 100)?.toFixed(1)}%</p>
+                                    </div>
+                                    <div className="p-4 bg-dark-700/50 rounded-lg">
+                                        <p className="text-gray-400 mb-1">Risk Classification</p>
+                                        <p className={`text-lg font-bold ${prediction.high_risk_label ? 'text-red-400' : 'text-green-400'}`}>
+                                            {prediction.high_risk_label ? 'HIGH RISK' : 'LOW RISK'}
+                                        </p>
+                                    </div>
+                                    <div className="p-4 bg-dark-700/50 rounded-lg">
+                                        <p className="text-gray-400 mb-1">Threshold</p>
+                                        <p className="text-lg font-bold text-blue-400">{prediction.threshold}</p>
+                                    </div>
                                 </div>
                             </div>
 
-                            {/* Recommendations */}
+                            {/* Model Response Info */}
                             <div className="bg-dark-800/50 border border-white/5 rounded-2xl p-6">
-                                <h3 className="text-lg font-semibold text-white mb-4">💡 Recommendations</h3>
-                                <ul className="space-y-3">
-                                    {prediction.recommendations?.map((rec, index) => (
-                                        <li key={index} className="flex items-start gap-3">
-                                            <span className="text-primary-400 mt-0.5">•</span>
-                                            <span className="text-gray-300">{rec}</span>
-                                        </li>
-                                    ))}
-                                </ul>
+                                <h3 className="text-lg font-semibold text-white mb-4">ℹ️ Model Information</h3>
+                                <div className="space-y-2 text-sm text-gray-400">
+                                    <p><span className="text-gray-300 font-medium">Model Type:</span> ANN Regression + Classification</p>
+                                    <p><span className="text-gray-300 font-medium">Input Features:</span> 25 parameters</p>
+                                    <p><span className="text-gray-300 font-medium">Prediction Timestamp:</span> {new Date(prediction.timestamp).toLocaleString()}</p>
+                                    <p><span className="text-gray-300 font-medium">Status:</span> <span className="text-green-400">✓ Successful</span></p>
+                                </div>
+                            </div>
+
+                            {/* Action Buttons */}
+                            <div className="flex gap-4">
+                                <button
+                                    onClick={clearPrediction}
+                                    className="flex-1 px-6 py-3 rounded-xl font-semibold bg-dark-700 border border-white/10 text-gray-300 hover:border-white/20 transition-all"
+                                >
+                                    Clear Results
+                                </button>
                             </div>
                         </div>
                     ) : (
@@ -242,9 +295,7 @@ const CostPredictionView = () => {
                             </div>
                             <h3 className="text-xl font-semibold text-white mb-2">No Prediction Yet</h3>
                             <p className="text-gray-400 text-center max-w-md">
-                                {hasQuantityData
-                                    ? 'Configure the parameters and click "Predict" to see cost overrun analysis.'
-                                    : 'Complete the Quantity Takeoff module first to enable cost prediction.'}
+                                Fill in the project parameters and click "Predict Cost Overrun" to analyze potential cost risks.
                             </p>
                         </div>
                     )}

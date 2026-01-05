@@ -22,7 +22,7 @@ const MODULES = [
         label: 'Cost Prediction',
         icon: '💰',
         description: 'Risk Analysis',
-        requiresQuantity: true,
+        requiresQuantity: false,
     },
     {
         key: 'sustainability',
