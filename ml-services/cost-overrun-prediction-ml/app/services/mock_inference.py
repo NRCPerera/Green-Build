@@ -16,12 +16,14 @@ class MockInferenceService:
         self.threshold = 0.5
         logger.info("✓ Mock Inference Service initialized (Development Mode)")
     
-    def predict(self, data: Dict[str, Any]) -> Dict[str, Any]:
+    def predict(self, data: Dict[str, Any], explain: bool = False, top_n: int = 6) -> Dict[str, Any]:
         """
         Generate mock predictions based on input features
         
         Args:
             data: Dictionary of input features
+            explain: Whether to include SHAP explanations (ignored in mock mode)
+            top_n: Number of top features to return (ignored in mock mode)
             
         Returns:
             Dictionary with mock prediction results
@@ -96,7 +98,8 @@ class MockInferenceService:
             "predicted_cost_overrun_pct": round(cost_overrun_pct, 2),
             "overrun_probability": round(overrun_probability, 4),
             "high_risk_label": high_risk_label,
-            "threshold": self.threshold
+                        "threshold": self.threshold,
+                        "shap_explanation": None  # No SHAP in mock mode
         }
         
         logger.info(f"Mock prediction: {result}")
