@@ -68,16 +68,6 @@ desktop.ini
 # ML / Data Science Specific
 # ===========================
 
-# Model weights and checkpoints (large files)
-*.pth
-*.pt
-*.h5
-*.hdf5
-*.ckpt
-*.onnx
-*.safetensors
-*.pkl
-*.pickle
 
 # Datasets and raw data (large directories)
 raw_data/
