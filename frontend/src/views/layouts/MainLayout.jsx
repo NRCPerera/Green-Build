@@ -52,7 +52,7 @@ const MODULES = [
         icon: '⏱️',
         description: 'Timeline',
         requiresAuth: false,
-        requiresQuantity: true,
+        requiresQuantity: false,
     },
 ];
 
