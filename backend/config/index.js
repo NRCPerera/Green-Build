@@ -28,43 +28,46 @@ const config = {
         'image/bmp'
     ],
 
-    // Cost estimation rates for ML-detected items
+    // Cost estimation rates for ML-detected items (in LKR - Sri Lankan Rupees)
     costRates: {
-        wallPaintRatePerSqm: 15.00,      // Basic wall painting
-        wallPlasterRatePerSqm: 25.00,    // Plastering work
-        wallTilingRatePerSqm: 45.00,     // Wall tiling
-        doorUnitCost: 350.00,            // Per door unit
-        windowUnitCost: 250.00           // Per window unit
+        wallPaintRatePerSqm: 450.00,       // Basic wall painting per sq.m
+        wallPlasterRatePerSqm: 850.00,     // Plastering work per sq.m
+        wallTilingRatePerSqm: 2500.00,     // Wall tiling per sq.m
+        doorUnitCost: 35000.00,            // Per door unit (standard wooden door)
+        windowUnitCost: 25000.00           // Per window unit (aluminum/UPVC)
     },
 
-    // Cost rates for manually-input items
+    // Cost rates for manually-input items (in LKR)
     additionalRates: {
         // Electrical
-        electricalOutlet: 25.00,         // Per outlet
-        electricalSwitch: 20.00,         // Per switch
-        lightFixture: 75.00,             // Per fixture
+        electricalOutlet: 1500.00,         // Per outlet (with wiring)
+        electricalSwitch: 1200.00,         // Per switch (with wiring)
+        lightFixture: 3500.00,             // Per fixture (standard LED)
 
         // Plumbing
-        sink: 150.00,                    // Per sink
-        toilet: 300.00,                  // Per toilet
-        shower: 400.00,                  // Per shower unit
-        bathtub: 600.00,                 // Per bathtub
+        sink: 15000.00,                    // Per sink (stainless steel)
+        toilet: 35000.00,                  // Per toilet (standard commode)
+        shower: 25000.00,                  // Per shower unit
+        bathtub: 85000.00,                 // Per bathtub
 
         // HVAC
-        acUnit: 1200.00,                 // Per AC unit
+        acUnit: 150000.00,                 // Per AC unit (1.5 ton split)
 
         // Structural
-        staircase: 2500.00,              // Per staircase
+        staircase: 350000.00,              // Per staircase (concrete with railing)
 
         // Flooring (per sq.m)
-        flooringTile: 35.00,             // Tile flooring
-        flooringWood: 65.00,             // Wood flooring
-        flooringCarpet: 25.00,           // Carpet flooring
+        flooringTile: 3500.00,             // Tile flooring per sq.m
+        flooringWood: 8500.00,             // Wood flooring per sq.m
+        flooringCarpet: 2500.00,           // Carpet flooring per sq.m
 
         // Ceiling (per sq.m)
-        ceilingPlain: 15.00,             // Plain ceiling
-        ceilingFalse: 35.00              // False ceiling
-    }
+        ceilingPlain: 1200.00,             // Plain ceiling per sq.m
+        ceilingFalse: 3500.00              // False ceiling per sq.m
+    },
+
+    // Currency setting
+    currency: 'LKR'
 };
 
 module.exports = config;

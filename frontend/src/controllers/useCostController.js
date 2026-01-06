@@ -14,21 +14,27 @@ const useCostController = () => {
         setError(null);
 
         try {
-            // Send the form data directly to the API
+            const requestPayload = { data: formValues, explain: true, top_n: 20 };
+            console.log('📤 Request Data:', requestPayload);
+            console.log('📋 Form Values:', formValues);
+
+            // Send the form data directly to the API, request SHAP with top_n=20
             const response = await fetch('http://localhost:5000/api/predict-cost-overrun', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ data: formValues })
+                body: JSON.stringify(requestPayload)
             });
 
             if (!response.ok) {
                 const errorData = await response.json();
+                console.error('❌ Error Response:', errorData);
                 throw new Error(errorData.message || 'Prediction failed');
             }
 
             const result = await response.json();
+            console.log('📥 Response Data:', result);
 
             if (result.success) {
                 // Map the API response to the expected format
@@ -36,9 +42,11 @@ const useCostController = () => {
                     ...result.prediction,
                     timestamp: result.timestamp
                 };
+                console.log('✅ Prediction Data:', predictionData);
                 setCostPrediction(predictionData);
                 return { success: true, data: predictionData };
             } else {
+                console.error('❌ Prediction Failed:', result.message);
                 throw new Error(result.message || 'Prediction failed');
             }
         } catch (err) {

@@ -48,7 +48,7 @@ router.post('/api/predict-cost-overrun', handleCostPrediction);
  */
 router.get('/api/cost-ml-health', async (req, res, next) => {
     try {
-        const mlServiceUrl = process.env.COST_ML_SERVICE_URL || 'http://localhost:8001';
+        const mlServiceUrl = process.env.COST_ML_SERVICE_URL || 'http://localhost:8080';
         
         const response = await axios.get(`${mlServiceUrl}/`, {
             timeout: 5000

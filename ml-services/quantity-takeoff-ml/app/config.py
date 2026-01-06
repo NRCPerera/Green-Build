@@ -27,8 +27,8 @@ NUM_RCNN_CLASSES = len(RCNN_CLASSES) + 1  # +1 for background
 # Detection thresholds
 DETECTION_CONFIDENCE_THRESHOLD = 0.5
 
-# Cost rates
-FLOORING_COST_RATE = 45.0  # USD per square meter
+# Cost rates (in LKR - Sri Lankan Rupees)
+FLOORING_COST_RATE = 20000.0  # LKR per square meter
 
 # Room detection settings
 MIN_ROOM_AREA_M2 = 4.0  # Minimum room area (filters noise, typical bathroom is ~4-5 sq.m)
