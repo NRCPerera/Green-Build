@@ -7,6 +7,7 @@
 const healthRoutes = require('./healthRoutes');
 const uploadRoutes = require('./uploadRoutes');
 const costPredictionRoutes = require('./costPredictionRoutes');
+const sustainabilityRoutes = require('./sustainabilityRoutes');
 const authRoutes = require('./authRoutes');
 const projectRoutes = require('./projectRoutes');
 const floorPlanRoutes = require('./floorPlanRoutes');
@@ -16,6 +17,7 @@ module.exports = {
     healthRoutes,
     uploadRoutes,
     costPredictionRoutes,
+    sustainabilityRoutes
     authRoutes,
     projectRoutes,
     floorPlanRoutes,
