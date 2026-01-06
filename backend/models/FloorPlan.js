@@ -127,6 +127,32 @@ const floorPlanSchema = new mongoose.Schema({
         detectionOverlay: { type: String },
         roomSegmentation: { type: String }
     },
+    costEstimates: {
+        basicFinish: { type: Number, default: 0 },
+        standardFinish: { type: Number, default: 0 },
+        premiumFinish: { type: Number, default: 0 },
+        breakdown: {
+            wallPaint: { type: Number, default: 0 },
+            wallPlaster: { type: Number, default: 0 },
+            wallTiling: { type: Number, default: 0 },
+            doors: { type: Number, default: 0 },
+            windows: { type: Number, default: 0 },
+            flooring: { type: Number, default: 0 }
+        },
+        currency: { type: String, default: 'LKR' },
+        calculatedAt: { type: Date }
+    },
+    costPrediction: {
+        predictedOverrunPct: { type: Number },
+        highRisk: { type: Boolean },
+        riskLabel: { type: String },
+        predictedAt: { type: Date }
+    },
+    sustainabilityAnalysis: {
+        carbonFootprint: { type: Number },
+        sustainabilityScore: { type: Number },
+        analyzedAt: { type: Date }
+    },
     status: {
         type: String,
         enum: ['uploaded', 'processing', 'processed', 'failed', 'archived'],

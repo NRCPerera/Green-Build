@@ -11,13 +11,23 @@ const MODULES = [
         label: 'Dashboard',
         icon: '🏠',
         description: 'Overview',
+        requiresAuth: false,
+        requiresQuantity: false,
+    },
+    {
+        key: 'projects',
+        label: 'My Projects',
+        icon: '📁',
+        description: 'Manage Projects',
+        requiresAuth: true,
         requiresQuantity: false,
     },
     {
         key: 'quantity',
-        label: 'Quantity Takeoff',
+        label: 'Quick Analysis',
         icon: '📐',
         description: 'CV & BOQ',
+        requiresAuth: false,
         requiresQuantity: false,
     },
     {
@@ -25,6 +35,7 @@ const MODULES = [
         label: 'Cost Prediction',
         icon: '💰',
         description: 'Risk Analysis',
+        requiresAuth: false,
         requiresQuantity: false,
     },
     {
@@ -32,6 +43,7 @@ const MODULES = [
         label: 'Sustainability',
         icon: '🌱',
         description: 'Carbon & LCC',
+        requiresAuth: false,
         requiresQuantity: true,
     },
     {
@@ -39,6 +51,7 @@ const MODULES = [
         label: 'Delay Forecast',
         icon: '⏱️',
         description: 'Timeline',
+        requiresAuth: false,
         requiresQuantity: true,
     },
 ];
@@ -82,8 +95,14 @@ const MainLayout = ({ children, activeModule = 'dashboard', onModuleChange, onLo
 
     const handleModuleClick = (moduleKey) => {
         const module = MODULES.find((m) => m.key === moduleKey);
+
+        // Check if module requires authentication
+        if (module?.requiresAuth && !isAuthenticated) {
+            onLogin?.();
+            return;
+        }
+
         if (module?.requiresQuantity && !hasQuantityData) {
-            // Could show a toast notification here
             console.warn('Complete Quantity Takeoff first');
             return;
         }
