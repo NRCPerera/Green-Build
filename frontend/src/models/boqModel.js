@@ -4,6 +4,11 @@ export const generateBOQData = (results) => {
     const { quantities, costs } = results;
     const rates = costs.rates_used;
 
+    // Helper function to format LKR with thousand separators
+    const formatLKR = (amount) => {
+        return `Rs. ${amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    };
+
     return [
         {
             key: '1',
@@ -41,8 +46,8 @@ export const generateBOQData = (results) => {
             description: 'Standard emulsion paint, 2 coats',
             quantity: quantities.wall_net_surface_area_m2,
             unit: 'm2',
-            rate: `$${rates.wall_paint_rate_per_m2.toFixed(2)}`,
-            total: `$${costs.breakdown.wall_paint_cost.toFixed(2)}`,
+            rate: formatLKR(rates.wall_paint_rate_per_m2),
+            total: formatLKR(costs.breakdown.wall_paint_cost),
             type: 'work'
         },
         {
@@ -51,8 +56,8 @@ export const generateBOQData = (results) => {
             description: 'Cement plaster, 12mm thick',
             quantity: quantities.wall_net_surface_area_m2,
             unit: 'm2',
-            rate: `$${rates.wall_plaster_rate_per_m2.toFixed(2)}`,
-            total: `$${costs.breakdown.wall_plaster_cost.toFixed(2)}`,
+            rate: formatLKR(rates.wall_plaster_rate_per_m2),
+            total: formatLKR(costs.breakdown.wall_plaster_cost),
             type: 'work'
         },
         {
@@ -61,8 +66,8 @@ export const generateBOQData = (results) => {
             description: 'Ceramic tiles with grouting',
             quantity: quantities.wall_net_surface_area_m2,
             unit: 'm2',
-            rate: `$${rates.wall_tiling_rate_per_m2.toFixed(2)}`,
-            total: `$${costs.breakdown.wall_tiling_cost.toFixed(2)}`,
+            rate: formatLKR(rates.wall_tiling_rate_per_m2),
+            total: formatLKR(costs.breakdown.wall_tiling_cost),
             type: 'work'
         },
         {
@@ -71,8 +76,8 @@ export const generateBOQData = (results) => {
             description: 'Standard interior doors with frames',
             quantity: quantities.item_counts.doors,
             unit: 'nos',
-            rate: `$${rates.door_unit_cost.toFixed(2)}`,
-            total: `$${costs.breakdown.doors_cost.toFixed(2)}`,
+            rate: formatLKR(rates.door_unit_cost),
+            total: formatLKR(costs.breakdown.doors_cost),
             type: 'item'
         },
         {
@@ -81,8 +86,8 @@ export const generateBOQData = (results) => {
             description: 'Standard aluminum windows with glass',
             quantity: quantities.item_counts.windows,
             unit: 'nos',
-            rate: `$${rates.window_unit_cost.toFixed(2)}`,
-            total: `$${costs.breakdown.windows_cost.toFixed(2)}`,
+            rate: formatLKR(rates.window_unit_cost),
+            total: formatLKR(costs.breakdown.windows_cost),
             type: 'item'
         }
     ];

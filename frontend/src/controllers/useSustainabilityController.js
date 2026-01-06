@@ -114,8 +114,14 @@ const useSustainabilityController = () => {
         return new Intl.NumberFormat('en-LK', {
             style: 'currency',
             currency: 'LKR',
+        return `${carbonKg.toFixed(2)} kg CO₂e`;
+    };
+
+    const formatCurrency = (amount) => {
+        return `Rs. ${amount.toLocaleString('en-IN', {
             minimumFractionDigits: 0,
-        }).format(amount);
+            maximumFractionDigits: 0,
+        })}`;
     };
 
     /**
