@@ -1,0 +1,147 @@
+/**
+ * Floor Plan Schema
+ * 
+ * Stores uploaded floor plan images and their ML analysis results.
+ */
+
+const mongoose = require('mongoose');
+
+const floorPlanSchema = new mongoose.Schema({
+    project: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Project',
+        required: true
+    },
+    uploadedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        required: true
+    },
+    name: {
+        type: String,
+        required: [true, 'Floor plan name is required'],
+        trim: true
+    },
+    description: {
+        type: String,
+        trim: true
+    },
+    floorNumber: {
+        type: Number,
+        default: 0
+    },
+    originalFilename: {
+        type: String,
+        required: true
+    },
+    storedFilename: {
+        type: String,
+        required: true
+    },
+    filePath: {
+        type: String,
+        required: true
+    },
+    fileSize: {
+        type: Number
+    },
+    mimeType: {
+        type: String
+    },
+    imageWidth: {
+        type: Number
+    },
+    imageHeight: {
+        type: Number
+    },
+    scale: {
+        pixelsPerMeter: { type: Number, default: 50 },
+        userDefined: { type: Boolean, default: false }
+    },
+    wallHeight: {
+        type: Number,
+        default: 3.0
+    },
+    mlAnalysis: {
+        isProcessed: { type: Boolean, default: false },
+        processedAt: { type: Date },
+        isValidFloorPlan: { type: Boolean },
+        validationConfidence: { type: Number },
+        walls: {
+            detectedLength: { type: Number },
+            lengthMeters: { type: Number },
+            surfaceArea: { type: Number },
+            netSurfaceArea: { type: Number }
+        },
+        doors: {
+            count: { type: Number, default: 0 },
+            totalArea: { type: Number, default: 0 }
+        },
+        windows: {
+            count: { type: Number, default: 0 },
+            totalArea: { type: Number, default: 0 }
+        },
+        rooms: [{
+            id: { type: String },
+            type: { type: String },
+            area: { type: Number },
+            perimeter: { type: Number }
+        }],
+        processingTime: { type: Number },
+        modelVersions: {
+            wallDetection: { type: String },
+            objectDetection: { type: String },
+            roomSegmentation: { type: String }
+        }
+    },
+    manualInputs: {
+        electrical: {
+            outlets: { type: Number, default: 0 },
+            switches: { type: Number, default: 0 },
+            lightFixtures: { type: Number, default: 0 }
+        },
+        plumbing: {
+            sinks: { type: Number, default: 0 },
+            toilets: { type: Number, default: 0 },
+            showers: { type: Number, default: 0 },
+            bathtubs: { type: Number, default: 0 }
+        },
+        hvac: {
+            acUnits: { type: Number, default: 0 }
+        },
+        structural: {
+            staircases: { type: Number, default: 0 }
+        },
+        flooring: {
+            tileArea: { type: Number, default: 0 },
+            woodArea: { type: Number, default: 0 },
+            carpetArea: { type: Number, default: 0 }
+        },
+        ceiling: {
+            plainArea: { type: Number, default: 0 },
+            falseArea: { type: Number, default: 0 }
+        }
+    },
+    visualizations: {
+        wallMask: { type: String },
+        detectionOverlay: { type: String },
+        roomSegmentation: { type: String }
+    },
+    status: {
+        type: String,
+        enum: ['uploaded', 'processing', 'processed', 'failed', 'archived'],
+        default: 'uploaded'
+    },
+    errorMessage: {
+        type: String
+    }
+}, {
+    timestamps: true
+});
+
+floorPlanSchema.index({ project: 1, floorNumber: 1 });
+floorPlanSchema.index({ uploadedBy: 1 });
+
+const FloorPlan = mongoose.model('FloorPlan', floorPlanSchema);
+
+module.exports = FloorPlan;
