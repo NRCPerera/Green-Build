@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Quantity Surveying Dashboard | AI-Powered Analysis</title>
+    <link rel="stylesheet" href="/static/css/dashboard.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="dashboard">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-content">
+                <div class="logo">
+                    <div class="logo-icon">🏗️</div>
+                    <div class="logo-text">
+                        <h1>QS Dashboard</h1>
+                        <span>AI-Powered Quantity Surveying</span>
+                    </div>
+                </div>
+                <div class="header-status">
+                    <div class="status-indicator" id="apiStatus">
+                        <span class="status-dot"></span>
+                        <span class="status-text">Checking API...</span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <div class="grid-layout">
+                <!-- Input Panel -->
+                <section class="panel input-panel">
+                    <div class="panel-header">
+                        <h2>📊 Project Parameters</h2>
+                        <p>Enter your project details for AI analysis</p>
+                    </div>
+                    
+                    <form id="predictionForm" class="prediction-form">
+                        <!-- Building Specifications -->
+                        <div class="form-section">
+                            <h3 class="section-title">🏢 Building Specifications</h3>
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label for="areaSqft">
+                                        Area (SQFT)
+                                        <span class="tooltip" data-tip="Total floor area in square feet">ℹ️</span>
+                                    </label>
+                                    <input type="number" id="areaSqft" name="areaSqft" 
+                                           placeholder="e.g., 2000" min="100" step="1" required>
+                                    <span class="error-message" id="areaSqftError"></span>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label for="floors">
+                                        Number of Floors
+                                        <span class="tooltip" data-tip="Total number of stories including ground floor">ℹ️</span>
+                                    </label>
+                                    <input type="number" id="floors" name="floors" 
+                                           placeholder="e.g., 2" min="1" max="100" step="1" required>
+                                    <span class="error-message" id="floorsError"></span>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label for="constructionType">
+                                        Construction Type
+                                        <span class="tooltip" data-tip="Primary construction method">ℹ️</span>
+                                    </label>
+                                    <select id="constructionType" name="constructionType" required>
+                                        <option value="">Select type...</option>
+                                        <option value="residential">Residential</option>
+                                        <option value="commercial">Commercial</option>
+                                        <option value="industrial">Industrial</option>
+                                        <option value="mixed_use">Mixed Use</option>
+                                    </select>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label for="materialQuality">
+                                        Material Quality
+                                        <span class="tooltip" data-tip="Quality level affects cost and sustainability">ℹ️</span>
+                                    </label>
+                                    <select id="materialQuality" name="materialQuality" required>
+                                        <option value="">Select quality...</option>
+                                        <option value="basic">Basic</option>
+                                        <option value="standard">Standard</option>
+                                        <option value="premium">Premium</option>
+                                        <option value="luxury">Luxury</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Energy & Sustainability -->
+                        <div class="form-section">
+                            <h3 class="section-title">🌱 Energy & Sustainability</h3>
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label for="energyEfficiency">
+                                        Energy Efficiency Rating
+                                        <span class="tooltip" data-tip="Building's energy efficiency score (0-100)">ℹ️</span>
+                                    </label>
+                                    <input type="range" id="energyEfficiency" name="energyEfficiency" 
+                                           min="0" max="100" value="70">
+                                    <div class="range-value">
+                                        <span id="energyEfficiencyValue">70</span>%
+                                    </div>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label for="renewableEnergy">
+                                        Renewable Energy %
+                                        <span class="tooltip" data-tip="Percentage of energy from renewable sources">ℹ️</span>
+                                    </label>
+                                    <input type="range" id="renewableEnergy" name="renewableEnergy" 
+                                           min="0" max="100" value="20">
+                                    <div class="range-value">
+                                        <span id="renewableEnergyValue">20</span>%
+                                    </div>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label for="recycledMaterials">
+                                        Recycled Materials %
+                                        <span class="tooltip" data-tip="Percentage of recycled materials used">ℹ️</span>
+                                    </label>
+                                    <input type="range" id="recycledMaterials" name="recycledMaterials" 
+                                           min="0" max="100" value="15">
+                                    <div class="range-value">
+                                        <span id="recycledMaterialsValue">15</span>%
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Risk Factors -->
+                        <div class="form-section">
+                            <h3 class="section-title">⚠️ Risk Assessment Factors</h3>
+                            <div class="form-grid">
+                                <div class="form-group">
+                                    <label for="designCompleteness">
+                                        Design Completeness %
+                                        <span class="tooltip" data-tip="How complete are the design documents (0-100)">ℹ️</span>
+                                    </label>
+                                    <input type="number" id="designCompleteness" name="designCompleteness" 
+                                           placeholder="e.g., 85" min="0" max="100" step="1" required>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label for="projectComplexity">
+                                        Project Complexity (1-10)
+                                        <span class="tooltip" data-tip="Overall complexity score (1=Simple, 10=Very Complex)">ℹ️</span>
+                                    </label>
+                                    <input type="number" id="projectComplexity" name="projectComplexity" 
+                                           placeholder="e.g., 5" min="1" max="10" step="1" required>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label for="contractorExperience">
+                                        Contractor Experience (Years)
+                                        <span class="tooltip" data-tip="Years of experience of the main contractor">ℹ️</span>
+                                    </label>
+                                    <input type="number" id="contractorExperience" name="contractorExperience" 
+                                           placeholder="e.g., 10" min="0" max="50" step="1" required>
+                                </div>
+                                
+                                <div class="form-group">
+                                    <label for="changeOrderFreq">
+                                        Expected Change Orders
+                                        <span class="tooltip" data-tip="Expected number of change orders">ℹ️</span>
+                                    </label>
+                                    <input type="number" id="changeOrderFreq" name="changeOrderFreq" 
+                                           placeholder="e.g., 3" min="0" max="20" step="1" required>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Submit Button -->
+                        <div class="form-actions">
+                            <button type="submit" class="submit-btn" id="submitBtn">
+                                <span class="btn-text">🚀 Analyze Project</span>
+                                <span class="btn-loading" style="display: none;">
+                                    <div class="spinner"></div>
+                                    AI is analyzing...
+                                </span>
+                            </button>
+                            <button type="reset" class="reset-btn">Reset Form</button>
+                        </div>
+                    </form>
+                </section>
+
+                <!-- Results Panel -->
+                <section class="panel results-panel">
+                    <div class="panel-header">
+                        <h2>📈 AI Analysis Results</h2>
+                        <p>Predictions and recommendations</p>
+                    </div>
+
+                    <!-- Placeholder when no results -->
+                    <div class="results-placeholder" id="resultsPlaceholder">
+                        <div class="placeholder-icon">🎯</div>
+                        <h3>Ready for Analysis</h3>
+                        <p>Fill in the project parameters and click <strong>Analyze Project</strong> to get AI-powered predictions.</p>
+                    </div>
+
+                    <!-- Results Content (hidden initially) -->
+                    <div class="results-content" id="resultsContent" style="display: none;">
+                        
+                        <!-- Key Metrics -->
+                        <div class="metrics-grid">
+                            <!-- Sustainability Score -->
+                            <div class="metric-card sustainability">
+                                <div class="metric-icon">🌱</div>
+                                <div class="metric-info">
+                                    <span class="metric-label">Sustainability Score</span>
+                                    <span class="metric-value" id="sustainabilityScore">--</span>
+                                    <span class="metric-unit">/ 100</span>
+                                </div>
+                                <div class="metric-bar">
+                                    <div class="metric-bar-fill" id="sustainabilityBar" style="width: 0%"></div>
+                                </div>
+                            </div>
+
+                            <!-- Lifecycle Cost -->
+                            <div class="metric-card cost">
+                                <div class="metric-icon">💰</div>
+                                <div class="metric-info">
+                                    <span class="metric-label">Lifecycle Cost</span>
+                                    <span class="metric-value" id="lifecycleCost">--</span>
+                                    <span class="metric-unit">LKR</span>
+                                </div>
+                                <div class="cost-bar-container">
+                                    <div class="cost-bar" id="costBar"></div>
+                                    <span class="cost-per-sqft" id="costPerSqft"></span>
+                                </div>
+                            </div>
+
+                            <!-- Risk Level -->
+                            <div class="metric-card risk">
+                                <div class="metric-icon">⚠️</div>
+                                <div class="metric-info">
+                                    <span class="metric-label">Risk Assessment</span>
+                                    <div class="risk-traffic-light">
+                                        <div class="traffic-light" id="trafficLight">
+                                            <div class="light red" id="redLight"></div>
+                                            <div class="light yellow" id="yellowLight"></div>
+                                            <div class="light green" id="greenLight"></div>
+                                        </div>
+                                        <span class="risk-label" id="riskLabel">--</span>
+                                    </div>
+                                </div>
+                                <div class="risk-probability">
+                                    Probability: <span id="riskProbability">--</span>%
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Smart Suggestions -->
+                        <div class="suggestions-section">
+                            <h3>💡 AI Recommendations</h3>
+                            <div class="suggestions-list" id="suggestionsList">
+                                <!-- Suggestions will be dynamically added here -->
+                            </div>
+                        </div>
+
+                        <!-- Detailed Breakdown -->
+                        <div class="breakdown-section">
+                            <h3>📊 Detailed Breakdown</h3>
+                            <div class="breakdown-grid" id="breakdownGrid">
+                                <!-- Breakdown items will be dynamically added here -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Error Display -->
+                    <div class="error-display" id="errorDisplay" style="display: none;">
+                        <div class="error-icon">❌</div>
+                        <h3>Analysis Failed</h3>
+                        <p id="errorMessage"></p>
+                        <button class="retry-btn" onclick="document.getElementById('predictionForm').dispatchEvent(new Event('submit'))">
+                            Retry Analysis
+                        </button>
+                    </div>
+                </section>
+            </div>
+        </main>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p>Sustainability ML Service v1.0 | AI-Powered Quantity Surveying Dashboard</p>
+        </footer>
+    </div>
+
+    <script src="/static/js/dashboard.js"></script>
+</body>
+</html>
