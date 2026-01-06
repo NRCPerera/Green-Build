@@ -15,21 +15,22 @@ export const defaultManualInputs = {
     ceilingFalseArea: 0
 };
 
+// Manual item rates in LKR (Sri Lankan Rupees)
 export const manualItemRates = {
-    outlets: 25.00,
-    switches: 20.00,
-    lightFixtures: 75.00,
-    sinks: 150.00,
-    toilets: 300.00,
-    showers: 400.00,
-    bathtubs: 600.00,
-    acUnits: 1200.00,
-    staircases: 2500.00,
-    flooringTileArea: 35.00,
-    flooringWoodArea: 65.00,
-    flooringCarpetArea: 25.00,
-    ceilingPlainArea: 15.00,
-    ceilingFalseArea: 35.00
+    outlets: 1500.00,
+    switches: 1200.00,
+    lightFixtures: 3500.00,
+    sinks: 15000.00,
+    toilets: 35000.00,
+    showers: 25000.00,
+    bathtubs: 85000.00,
+    acUnits: 150000.00,
+    staircases: 350000.00,
+    flooringTileArea: 3500.00,
+    flooringWoodArea: 8500.00,
+    flooringCarpetArea: 2500.00,
+    ceilingPlainArea: 1200.00,
+    ceilingFalseArea: 3500.00
 };
 
 export const calculateManualCosts = (inputs) => {
@@ -52,6 +53,11 @@ export const calculateManualCosts = (inputs) => {
     });
 
     return { breakdown, total };
+};
+
+// Helper function to format LKR
+const formatLKR = (amount) => {
+    return `Rs. ${amount.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 };
 
 export const generateManualBOQData = (inputs) => {
@@ -88,8 +94,8 @@ export const generateManualBOQData = (inputs) => {
                 description: `${config.category} - User input`,
                 quantity: quantity,
                 unit: config.unit,
-                rate: `$${rate.toFixed(2)}`,
-                total: `$${cost.toFixed(2)}`,
+                rate: formatLKR(rate),
+                total: formatLKR(cost),
                 type: 'manual'
             });
         }

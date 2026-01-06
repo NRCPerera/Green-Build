@@ -62,7 +62,7 @@ const getRoomScheduleColumns = () => [
         width: 180,
         render: (cost) => (
             <Text strong style={{ color: '#faad14' }}>
-                ${cost.toFixed(2)}
+                Rs. {cost.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
             </Text>
         )
     }
@@ -445,7 +445,7 @@ const ResultsPanel = ({ results, loading, error, onErrorClose, manualInputs, man
                                                                     </Table.Summary.Cell>
                                                                     <Table.Summary.Cell index={2}>
                                                                         <Text strong style={{ color: '#faad14' }}>
-                                                                            ${getTotalFlooringCost().toFixed(2)}
+                                                                            Rs. {getTotalFlooringCost().toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                                         </Text>
                                                                     </Table.Summary.Cell>
                                                                 </Table.Summary.Row>
@@ -471,11 +471,11 @@ const ResultsPanel = ({ results, loading, error, onErrorClose, manualInputs, man
                                                                     title="Total Flooring Cost"
                                                                     value={getTotalFlooringCost()}
                                                                     precision={2}
-                                                                    prefix="$"
+                                                                    prefix="Rs. "
                                                                     valueStyle={{ color: '#faad14' }}
                                                                 />
                                                                 <Text type="secondary" style={{ fontSize: '11px' }}>
-                                                                    Rate: $45.00/m²
+                                                                    Rate: Rs. 20,000.00/m²
                                                                 </Text>
                                                             </Card>
                                                         </Col>
@@ -505,7 +505,7 @@ const ResultsPanel = ({ results, loading, error, onErrorClose, manualInputs, man
                                         title="Basic Finish"
                                         value={results.costs.estimates.basic_finish}
                                         precision={2}
-                                        prefix="$"
+                                        prefix="Rs. "
                                         valueStyle={{ color: '#52c41a' }}
                                     />
                                     <Text type="secondary" style={{ fontSize: '11px' }}>
@@ -519,7 +519,7 @@ const ResultsPanel = ({ results, loading, error, onErrorClose, manualInputs, man
                                         title="Standard Finish"
                                         value={results.costs.estimates.standard_finish}
                                         precision={2}
-                                        prefix="$"
+                                        prefix="Rs. "
                                         valueStyle={{ color: '#1890ff' }}
                                     />
                                     <Text type="secondary" style={{ fontSize: '11px' }}>
@@ -533,7 +533,7 @@ const ResultsPanel = ({ results, loading, error, onErrorClose, manualInputs, man
                                         title="Premium Finish"
                                         value={results.costs.estimates.premium_finish}
                                         precision={2}
-                                        prefix="$"
+                                        prefix="Rs. "
                                         valueStyle={{ color: '#faad14' }}
                                     />
                                     <Text type="secondary" style={{ fontSize: '11px' }}>
