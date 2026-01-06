@@ -43,9 +43,8 @@ const MODULES = [
         label: 'Sustainability',
         icon: '🌱',
         description: 'Carbon & LCC',
-        requiresQuantity: false,
         requiresAuth: false,
-        requiresQuantity: true,
+        requiresQuantity: false,
     },
     {
         key: 'delay',

@@ -17,7 +17,7 @@ module.exports = {
     healthRoutes,
     uploadRoutes,
     costPredictionRoutes,
-    sustainabilityRoutes
+    sustainabilityRoutes,
     authRoutes,
     projectRoutes,
     floorPlanRoutes,
