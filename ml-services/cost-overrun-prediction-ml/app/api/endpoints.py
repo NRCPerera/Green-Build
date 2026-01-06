@@ -6,23 +6,23 @@ from typing import Dict, Any
 from fastapi import APIRouter, HTTPException, status
 from fastapi.responses import JSONResponse
 
-from app.models.schemas import PredictionRequest, PredictionResponse
+from app.models.schemas import PredictionRequest, PredictionResponse, PredictionResult
 
 logger = logging.getLogger(__name__)
 
-# Global reference to inference service (set by main.py)
-_inference_service = None
+# Global reference to predictor (set by main.py)
+_predictor = None
 
 
-def set_inference_service(service):
-    """Set the global inference service instance"""
-    global _inference_service
-    _inference_service = service
+def set_predictor(predictor):
+    """Set the global predictor instance"""
+    global _predictor
+    _predictor = predictor
 
 
-def get_inference_service():
-    """Get the global inference service instance"""
-    return _inference_service
+def get_predictor():
+    """Get the global predictor instance"""
+    return _predictor
 
 router = APIRouter()
 
@@ -43,20 +43,21 @@ async def root() -> Dict[str, str]:
 
 
 @router.post(
-    "/predict/raw",
+    "/predict",
     response_model=PredictionResponse,
     status_code=status.HTTP_200_OK,
     tags=["Prediction"]
 )
-async def predict_raw(request: PredictionRequest) -> PredictionResponse:
+async def predict(request: PredictionRequest) -> PredictionResponse:
     """
     Predict cost overrun for a construction project
     
     Args:
-        request: Project features
+        request: Project features and optional explain flag
         
     Returns:
-        Prediction results including cost overrun percentage, probability, and risk label
+        Prediction results including cost overrun percentage, probability, 
+        risk label, and optional SHAP explanations
         
     Raises:
         HTTPException 400: Invalid input data
@@ -66,22 +67,35 @@ async def predict_raw(request: PredictionRequest) -> PredictionResponse:
     try:
         logger.info("Received prediction request")
         
-        # Get inference service
-        inference_service = get_inference_service()
+        # Get predictor
+        predictor = get_predictor()
         
-        if inference_service is None:
-            logger.error("Inference service not initialized")
+        if predictor is None:
+            logger.error("Predictor not initialized")
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Model service not initialized"
+                detail="Predictor service not initialized"
             )
         
+        # Extract explain flag, top_n, and data
+        explain = request.explain
+        top_n = request.top_n
+        payload = request.data
+        
+        logger.info(f"Explain flag: {explain}, top_n: {top_n}")
+        
         # Run prediction
-        result = inference_service.predict(request.data)
+        result = predictor.predict(payload, explain=explain, top_n=top_n)
         
         logger.info("Prediction completed successfully")
         
-        return PredictionResponse(**result)
+        # Build response
+        response = PredictionResponse(
+            success=True,
+            prediction=PredictionResult(**result)
+        )
+        
+        return response
         
     except ValueError as e:
         # Validation errors (invalid categorical values, etc.)

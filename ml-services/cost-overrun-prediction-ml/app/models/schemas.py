@@ -1,41 +1,46 @@
-"""Request and response schemas"""
+"""Pydantic schemas for request/response validation"""
 
-from typing import Any, Dict, Optional
+from typing import Dict, Any, Optional, List
 from pydantic import BaseModel, Field
 
 
 class PredictionRequest(BaseModel):
-    """Request schema for cost overrun prediction"""
+    """Request model for cost overrun prediction"""
     
     data: Dict[str, Any] = Field(
         ...,
-        description="Project features as key-value pairs",
+        description="Project features for prediction",
         example={
-            "project_size": 5000000,
-            "duration_months": 18,
-            "project_type": "Commercial",
+            "project_type": "Residential",
+            "contract_type": "Fixed Price",
+            "project_size_sqft": 5000.0,
+            "duration_months": 12.0,
             "location": "Urban",
-            "contractor_experience": "High"
+            "complexity": "Medium"
         }
     )
+    explain: bool = Field(
+        default=False,
+        description="Whether to include SHAP explanations in the response"
+    )
+    top_n: int = Field(
+        default=6,
+        ge=1,
+        le=50,
+        description="Number of top SHAP features to return"
+    )
+
+
+class ShapFeature(BaseModel):
+    """SHAP feature impact"""
     
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "data": {
-                    "project_size": 5000000,
-                    "duration_months": 18,
-                    "project_type": "Commercial",
-                    "location": "Urban",
-                    "contractor_experience": "High",
-                    "weather_risk": "Medium"
-                }
-            }
-        }
+    feature: str = Field(..., description="Feature name")
+    impact: float = Field(..., description="SHAP value (absolute impact)")
+    direction: str = Field(..., description="Impact direction: 'increase' or 'decrease'")
 
 
-class PredictionResponse(BaseModel):
-    """Response schema for cost overrun prediction"""
+class PredictionResult(BaseModel):
+    """Prediction result details"""
     
     predicted_cost_overrun_pct: float = Field(
         ...,
@@ -51,15 +56,22 @@ class PredictionResponse(BaseModel):
     )
     threshold: float = Field(
         ...,
-        description="Classification threshold used"
+        description="Threshold used for high risk classification"
     )
+    shap_explanation: Optional[List[ShapFeature]] = Field(
+        default=None,
+        description="SHAP feature importance explanation (only if explain=True)"
+    )
+
+
+class PredictionResponse(BaseModel):
+    """Response model for cost overrun prediction"""
     
-    class Config:
-        json_schema_extra = {
-            "example": {
-                "predicted_cost_overrun_pct": 15.5,
-                "overrun_probability": 0.78,
-                "high_risk_label": True,
-                "threshold": 0.5
-            }
-        }
+    success: bool = Field(
+        default=True,
+        description="Whether the prediction was successful"
+    )
+    prediction: PredictionResult = Field(
+        ...,
+        description="Prediction results"
+    )
