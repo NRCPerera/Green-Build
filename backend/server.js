@@ -3,7 +3,7 @@ const cors = require('cors');
 const morgan = require('morgan');
 const config = require('./config');
 const connectDB = require('./config/database');
-const { healthRoutes, uploadRoutes, costPredictionRoutes, authRoutes, projectRoutes, floorPlanRoutes } = require('./routes');
+const { healthRoutes, uploadRoutes, costPredictionRoutes, authRoutes, projectRoutes, floorPlanRoutes, boqRoutes } = require('./routes');
 const {
     multerErrorHandler,
     notFoundHandler,
@@ -53,6 +53,7 @@ app.use('/', costPredictionRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/projects', projectRoutes);
 app.use('/api/projects/:projectId/floorplans', floorPlanRoutes);
+app.use('/api/projects/:projectId/boq-reports', boqRoutes);
 
 // Error handling middleware should be registered last
 app.use(multerErrorHandler);
@@ -93,6 +94,9 @@ const startServer = async () => {
             console.log('  Floor Plans:');
             console.log('    POST /api/projects/:id/floorplans  - Upload floor plan');
             console.log('    GET  /api/projects/:id/floorplans  - List floor plans');
+            console.log('  BOQ Reports:');
+            console.log('    GET  /api/projects/:id/boq-reports - List BOQ reports');
+            console.log('    GET  /api/projects/:id/boq-reports/:id - Get BOQ details');
             console.log('================================================================');
             console.log('');
         });

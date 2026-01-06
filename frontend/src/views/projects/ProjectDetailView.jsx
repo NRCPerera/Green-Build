@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import {
     Card, Button, Tabs, Upload, Progress, message, Modal,
-    Spin, Empty, Tag, Statistic, Row, Col, Descriptions
+    Spin, Empty, Tag, Statistic, Row, Col, Descriptions, Table
 } from 'antd';
 import {
     ArrowLeftOutlined,
@@ -10,12 +10,13 @@ import {
     DeleteOutlined,
     EyeOutlined,
     SettingOutlined,
-    BarChartOutlined
+    BarChartOutlined,
+    FileTextOutlined
 } from '@ant-design/icons';
 import useProjectsController from '../../controllers/useProjectsController';
+import { projectApi } from '../../services/projectService';
 
 const { Dragger } = Upload;
-const { TabPane } = Tabs;
 
 const ProjectDetailView = ({ project, onBack, onSelectFloorPlan }) => {
     const [activeTab, setActiveTab] = useState('floorplans');
@@ -23,6 +24,10 @@ const ProjectDetailView = ({ project, onBack, onSelectFloorPlan }) => {
     const [uploadProgress, setUploadProgress] = useState(0);
     const [selectedFloorPlan, setSelectedFloorPlan] = useState(null);
     const [viewModalVisible, setViewModalVisible] = useState(false);
+    const [boqReports, setBOQReports] = useState([]);
+    const [selectedBOQ, setSelectedBOQ] = useState(null);
+    const [boqModalVisible, setBOQModalVisible] = useState(false);
+    const [boqLoading, setBOQLoading] = useState(false);
 
     const {
         floorPlans,
@@ -36,8 +41,36 @@ const ProjectDetailView = ({ project, onBack, onSelectFloorPlan }) => {
     useEffect(() => {
         if (project?._id) {
             fetchFloorPlans(project._id);
+            fetchBOQReports();
         }
     }, [project?._id, fetchFloorPlans]);
+
+    const fetchBOQReports = async () => {
+        if (!project?._id) return;
+        setBOQLoading(true);
+        try {
+            const response = await projectApi.getBOQReports(project._id);
+            if (response.success) {
+                setBOQReports(response.data.reports);
+            }
+        } catch (error) {
+            console.error('Failed to fetch BOQ reports:', error);
+        } finally {
+            setBOQLoading(false);
+        }
+    };
+
+    const handleViewBOQ = async (reportId) => {
+        try {
+            const response = await projectApi.getBOQReport(project._id, reportId);
+            if (response.success) {
+                setSelectedBOQ(response.data.report);
+                setBOQModalVisible(true);
+            }
+        } catch (error) {
+            message.error('Failed to load BOQ report');
+        }
+    };
 
     const handleUpload = async (file) => {
         setUploading(true);
@@ -56,6 +89,7 @@ const ProjectDetailView = ({ project, onBack, onSelectFloorPlan }) => {
             if (result.success) {
                 message.success('Floor plan uploaded and analyzed successfully!');
                 fetchFloorPlans(project._id);
+                fetchBOQReports(); // Refresh BOQ reports after new floor plan
             } else {
                 message.error(result.error || 'Upload failed');
             }
@@ -332,6 +366,67 @@ const ProjectDetailView = ({ project, onBack, onSelectFloorPlan }) => {
                                     )}
                                 </Descriptions>
                             )
+                        },
+                        {
+                            key: 'boq',
+                            label: <span className="text-gray-300">📋 BOQ Reports</span>,
+                            children: (
+                                <div className="space-y-4">
+                                    {boqLoading ? (
+                                        <div className="flex justify-center py-8">
+                                            <Spin size="large" />
+                                        </div>
+                                    ) : boqReports.length === 0 ? (
+                                        <Empty
+                                            description={
+                                                <span className="text-gray-400">
+                                                    No BOQ reports yet. Upload a floor plan to generate a BOQ.
+                                                </span>
+                                            }
+                                        />
+                                    ) : (
+                                        <div className="space-y-4">
+                                            {boqReports.map(report => (
+                                                <Card
+                                                    key={report._id}
+                                                    className="!bg-dark-700/50 !border-white/10"
+                                                    size="small"
+                                                >
+                                                    <div className="flex items-center justify-between">
+                                                        <div className="flex items-center gap-4">
+                                                            <FileTextOutlined className="text-2xl text-primary-400" />
+                                                            <div>
+                                                                <h4 className="text-white font-medium">{report.title}</h4>
+                                                                <p className="text-gray-400 text-sm">
+                                                                    {report.reportNumber} • {new Date(report.createdAt).toLocaleDateString()}
+                                                                </p>
+                                                            </div>
+                                                        </div>
+                                                        <div className="flex items-center gap-4">
+                                                            <div className="text-right">
+                                                                <p className="text-gray-400 text-xs">Grand Total</p>
+                                                                <p className="text-white font-bold">
+                                                                    Rs. {report.summary?.grandTotal?.toLocaleString() || 0}
+                                                                </p>
+                                                            </div>
+                                                            <Tag color={report.status === 'final' ? 'success' : 'default'}>
+                                                                {report.status?.toUpperCase()}
+                                                            </Tag>
+                                                            <Button
+                                                                type="primary"
+                                                                icon={<EyeOutlined />}
+                                                                onClick={() => handleViewBOQ(report._id)}
+                                                            >
+                                                                View Details
+                                                            </Button>
+                                                        </div>
+                                                    </div>
+                                                </Card>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            )
                         }
                     ]}
                 />
@@ -431,8 +526,112 @@ const ProjectDetailView = ({ project, onBack, onSelectFloorPlan }) => {
                     </div>
                 )}
             </Modal>
+
+            {/* BOQ Report Detail Modal */}
+            <Modal
+                title={selectedBOQ?.title || 'BOQ Report Details'}
+                open={boqModalVisible}
+                onCancel={() => setBOQModalVisible(false)}
+                footer={null}
+                width={1000}
+            >
+                {selectedBOQ && (
+                    <div className="space-y-6">
+                        {/* Report Header */}
+                        <div className="flex justify-between items-start">
+                            <div>
+                                <p className="text-gray-500">Report Number: {selectedBOQ.reportNumber}</p>
+                                <p className="text-gray-500">Generated: {new Date(selectedBOQ.createdAt).toLocaleDateString()}</p>
+                            </div>
+                            <Tag color={selectedBOQ.status === 'final' ? 'success' : 'default'} className="text-lg px-3 py-1">
+                                {selectedBOQ.status?.toUpperCase()}
+                            </Tag>
+                        </div>
+
+                        {/* Items Table */}
+                        <Table
+                            dataSource={selectedBOQ.items}
+                            rowKey="_id"
+                            pagination={false}
+                            columns={[
+                                {
+                                    title: 'Category',
+                                    dataIndex: 'category',
+                                    key: 'category',
+                                    render: (cat) => <Tag>{cat?.toUpperCase()}</Tag>
+                                },
+                                {
+                                    title: 'Item',
+                                    dataIndex: 'itemName',
+                                    key: 'itemName',
+                                },
+                                {
+                                    title: 'Description',
+                                    dataIndex: 'description',
+                                    key: 'description',
+                                    ellipsis: true
+                                },
+                                {
+                                    title: 'Qty',
+                                    dataIndex: 'quantity',
+                                    key: 'quantity',
+                                    render: (qty, record) => `${qty?.toFixed(2)} ${record.unit}`
+                                },
+                                {
+                                    title: 'Unit Rate',
+                                    dataIndex: 'unitRate',
+                                    key: 'unitRate',
+                                    render: (rate) => `Rs. ${rate?.toLocaleString()}`
+                                },
+                                {
+                                    title: 'Total Cost',
+                                    dataIndex: 'totalCost',
+                                    key: 'totalCost',
+                                    render: (cost) => <strong>Rs. {cost?.toLocaleString()}</strong>
+                                }
+                            ]}
+                        />
+
+                        {/* Summary */}
+                        <Card className="!bg-dark-100">
+                            <Row gutter={16}>
+                                <Col span={6}>
+                                    <Statistic
+                                        title="Subtotal"
+                                        value={selectedBOQ.summary?.subtotal}
+                                        prefix="Rs."
+                                    />
+                                </Col>
+                                <Col span={6}>
+                                    <Statistic
+                                        title={`Contingency (${selectedBOQ.summary?.contingencyPercent}%)`}
+                                        value={selectedBOQ.summary?.contingencyAmount}
+                                        prefix="Rs."
+                                    />
+                                </Col>
+                                <Col span={6}>
+                                    <Statistic
+                                        title={`Overhead (${selectedBOQ.summary?.overheadPercent}%)`}
+                                        value={selectedBOQ.summary?.overheadAmount}
+                                        prefix="Rs."
+                                    />
+                                </Col>
+                                <Col span={6}>
+                                    <Statistic
+                                        title="Grand Total"
+                                        value={selectedBOQ.summary?.grandTotal}
+                                        prefix="Rs."
+                                        valueStyle={{ color: '#22c55e', fontWeight: 'bold' }}
+                                    />
+                                </Col>
+                            </Row>
+                        </Card>
+                    </div>
+                )}
+            </Modal>
         </div>
     );
 };
 
 export default ProjectDetailView;
+

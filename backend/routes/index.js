@@ -10,6 +10,7 @@ const costPredictionRoutes = require('./costPredictionRoutes');
 const authRoutes = require('./authRoutes');
 const projectRoutes = require('./projectRoutes');
 const floorPlanRoutes = require('./floorPlanRoutes');
+const boqRoutes = require('./boqRoutes');
 
 module.exports = {
     healthRoutes,
@@ -17,7 +18,8 @@ module.exports = {
     costPredictionRoutes,
     authRoutes,
     projectRoutes,
-    floorPlanRoutes
+    floorPlanRoutes,
+    boqRoutes
 };
 
 

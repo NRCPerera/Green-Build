@@ -142,7 +142,7 @@ const boqReportSchema = new mongoose.Schema({
     timestamps: true
 });
 
-boqReportSchema.pre('save', async function (next) {
+boqReportSchema.pre('save', async function () {
     if (!this.reportNumber) {
         const count = await mongoose.model('BOQReport').countDocuments();
         const date = new Date();
@@ -150,7 +150,6 @@ boqReportSchema.pre('save', async function (next) {
         const month = String(date.getMonth() + 1).padStart(2, '0');
         this.reportNumber = `BOQ-${year}${month}-${String(count + 1).padStart(5, '0')}`;
     }
-    next();
 });
 
 boqReportSchema.index({ project: 1, status: 1 });

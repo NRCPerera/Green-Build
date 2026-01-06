@@ -72,6 +72,27 @@ export const projectApi = {
             params
         );
         return response.data;
+    },
+
+    // BOQ Reports
+    getBOQReports: async (projectId) => {
+        const response = await api.get(`/api/projects/${projectId}/boq-reports`);
+        return response.data;
+    },
+
+    getBOQReport: async (projectId, reportId) => {
+        const response = await api.get(`/api/projects/${projectId}/boq-reports/${reportId}`);
+        return response.data;
+    },
+
+    updateBOQReport: async (projectId, reportId, data) => {
+        const response = await api.put(`/api/projects/${projectId}/boq-reports/${reportId}`, data);
+        return response.data;
+    },
+
+    deleteBOQReport: async (projectId, reportId) => {
+        const response = await api.delete(`/api/projects/${projectId}/boq-reports/${reportId}`);
+        return response.data;
     }
 };
 

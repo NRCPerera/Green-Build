@@ -7,6 +7,7 @@
 
 const FloorPlan = require('../models/FloorPlan');
 const Project = require('../models/Project');
+const BOQReport = require('../models/BOQReport');
 const axios = require('axios');
 const FormData = require('form-data');
 const fs = require('fs');
@@ -157,11 +158,126 @@ const uploadFloorPlan = async (req, res) => {
         floorPlan.status = 'processed';
         await floorPlan.save();
 
+        // Generate BOQ Report
+        const boqItems = [];
+
+        // Add wall-related items
+        if (floorPlan.mlAnalysis.walls.netSurfaceArea > 0) {
+            boqItems.push({
+                category: 'walls',
+                itemName: 'Wall Painting',
+                description: 'Interior wall painting with primer and two coats',
+                unit: 'm²',
+                quantity: floorPlan.mlAnalysis.walls.netSurfaceArea,
+                unitRate: config.costRates?.wallPaintRatePerSqm || 1500,
+                totalCost: costs.breakdown?.wall_paint_cost || 0,
+                source: 'ml-detected'
+            });
+            boqItems.push({
+                category: 'walls',
+                itemName: 'Wall Plastering',
+                description: 'Cement plaster finishing',
+                unit: 'm²',
+                quantity: floorPlan.mlAnalysis.walls.netSurfaceArea,
+                unitRate: config.costRates?.wallPlasterRatePerSqm || 2500,
+                totalCost: costs.breakdown?.wall_plaster_cost || 0,
+                source: 'ml-detected'
+            });
+        }
+
+        // Add door items
+        if (floorPlan.mlAnalysis.doors.count > 0) {
+            boqItems.push({
+                category: 'doors',
+                itemName: 'Interior Doors',
+                description: 'Standard wooden doors with frames and hardware',
+                unit: 'nos',
+                quantity: floorPlan.mlAnalysis.doors.count,
+                unitRate: config.costRates?.doorUnitCost || 75000,
+                totalCost: costs.breakdown?.doors_cost || 0,
+                source: 'ml-detected'
+            });
+        }
+
+        // Add window items
+        if (floorPlan.mlAnalysis.windows.count > 0) {
+            boqItems.push({
+                category: 'windows',
+                itemName: 'Windows',
+                description: 'Aluminum sliding windows with glass',
+                unit: 'nos',
+                quantity: floorPlan.mlAnalysis.windows.count,
+                unitRate: config.costRates?.windowUnitCost || 45000,
+                totalCost: costs.breakdown?.windows_cost || 0,
+                source: 'ml-detected'
+            });
+        }
+
+        // Add flooring if rooms detected
+        const totalFloorArea = mlData.room_detection?.total_floor_area_m2 || 0;
+        if (totalFloorArea > 0) {
+            boqItems.push({
+                category: 'flooring',
+                itemName: 'Floor Tiling',
+                description: 'Ceramic floor tiles with installation',
+                unit: 'm²',
+                quantity: totalFloorArea,
+                unitRate: 20000,
+                totalCost: totalFloorArea * 20000,
+                source: 'ml-detected'
+            });
+        }
+
+        // Calculate summary
+        const totalMLCost = boqItems.reduce((sum, item) => sum + item.totalCost, 0);
+        const contingencyAmount = totalMLCost * 0.1;
+        const overheadAmount = totalMLCost * 0.15;
+        const profitAmount = totalMLCost * 0.1;
+        const grandTotal = totalMLCost + contingencyAmount + overheadAmount + profitAmount;
+
+        const boqReport = new BOQReport({
+            project: projectId,
+            floorPlan: floorPlan._id,
+            generatedBy: req.userId,
+            title: `BOQ - ${floorPlan.name}`,
+            description: `Automatically generated Bill of Quantities from floor plan analysis`,
+            items: boqItems,
+            summary: {
+                totalMLDetectedCost: totalMLCost,
+                totalManualInputCost: 0,
+                subtotal: totalMLCost,
+                contingencyPercent: 10,
+                contingencyAmount: contingencyAmount,
+                overheadPercent: 15,
+                overheadAmount: overheadAmount,
+                profitPercent: 10,
+                profitAmount: profitAmount,
+                grandTotal: grandTotal,
+                currency: 'LKR'
+            },
+            estimates: {
+                basic: costs.estimates?.basic_finish || 0,
+                standard: costs.estimates?.standard_finish || 0,
+                premium: costs.estimates?.premium_finish || 0
+            },
+            finishType: 'standard',
+            status: 'draft'
+        });
+
+        await boqReport.save();
+        console.log(`[FloorPlan] BOQ Report generated: ${boqReport.reportNumber}`);
+
         // Add floor plan reference to project
         if (!project.floorPlans.includes(floorPlan._id)) {
             project.floorPlans.push(floorPlan._id);
-            await project.save();
         }
+
+        // Add BOQ report reference to project
+        if (!project.boqReports.includes(boqReport._id)) {
+            project.boqReports.push(boqReport._id);
+        }
+
+        await project.save();
 
         // Clean up temp file
         if (tempFilePath && fs.existsSync(tempFilePath)) {
@@ -181,7 +297,15 @@ const uploadFloorPlan = async (req, res) => {
                     floorNumber: floorPlan.floorNumber,
                     status: floorPlan.status,
                     mlAnalysis: floorPlan.mlAnalysis,
-                    visualizations: floorPlan.visualizations
+                    visualizations: floorPlan.visualizations,
+                    costEstimates: floorPlan.costEstimates
+                },
+                boqReport: {
+                    _id: boqReport._id,
+                    reportNumber: boqReport.reportNumber,
+                    title: boqReport.title,
+                    summary: boqReport.summary,
+                    itemCount: boqReport.items.length
                 },
                 costs,
                 processingTime
