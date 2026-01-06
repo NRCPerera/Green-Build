@@ -1,5 +1,8 @@
 import { useState, useMemo } from 'react';
+import { Dropdown, Avatar, Space } from 'antd';
+import { UserOutlined, LogoutOutlined, SettingOutlined, LoginOutlined } from '@ant-design/icons';
 import useProjectStore from '../../models/useProjectStore';
+import useAuthStore from '../../models/useAuthStore';
 
 // Module configuration
 const MODULES = [
@@ -46,9 +49,14 @@ const MODULES = [
  * @param {React.ReactNode} props.children - Content to render in main area
  * @param {string} props.activeModule - Currently active module key
  * @param {Function} props.onModuleChange - Callback when module is selected
+ * @param {Function} props.onLogout - Callback when user logs out
+ * @param {Function} props.onLogin - Callback when user wants to login
  */
-const MainLayout = ({ children, activeModule = 'dashboard', onModuleChange }) => {
+const MainLayout = ({ children, activeModule = 'dashboard', onModuleChange, onLogout, onLogin }) => {
     const [sidebarOpen, setSidebarOpen] = useState(true);
+
+    // Auth state
+    const { user, isAuthenticated, logout } = useAuthStore();
 
     // Use individual selectors to avoid creating new objects
     const quantityData = useProjectStore((state) => state.quantityData);
@@ -219,10 +227,71 @@ const MainLayout = ({ children, activeModule = 'dashboard', onModuleChange }) =>
                                 </span>
                             )}
 
-                            {/* User Avatar */}
-                            <div className="w-9 h-9 rounded-full bg-primary-500 flex items-center justify-center text-white font-medium cursor-pointer hover:ring-2 hover:ring-primary-400/50 transition-all">
-                                U
-                            </div>
+                            {/* User Menu */}
+                            {isAuthenticated && user ? (
+                                <Dropdown
+                                    menu={{
+                                        items: [
+                                            {
+                                                key: 'user-info',
+                                                label: (
+                                                    <div className="px-2 py-1">
+                                                        <div className="font-semibold text-white">{user.name}</div>
+                                                        <div className="text-xs text-gray-400">{user.email}</div>
+                                                    </div>
+                                                ),
+                                                disabled: true,
+                                            },
+                                            { type: 'divider' },
+                                            {
+                                                key: 'profile',
+                                                icon: <UserOutlined />,
+                                                label: 'My Profile',
+                                                onClick: () => onModuleChange?.('profile'),
+                                            },
+                                            {
+                                                key: 'settings',
+                                                icon: <SettingOutlined />,
+                                                label: 'Settings',
+                                                onClick: () => onModuleChange?.('profile'),
+                                            },
+                                            { type: 'divider' },
+                                            {
+                                                key: 'logout',
+                                                icon: <LogoutOutlined />,
+                                                label: 'Sign Out',
+                                                danger: true,
+                                                onClick: () => {
+                                                    logout();
+                                                    onLogout?.();
+                                                },
+                                            },
+                                        ],
+                                    }}
+                                    placement="bottomRight"
+                                    trigger={['click']}
+                                >
+                                    <div className="flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity">
+                                        <Avatar
+                                            className="!bg-gradient-to-r !from-primary-500 !to-primary-600"
+                                            size={36}
+                                        >
+                                            {user.name?.charAt(0)?.toUpperCase() || 'U'}
+                                        </Avatar>
+                                        <span className="text-sm text-gray-300 hidden md:block">
+                                            {user.name?.split(' ')[0]}
+                                        </span>
+                                    </div>
+                                </Dropdown>
+                            ) : (
+                                <button
+                                    onClick={onLogin}
+                                    className="flex items-center gap-2 px-4 py-2 bg-primary-500/20 hover:bg-primary-500/30 text-primary-400 rounded-lg border border-primary-500/30 transition-all"
+                                >
+                                    <LoginOutlined />
+                                    <span>Sign In</span>
+                                </button>
+                            )}
                         </div>
                     </div>
                 </header>

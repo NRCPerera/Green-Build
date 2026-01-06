@@ -3,7 +3,7 @@ const cors = require('cors');
 const morgan = require('morgan');
 const config = require('./config');
 const connectDB = require('./config/database');
-const { healthRoutes, uploadRoutes, costPredictionRoutes } = require('./routes');
+const { healthRoutes, uploadRoutes, costPredictionRoutes, authRoutes } = require('./routes');
 const {
     multerErrorHandler,
     notFoundHandler,
@@ -50,6 +50,7 @@ app.use(morgan('dev'));
 app.use('/', healthRoutes);
 app.use('/', uploadRoutes);
 app.use('/', costPredictionRoutes);
+app.use('/api/auth', authRoutes);
 
 // Error handling middleware should be registered last
 app.use(multerErrorHandler);
@@ -79,6 +80,12 @@ const startServer = async () => {
             console.log('    POST /api/upload-plan         - Upload and process plan');
             console.log('    POST /api/predict-cost-overrun - Predict cost overrun');
             console.log('    GET  /api/cost-ml-health      - Cost ML service health');
+            console.log('  Authentication:');
+            console.log('    POST /api/auth/register       - Register new user');
+            console.log('    POST /api/auth/login          - Login user');
+            console.log('    GET  /api/auth/profile        - Get user profile');
+            console.log('    PUT  /api/auth/profile        - Update profile');
+            console.log('    PUT  /api/auth/change-password - Change password');
             console.log('================================================================');
             console.log('');
         });

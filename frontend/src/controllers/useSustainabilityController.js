@@ -75,11 +75,10 @@ const useSustainabilityController = () => {
     };
 
     const formatCurrency = (amount) => {
-        return new Intl.NumberFormat('en-US', {
-            style: 'currency',
-            currency: 'USD',
+        return `Rs. ${amount.toLocaleString('en-IN', {
             minimumFractionDigits: 0,
-        }).format(amount);
+            maximumFractionDigits: 0,
+        })}`;
     };
 
     return {

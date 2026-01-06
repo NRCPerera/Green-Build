@@ -55,7 +55,7 @@ const calculateCosts = (quantities) => {
             standard_finish: parseFloat((wallPlasterCost + doorsCost + windowsCost).toFixed(2)),
             premium_finish: parseFloat((wallTilingCost + doorsCost + windowsCost).toFixed(2))
         },
-        currency: 'USD'
+        currency: 'LKR'
     };
 };
 

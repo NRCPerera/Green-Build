@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { ConfigProvider } from 'antd';
 import './index.css';
 import customTheme from './views/theme';
@@ -12,8 +12,12 @@ import CostPredictionView from './views/modules/CostPrediction/index.jsx';
 import SustainabilityView from './views/modules/Sustainability/index.jsx';
 import DelayForecastView from './views/modules/DelayForecast/index.jsx';
 
+// Auth Views
+import { LoginView, RegisterView, ProfileView } from './views/auth';
+
 // Global Store
 import useProjectStore from './models/useProjectStore';
+import useAuthStore from './models/useAuthStore';
 
 const DashboardView = () => {
   // Use individual selectors to avoid infinite loops
@@ -22,6 +26,7 @@ const DashboardView = () => {
   const costPrediction = useProjectStore((state) => state.costPrediction);
   const sustainabilityResult = useProjectStore((state) => state.sustainabilityResult);
   const delayForecast = useProjectStore((state) => state.delayForecast);
+  const { user, isAuthenticated } = useAuthStore();
 
   // Memoize module statuses
   const moduleStatuses = useMemo(() => ({
@@ -88,7 +93,7 @@ const DashboardView = () => {
       <div className="bg-gradient-to-r from-primary-500/20 via-primary-500/10 to-transparent 
                       border border-primary-500/30 rounded-2xl p-8">
         <h1 className="text-3xl font-bold text-white mb-2">
-          Welcome to Green Build Platform
+          {isAuthenticated && user ? `Welcome back, ${user.name?.split(' ')[0]}!` : 'Welcome to Green Build Platform'}
         </h1>
         <p className="text-gray-400 max-w-2xl">
           Your AI-powered construction management solution. Start by uploading a floor plan
@@ -218,6 +223,53 @@ const DashboardView = () => {
  */
 function App() {
   const [activeModule, setActiveModule] = useState('dashboard');
+  const [authView, setAuthView] = useState(null); // 'login' | 'register' | null
+  const { isAuthenticated, checkAuth } = useAuthStore();
+
+  // Check auth status on mount
+  useEffect(() => {
+    checkAuth();
+  }, [checkAuth]);
+
+  // Handle successful login/register
+  const handleAuthSuccess = () => {
+    setAuthView(null);
+    setActiveModule('dashboard');
+  };
+
+  // Handle logout
+  const handleLogout = () => {
+    setActiveModule('dashboard');
+  };
+
+  // Handle login button click
+  const handleLoginClick = () => {
+    setAuthView('login');
+  };
+
+  // Show login view
+  if (authView === 'login') {
+    return (
+      <ConfigProvider theme={customTheme}>
+        <LoginView
+          onSwitchToRegister={() => setAuthView('register')}
+          onLoginSuccess={handleAuthSuccess}
+        />
+      </ConfigProvider>
+    );
+  }
+
+  // Show register view
+  if (authView === 'register') {
+    return (
+      <ConfigProvider theme={customTheme}>
+        <RegisterView
+          onSwitchToLogin={() => setAuthView('login')}
+          onRegisterSuccess={handleAuthSuccess}
+        />
+      </ConfigProvider>
+    );
+  }
 
   // Render the appropriate module view
   const renderModuleView = () => {
@@ -230,6 +282,8 @@ function App() {
         return <SustainabilityView />;
       case 'delay':
         return <DelayForecastView />;
+      case 'profile':
+        return <ProfileView />;
       case 'dashboard':
       default:
         return <DashboardView />;
@@ -238,7 +292,12 @@ function App() {
 
   return (
     <ConfigProvider theme={customTheme}>
-      <MainLayout activeModule={activeModule} onModuleChange={setActiveModule}>
+      <MainLayout
+        activeModule={activeModule}
+        onModuleChange={setActiveModule}
+        onLogout={handleLogout}
+        onLogin={handleLoginClick}
+      >
         {renderModuleView()}
       </MainLayout>
     </ConfigProvider>
@@ -246,3 +305,4 @@ function App() {
 }
 
 export default App;
+
