@@ -1,249 +1,416 @@
 import { useState } from 'react';
 import useSustainabilityController from '../../../controllers/useSustainabilityController';
 
+/**
+ * Sustainability Analysis View
+ * 
+ * Provides input forms for all 3 ML models:
+ * 1. Sustainability Score Model
+ * 2. Lifecycle Cost Model  
+ * 3. Risk Prediction Model
+ */
 const SustainabilityView = () => {
-    const [formValues, setFormValues] = useState({
-        buildingLifespanYears: 50,
-        energyEfficiencyRating: 'B',
-        renewableEnergyPercentage: 20,
+    // Form state with all model features
+    const [formData, setFormData] = useState({
+        // Sustainability Score Features
+        energyKwhYear: 15000,
+        embodiedCo2Tons: 45,
+        operationalCo2Tons: 12,
+        energyEfficiency: 75,
+        energyEfficiencyPerSqft: 0.85,
+        costPerSqftForSustainability: 250,
+        energyCo2ImpactRelativeToCost: 0.15,
+        
+        // Lifecycle Cost Features
+        constructionCostPerSqft: 12000,
+        maintenanceCostPerYear: 150000,
+        
+        // Risk Prediction Features
+        designCompleteness: 85,
+        projectComplexityScore: 50,
+        changeOrderFrequency: 2,
+        inflationRate: 6.5,
+        interestRate: 12,
+        contractorExperienceYears: 10
     });
 
     const {
         loading,
         error,
-        hasQuantityData,
-        quantityData,
         result,
         hasResult,
-        materials,
-        addMaterial,
-        removeMaterial,
-        calculateSustainability,
-        formatCarbon,
-        formatCurrency,
+        mlServiceStatus,
+        analyzeProject,
+        clearResults,
+        formatCurrencyLKR,
+        getRiskColor,
+        getScoreColor
     } = useSustainabilityController();
 
-    const handleAddMaterial = () => {
-        addMaterial({
-            type: 'Concrete',
-            quantity: 1000,
-            unit: 'kg',
-            recycledContent: 0,
-        });
+    const handleInputChange = (e) => {
+        const { name, value } = e.target;
+        setFormData(prev => ({
+            ...prev,
+            [name]: value
+        }));
     };
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        await calculateSustainability(formValues);
+        await analyzeProject(formData);
     };
 
     return (
         <div className="space-y-6">
-            {/* Module Header */}
-            <div className="bg-gradient-to-r from-green-500/10 to-transparent border border-green-500/20 rounded-2xl p-6">
-                <div className="flex items-center gap-4">
-                    <span className="text-4xl">🌱</span>
-                    <div>
-                        <h2 className="text-2xl font-bold text-white">Sustainability Analysis</h2>
-                        <p className="text-gray-400 mt-1">
-                            Lifecycle cost and carbon footprint analysis with Pareto optimization.
-                        </p>
-                    </div>
-                </div>
-            </div>
-
-            {/* Dependency Check */}
-            {!hasQuantityData ? (
-                <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-xl p-6">
+            {/* Header */}
+            <div className="bg-dark-800/50 border border-white/5 rounded-2xl p-6">
+                <div className="flex items-center justify-between">
                     <div className="flex items-center gap-4">
-                        <span className="text-2xl">⚠️</span>
+                        <span className="text-4xl">🌱</span>
                         <div>
-                            <p className="text-yellow-400 font-medium">Quantity Data Required</p>
-                            <p className="text-gray-400 text-sm mt-1">
-                                Please complete the Quantity Takeoff (Module 1) first.
+                            <h2 className="text-2xl font-bold text-white">Sustainability Analysis</h2>
+                            <p className="text-gray-400 mt-1">
+                                ML-powered sustainability score, lifecycle cost & risk prediction
                             </p>
                         </div>
                     </div>
+                    {/* ML Service Status */}
+                    {mlServiceStatus && (
+                        <div className={`px-3 py-1.5 rounded-lg text-xs font-medium ${
+                            mlServiceStatus.status === 'healthy' || mlServiceStatus.status === 'ok'
+                                ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+                                : 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30'
+                        }`}>
+                            {mlServiceStatus.status === 'healthy' || mlServiceStatus.status === 'ok'
+                                ? '🟢 ML Service Online' 
+                                : '🟡 ML Service Unavailable'}
+                        </div>
+                    )}
                 </div>
-            ) : (
-                <div className="bg-primary-500/10 border border-primary-500/30 rounded-xl p-4">
-                    <p className="text-primary-400">
-                        Building area: {quantityData?.wallNetSurfaceAreaM2?.toFixed(1)} m²
-                    </p>
+            </div>
+
+            {/* Error Display */}
+            {error && (
+                <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4">
+                    <p className="text-red-400">{error}</p>
                 </div>
             )}
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Input Form */}
-                <div className="lg:col-span-1 space-y-6">
-                    {/* Materials */}
-                    <div className="bg-dark-800/50 border border-white/5 rounded-2xl p-6">
-                        <div className="flex items-center justify-between mb-4">
-                            <h3 className="text-lg font-semibold text-white">Materials</h3>
+                <div className="lg:col-span-2 space-y-6">
+                    <form onSubmit={handleSubmit} className="space-y-6">
+                        
+                        {/* Sustainability Score Inputs */}
+                        <div className="bg-dark-800/50 border border-white/5 rounded-2xl p-6">
+                            <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                                <span className="text-green-400">🌍</span> Sustainability Score Inputs
+                            </h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm text-gray-400 mb-2">Energy Consumption (kWh/year)</label>
+                                    <input
+                                        type="number"
+                                        name="energyKwhYear"
+                                        value={formData.energyKwhYear}
+                                        onChange={handleInputChange}
+                                        className="w-full px-4 py-3 bg-dark-700 border border-white/10 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm text-gray-400 mb-2">Embodied CO₂ (tons)</label>
+                                    <input
+                                        type="number"
+                                        name="embodiedCo2Tons"
+                                        value={formData.embodiedCo2Tons}
+                                        onChange={handleInputChange}
+                                        className="w-full px-4 py-3 bg-dark-700 border border-white/10 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm text-gray-400 mb-2">Operational CO₂ (tons/year)</label>
+                                    <input
+                                        type="number"
+                                        name="operationalCo2Tons"
+                                        value={formData.operationalCo2Tons}
+                                        onChange={handleInputChange}
+                                        className="w-full px-4 py-3 bg-dark-700 border border-white/10 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm text-gray-400 mb-2">Energy Efficiency (0-100)</label>
+                                    <input
+                                        type="number"
+                                        name="energyEfficiency"
+                                        value={formData.energyEfficiency}
+                                        onChange={handleInputChange}
+                                        min="0"
+                                        max="100"
+                                        className="w-full px-4 py-3 bg-dark-700 border border-white/10 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm text-gray-400 mb-2">Energy Efficiency per sqft</label>
+                                    <input
+                                        type="number"
+                                        name="energyEfficiencyPerSqft"
+                                        value={formData.energyEfficiencyPerSqft}
+                                        onChange={handleInputChange}
+                                        step="0.01"
+                                        className="w-full px-4 py-3 bg-dark-700 border border-white/10 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm text-gray-400 mb-2">Cost per sqft for Sustainability (LKR)</label>
+                                    <input
+                                        type="number"
+                                        name="costPerSqftForSustainability"
+                                        value={formData.costPerSqftForSustainability}
+                                        onChange={handleInputChange}
+                                        className="w-full px-4 py-3 bg-dark-700 border border-white/10 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                                    />
+                                </div>
+                                <div className="md:col-span-2">
+                                    <label className="block text-sm text-gray-400 mb-2">Energy CO₂ Impact Relative to Cost</label>
+                                    <input
+                                        type="number"
+                                        name="energyCo2ImpactRelativeToCost"
+                                        value={formData.energyCo2ImpactRelativeToCost}
+                                        onChange={handleInputChange}
+                                        step="0.01"
+                                        className="w-full px-4 py-3 bg-dark-700 border border-white/10 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-green-500"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Lifecycle Cost Inputs */}
+                        <div className="bg-dark-800/50 border border-white/5 rounded-2xl p-6">
+                            <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                                <span className="text-blue-400">💰</span> Lifecycle Cost Inputs
+                            </h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm text-gray-400 mb-2">Construction Cost per sqft (LKR)</label>
+                                    <input
+                                        type="number"
+                                        name="constructionCostPerSqft"
+                                        value={formData.constructionCostPerSqft}
+                                        onChange={handleInputChange}
+                                        className="w-full px-4 py-3 bg-dark-700 border border-white/10 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm text-gray-400 mb-2">Maintenance Cost per Year (LKR)</label>
+                                    <input
+                                        type="number"
+                                        name="maintenanceCostPerYear"
+                                        value={formData.maintenanceCostPerYear}
+                                        onChange={handleInputChange}
+                                        className="w-full px-4 py-3 bg-dark-700 border border-white/10 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Risk Prediction Inputs */}
+                        <div className="bg-dark-800/50 border border-white/5 rounded-2xl p-6">
+                            <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                                <span className="text-yellow-400">⚠️</span> Risk Prediction Inputs
+                            </h3>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm text-gray-400 mb-2">Design Completeness (%)</label>
+                                    <input
+                                        type="number"
+                                        name="designCompleteness"
+                                        value={formData.designCompleteness}
+                                        onChange={handleInputChange}
+                                        min="0"
+                                        max="100"
+                                        className="w-full px-4 py-3 bg-dark-700 border border-white/10 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm text-gray-400 mb-2">Project Complexity Score (0-100)</label>
+                                    <input
+                                        type="number"
+                                        name="projectComplexityScore"
+                                        value={formData.projectComplexityScore}
+                                        onChange={handleInputChange}
+                                        min="0"
+                                        max="100"
+                                        className="w-full px-4 py-3 bg-dark-700 border border-white/10 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm text-gray-400 mb-2">Change Order Frequency</label>
+                                    <input
+                                        type="number"
+                                        name="changeOrderFrequency"
+                                        value={formData.changeOrderFrequency}
+                                        onChange={handleInputChange}
+                                        step="0.1"
+                                        min="0"
+                                        className="w-full px-4 py-3 bg-dark-700 border border-white/10 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm text-gray-400 mb-2">Inflation Rate (%)</label>
+                                    <input
+                                        type="number"
+                                        name="inflationRate"
+                                        value={formData.inflationRate}
+                                        onChange={handleInputChange}
+                                        step="0.1"
+                                        className="w-full px-4 py-3 bg-dark-700 border border-white/10 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm text-gray-400 mb-2">Interest Rate (%)</label>
+                                    <input
+                                        type="number"
+                                        name="interestRate"
+                                        value={formData.interestRate}
+                                        onChange={handleInputChange}
+                                        step="0.1"
+                                        className="w-full px-4 py-3 bg-dark-700 border border-white/10 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm text-gray-400 mb-2">Contractor Experience (years)</label>
+                                    <input
+                                        type="number"
+                                        name="contractorExperienceYears"
+                                        value={formData.contractorExperienceYears}
+                                        onChange={handleInputChange}
+                                        min="0"
+                                        className="w-full px-4 py-3 bg-dark-700 border border-white/10 rounded-xl text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Submit Button */}
+                        <div className="flex gap-4">
                             <button
-                                onClick={handleAddMaterial}
-                                disabled={!hasQuantityData}
-                                className="px-3 py-1.5 bg-primary-500/20 text-primary-400 text-sm rounded-lg 
-                         hover:bg-primary-500/30 transition-colors disabled:opacity-50"
+                                type="submit"
+                                disabled={loading}
+                                className={`
+                                    flex-1 px-6 py-4 rounded-xl font-semibold transition-all duration-200
+                                    ${loading
+                                        ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                                        : 'bg-gradient-to-r from-green-500 to-emerald-500 text-white hover:from-green-400 hover:to-emerald-400 shadow-lg shadow-green-500/20'
+                                    }
+                                `}
                             >
-                                + Add Material
+                                {loading ? (
+                                    <span className="flex items-center justify-center gap-2">
+                                        <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                        </svg>
+                                        Analyzing with ML Models...
+                                    </span>
+                                ) : '🚀 Run Full Analysis'}
                             </button>
+                            {hasResult && (
+                                <button
+                                    type="button"
+                                    onClick={clearResults}
+                                    className="px-6 py-4 rounded-xl font-semibold bg-dark-700 text-gray-400 hover:bg-dark-600 transition-all"
+                                >
+                                    Clear
+                                </button>
+                            )}
                         </div>
-
-                        {materials.length > 0 ? (
-                            <div className="space-y-2">
-                                {materials.map((material) => (
-                                    <div key={material.id} className="flex items-center justify-between p-3 bg-dark-700/50 rounded-lg">
-                                        <div>
-                                            <p className="text-white text-sm">{material.type}</p>
-                                            <p className="text-gray-500 text-xs">{material.quantity} {material.unit}</p>
-                                        </div>
-                                        <button
-                                            onClick={() => removeMaterial(material.id)}
-                                            className="text-red-400 hover:text-red-300 text-sm"
-                                        >
-                                            Remove
-                                        </button>
-                                    </div>
-                                ))}
-                            </div>
-                        ) : (
-                            <p className="text-gray-500 text-sm text-center py-4">No materials added</p>
-                        )}
-                    </div>
-
-                    {/* Parameters */}
-                    <form onSubmit={handleSubmit} className="bg-dark-800/50 border border-white/5 rounded-2xl p-6 space-y-5">
-                        <h3 className="text-lg font-semibold text-white">Parameters</h3>
-
-                        <div>
-                            <label className="block text-sm font-medium text-gray-300 mb-2">
-                                Building Lifespan (years)
-                            </label>
-                            <input
-                                type="number"
-                                value={formValues.buildingLifespanYears}
-                                onChange={(e) => setFormValues({ ...formValues, buildingLifespanYears: parseInt(e.target.value) || 50 })}
-                                min="10"
-                                max="100"
-                                disabled={!hasQuantityData}
-                                className="w-full px-4 py-3 bg-dark-700 border border-white/10 rounded-xl text-white 
-                         focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50"
-                            />
-                        </div>
-
-                        <div>
-                            <label className="block text-sm font-medium text-gray-300 mb-2">
-                                Energy Efficiency Rating
-                            </label>
-                            <select
-                                value={formValues.energyEfficiencyRating}
-                                onChange={(e) => setFormValues({ ...formValues, energyEfficiencyRating: e.target.value })}
-                                disabled={!hasQuantityData}
-                                className="w-full px-4 py-3 bg-dark-700 border border-white/10 rounded-xl text-white 
-                         focus:outline-none focus:ring-2 focus:ring-green-500 disabled:opacity-50"
-                            >
-                                <option value="A+">A+ (Highest)</option>
-                                <option value="A">A</option>
-                                <option value="B">B</option>
-                                <option value="C">C</option>
-                                <option value="D">D (Lowest)</option>
-                            </select>
-                        </div>
-
-                        <div>
-                            <label className="block text-sm font-medium text-gray-300 mb-2">
-                                Renewable Energy (%)
-                            </label>
-                            <input
-                                type="range"
-                                value={formValues.renewableEnergyPercentage}
-                                onChange={(e) => setFormValues({ ...formValues, renewableEnergyPercentage: parseInt(e.target.value) })}
-                                min="0"
-                                max="100"
-                                disabled={!hasQuantityData}
-                                className="w-full"
-                            />
-                            <div className="flex justify-between text-xs text-gray-500 mt-1">
-                                <span>0%</span>
-                                <span className="text-green-400 font-medium">{formValues.renewableEnergyPercentage}%</span>
-                                <span>100%</span>
-                            </div>
-                        </div>
-
-                        <button
-                            type="submit"
-                            disabled={loading || !hasQuantityData}
-                            className={`
-                w-full px-6 py-3 rounded-xl font-semibold transition-all duration-200
-                ${loading || !hasQuantityData
-                                    ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
-                                    : 'bg-gradient-to-r from-green-500 to-emerald-500 text-white hover:from-green-400 hover:to-emerald-400'
-                                }
-              `}
-                        >
-                            {loading ? 'Calculating...' : 'Calculate Sustainability'}
-                        </button>
                     </form>
                 </div>
 
-                {/* Results */}
-                <div className="lg:col-span-2">
+                {/* Results Panel */}
+                <div className="space-y-6">
                     {hasResult ? (
-                        <div className="space-y-6">
-                            {/* Key Metrics */}
-                            <div className="grid grid-cols-3 gap-4">
-                                <div className="bg-dark-800/50 border border-green-500/20 rounded-xl p-5 text-center">
-                                    <p className="text-sm text-gray-400 mb-2">Lifecycle Cost</p>
-                                    <p className="text-2xl font-bold text-green-400">{formatCurrency(result.lifecycleCost)}</p>
-                                </div>
-                                <div className="bg-dark-800/50 border border-blue-500/20 rounded-xl p-5 text-center">
-                                    <p className="text-sm text-gray-400 mb-2">Carbon Footprint</p>
-                                    <p className="text-2xl font-bold text-blue-400">{formatCarbon(result.carbonFootprint)}</p>
-                                </div>
-                                <div className="bg-dark-800/50 border border-yellow-500/20 rounded-xl p-5 text-center">
-                                    <p className="text-sm text-gray-400 mb-2">Sustainability Score</p>
-                                    <p className="text-2xl font-bold text-yellow-400">{result.sustainabilityScore}/100</p>
-                                </div>
-                            </div>
-
-                            {/* Pareto Frontier */}
-                            <div className="bg-dark-800/50 border border-white/5 rounded-2xl p-6">
-                                <h3 className="text-lg font-semibold text-white mb-4">📊 Pareto Frontier</h3>
-                                <div className="space-y-3">
-                                    {result.paretoFrontier?.map((point) => (
-                                        <div key={point.id} className="flex items-center justify-between p-3 bg-dark-700/50 rounded-lg">
-                                            <span className="text-white font-medium">{point.label}</span>
-                                            <div className="flex gap-6">
-                                                <span className="text-gray-400">{formatCurrency(point.cost)}</span>
-                                                <span className="text-gray-400">{formatCarbon(point.carbon)}</span>
-                                            </div>
-                                        </div>
-                                    ))}
+                        <>
+                            {/* Sustainability Score */}
+                            <div className="bg-dark-800/50 border border-green-500/20 rounded-2xl p-6">
+                                <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                                    <span>🌍</span> Sustainability Score
+                                </h3>
+                                <div className="text-center">
+                                    <p className={`text-5xl font-bold ${getScoreColor(result.sustainabilityScore)}`}>
+                                        {result.sustainabilityScore?.toFixed(1)}
+                                    </p>
+                                    <p className="text-gray-400 mt-2">out of 100</p>
+                                    <p className={`mt-3 text-sm ${getScoreColor(result.sustainabilityScore)}`}>
+                                        {result.sustainabilityInterpretation}
+                                    </p>
                                 </div>
                             </div>
 
-                            {/* Recommendations */}
-                            <div className="bg-dark-800/50 border border-white/5 rounded-2xl p-6">
-                                <h3 className="text-lg font-semibold text-white mb-4">💡 Recommendations</h3>
-                                <ul className="space-y-3">
-                                    {result.recommendations?.map((rec, index) => (
-                                        <li key={index} className="flex items-start gap-3">
-                                            <span className="text-green-400 mt-0.5">•</span>
-                                            <span className="text-gray-300">{rec}</span>
-                                        </li>
-                                    ))}
-                                </ul>
+                            {/* Lifecycle Cost */}
+                            <div className="bg-dark-800/50 border border-blue-500/20 rounded-2xl p-6">
+                                <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                                    <span>💰</span> Lifecycle Cost
+                                </h3>
+                                <div className="text-center">
+                                    <p className="text-3xl font-bold text-blue-400">
+                                        {result.lifecycleCostMillions?.toFixed(2)}M
+                                    </p>
+                                    <p className="text-gray-400 mt-2">LKR (Sri Lankan Rupees)</p>
+                                    <p className="text-sm text-gray-500 mt-1">
+                                        {formatCurrencyLKR(result.lifecycleCostLkr || 0)}
+                                    </p>
+                                    <p className="mt-3 text-sm text-blue-400">
+                                        {result.lifecycleInterpretation}
+                                    </p>
+                                </div>
                             </div>
-                        </div>
+
+                            {/* Risk Assessment */}
+                            <div className={`bg-dark-800/50 border rounded-2xl p-6 ${
+                                result.riskLevel === 'high' ? 'border-red-500/30' :
+                                result.riskLevel === 'medium' ? 'border-yellow-500/30' :
+                                'border-green-500/30'
+                            }`}>
+                                <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                                    <span>⚠️</span> Risk Assessment
+                                </h3>
+                                <div className="text-center mb-4">
+                                    <p className={`text-3xl font-bold capitalize ${getRiskColor(result.riskLevel)}`}>
+                                        {result.riskLevel}
+                                    </p>
+                                    <p className="text-gray-400 mt-2">
+                                        Probability: {(result.riskProbability * 100)?.toFixed(1)}%
+                                    </p>
+                                </div>
+                                
+                                {result.riskRecommendations?.length > 0 && (
+                                    <div className="mt-4 pt-4 border-t border-white/10">
+                                        <p className="text-sm text-gray-400 mb-2">Recommendations:</p>
+                                        <ul className="space-y-2">
+                                            {result.riskRecommendations.map((rec, index) => (
+                                                <li key={index} className="text-sm text-gray-300 flex items-start gap-2">
+                                                    <span className="text-green-400 mt-0.5">•</span>
+                                                    {rec}
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Timestamp */}
+                            <div className="text-center text-xs text-gray-500">
+                                Analysis completed: {new Date(result.timestamp).toLocaleString()}
+                            </div>
+                        </>
                     ) : (
-                        <div className="h-96 flex flex-col items-center justify-center bg-dark-800/50 border border-white/5 rounded-2xl">
-                            <div className="w-20 h-20 mb-6 rounded-full bg-dark-700 flex items-center justify-center">
-                                <span className="text-4xl">🌍</span>
-                            </div>
+                        <div className="bg-dark-800/50 border border-white/5 rounded-2xl p-8 flex flex-col items-center justify-center min-h-[400px]">
+                            <div className="text-6xl mb-4">📊</div>
                             <h3 className="text-xl font-semibold text-white mb-2">No Analysis Yet</h3>
-                            <p className="text-gray-400 text-center max-w-md">
-                                Add materials and configure parameters to see sustainability analysis.
+                            <p className="text-gray-400 text-center">
+                                Fill in the project parameters and click <br />
+                                <strong className="text-green-400">Run Full Analysis</strong> to get predictions.
                             </p>
                         </div>
                     )}

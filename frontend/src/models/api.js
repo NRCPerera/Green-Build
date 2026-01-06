@@ -117,13 +117,28 @@ export const costApi = {
 };
 
 export const sustainabilityApi = {
-    calculate: async (input) => {
-        return api.post('/api/sustainability/calculate', input);
+    // Full analysis with all 3 models
+    analyze: async (input) => {
+        return api.post('/api/sustainability/analyze', input);
     },
 
-    getMaterialFactors: () => {
-        return api.get('/api/sustainability/material-factors');
+    // Individual predictions
+    predictScore: async (input) => {
+        return api.post('/api/sustainability/predict-score', input);
     },
+
+    predictLifecycle: async (input) => {
+        return api.post('/api/sustainability/predict-lifecycle', input);
+    },
+
+    predictRisk: async (input) => {
+        return api.post('/api/sustainability/predict-risk', input);
+    },
+
+    // Health check
+    checkHealth: async () => {
+        return api.get('/api/sustainability-ml-health');
+    }
 };
 
 export const delayApi = {

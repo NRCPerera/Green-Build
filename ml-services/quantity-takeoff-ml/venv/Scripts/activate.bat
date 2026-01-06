@@ -8,7 +8,7 @@ if defined _OLD_CODEPAGE (
     "%SystemRoot%\System32\chcp.com" 65001 > nul
 )
 
-set VIRTUAL_ENV=C:\Users\Ridma Chalana\Desktop\green-build\ml-services\quantity-takeoff-ml\venv
+set VIRTUAL_ENV=C:\Users\Janasanka\Desktop\green-build\Green-Build\ml-services\quantity-takeoff-ml\venv
 
 if not defined PROMPT set PROMPT=$P$G
 

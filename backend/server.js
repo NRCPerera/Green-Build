@@ -2,7 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const morgan = require('morgan');
 const config = require('./config');
-const { healthRoutes, uploadRoutes, costPredictionRoutes } = require('./routes');
+const { healthRoutes, uploadRoutes, costPredictionRoutes, sustainabilityRoutes } = require('./routes');
 const {
     multerErrorHandler,
     notFoundHandler,
@@ -30,6 +30,7 @@ app.use(morgan('dev'));
 app.use('/', healthRoutes);
 app.use('/', uploadRoutes);
 app.use('/', costPredictionRoutes);
+app.use('/', sustainabilityRoutes);
 
 // Error handling middleware should be registered last
 app.use(multerErrorHandler);
@@ -42,19 +43,24 @@ app.listen(config.port, () => {
     console.log('================================================================');
     console.log('         Green Build Backend Server Started                     ');
     console.log('================================================================');
-    console.log(`  Server:          http://localhost:${config.port}`);
-    console.log(`  ML Service:      ${config.pythonServiceUrl}`);
-    console.log(`  Cost ML Service: ${config.costMlServiceUrl}`);
-    console.log(`  Uploads:         ${config.uploadDir}`);
+    console.log(`  Server:              http://localhost:${config.port}`);
+    console.log(`  ML Service:          ${config.pythonServiceUrl}`);
+    console.log(`  Cost ML Service:     ${config.costMlServiceUrl}`);
+    console.log(`  Sustainability ML:   http://localhost:8003`);
+    console.log(`  Uploads:             ${config.uploadDir}`);
     console.log('----------------------------------------------------------------');
     console.log('  Endpoints:');
-    console.log('    GET  /                        - API info');
-    console.log('    GET  /api/health              - Health check');
-    console.log('    POST /api/upload-plan         - Upload and process plan');
-    console.log('    POST /api/predict-cost-overrun - Predict cost overrun');
-    console.log('    GET  /api/cost-ml-health      - Cost ML service health');
+    console.log('    GET  /                              - API info');
+    console.log('    GET  /api/health                    - Health check');
+    console.log('    POST /api/upload-plan               - Upload floor plan');
+    console.log('    POST /api/predict-cost-overrun      - Cost overrun prediction');
+    console.log('    POST /api/sustainability/analyze    - Full sustainability analysis');
+    console.log('    POST /api/sustainability/predict-score    - Sustainability score');
+    console.log('    POST /api/sustainability/predict-lifecycle - Lifecycle cost');
+    console.log('    POST /api/sustainability/predict-risk     - Risk prediction');
     console.log('================================================================');
     console.log('');
 });
 
 module.exports = app;
+

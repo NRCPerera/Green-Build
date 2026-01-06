@@ -1,140 +1,156 @@
-import { useState, useCallback } from 'react';
-import useProjectStore from '../models/useProjectStore';
+import { useState, useCallback, useEffect } from 'react';
 import { sustainabilityApi, parseApiError } from '../models/api';
 
+/**
+ * Sustainability Controller Hook
+ * 
+ * Manages state and logic for the sustainability analysis module.
+ * Connects to the ML service for predictions using actual model features.
+ */
 const useSustainabilityController = () => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
-    const [materials, setMaterials] = useState([]);
+    const [result, setResult] = useState(null);
+    const [mlServiceStatus, setMlServiceStatus] = useState(null);
 
-    const quantityData = useProjectStore((state) => state.quantityData);
-    const sustainabilityResult = useProjectStore((state) => state.sustainabilityResult);
-    const setSustainabilityResult = useProjectStore((state) => state.setSustainabilityResult);
-
-    const hasQuantityData = quantityData !== null;
-
-    const addMaterial = useCallback((material) => {
-        setMaterials((prev) => [...prev, { ...material, id: Date.now() }]);
+    // Check ML service health on mount
+    useEffect(() => {
+        const checkHealth = async () => {
+            try {
+                const response = await sustainabilityApi.checkHealth();
+                setMlServiceStatus(response.data?.mlService || { status: 'healthy' });
+            } catch {
+                setMlServiceStatus({ status: 'unavailable' });
+            }
+        };
+        checkHealth();
     }, []);
 
-    const removeMaterial = useCallback((id) => {
-        setMaterials((prev) => prev.filter((m) => m.id !== id));
-    }, []);
-
-    const calculateSustainability = useCallback(async (formValues) => {
-        if (!hasQuantityData) {
-            setError('Quantity data is required. Complete Module 1 first.');
-            return { success: false, error: 'Missing quantity data' };
-        }
-
+    /**
+     * Run full sustainability analysis (all 3 models)
+     */
+    const analyzeProject = useCallback(async (formData) => {
         setLoading(true);
         setError(null);
 
         try {
+            // Format data for the API (matching actual model features)
             const input = {
-                quantityData: {
-                    wallArea: quantityData.wallNetSurfaceAreaM2,
-                    doorCount: quantityData.itemCounts?.doors || 0,
-                    windowCount: quantityData.itemCounts?.windows || 0,
-                },
-                materials,
-                buildingLifespanYears: formValues.buildingLifespanYears,
-                energyEfficiencyRating: formValues.energyEfficiencyRating,
-                renewableEnergyPercentage: formValues.renewableEnergyPercentage,
+                // Sustainability score features
+                energy_kwh_year: parseFloat(formData.energyKwhYear) || 0,
+                embodied_co2_tons: parseFloat(formData.embodiedCo2Tons) || 0,
+                operational_co2_tons: parseFloat(formData.operationalCo2Tons) || 0,
+                energy_efficiency: parseFloat(formData.energyEfficiency) || 0,
+                energy_efficiency_per_sqft: parseFloat(formData.energyEfficiencyPerSqft) || 0,
+                cost_per_sqft_for_sustainability: parseFloat(formData.costPerSqftForSustainability) || 0,
+                energy_co2_impact_relative_to_cost: parseFloat(formData.energyCo2ImpactRelativeToCost) || 0,
+                
+                // Lifecycle cost features
+                construction_cost_per_sqft: parseFloat(formData.constructionCostPerSqft) || 0,
+                maintenance_cost_per_year: parseFloat(formData.maintenanceCostPerYear) || 0,
+                
+                // Risk prediction features
+                design_completeness: parseFloat(formData.designCompleteness) || 0,
+                project_complexity_score: parseFloat(formData.projectComplexityScore) || 0,
+                change_order_frequency: parseFloat(formData.changeOrderFrequency) || 0,
+                inflation_rate: parseFloat(formData.inflationRate) || 0,
+                interest_rate: parseFloat(formData.interestRate) || 0,
+                contractor_experience_years: parseFloat(formData.contractorExperienceYears) || 0
             };
 
-            const response = await sustainabilityApi.calculate(input);
+            console.log('[Sustainability] Sending analysis request:', input);
+
+            const response = await sustainabilityApi.analyze(input);
 
             if (response.data?.success) {
-                setSustainabilityResult(response.data.data);
+                const data = response.data.data;
+                setResult({
+                    // Sustainability score
+                    sustainabilityScore: data.sustainability_score,
+                    sustainabilityInterpretation: data.sustainability_interpretation,
+                    
+                    // Lifecycle cost
+                    lifecycleCostMillions: data.lifecycle_cost_millions_lkr,
+                    lifecycleCostLkr: data.lifecycle_cost_lkr,
+                    lifecycleInterpretation: data.lifecycle_interpretation,
+                    
+                    // Risk
+                    isHighRisk: data.is_high_risk,
+                    riskProbability: data.risk_probability,
+                    riskLevel: data.risk_level,
+                    riskRecommendations: data.risk_recommendations || [],
+                    
+                    timestamp: new Date().toISOString()
+                });
                 return { success: true, data: response.data.data };
             }
-            throw new Error(response.data?.message || 'Calculation failed');
+            
+            throw new Error(response.data?.message || 'Analysis failed');
         } catch (err) {
+            console.error('[Sustainability] API Error:', err);
             const errorMessage = parseApiError(err);
             setError(errorMessage);
-
-            const mockResult = generateMockSustainabilityResult(formValues, quantityData, materials);
-            setSustainabilityResult(mockResult);
-            return { success: true, data: mockResult, mock: true };
+            return { success: false, error: errorMessage };
         } finally {
             setLoading(false);
         }
-    }, [hasQuantityData, quantityData, materials, setSustainabilityResult]);
+    }, []);
 
+    /**
+     * Clear all results
+     */
     const clearResults = useCallback(() => {
-        useProjectStore.getState().resetModule('sustainability');
+        setResult(null);
         setError(null);
     }, []);
 
-    const formatCarbon = (carbonKg) => {
-        if (carbonKg >= 1000) {
-            return `${(carbonKg / 1000).toFixed(2)} t CO₂e`;
+    /**
+     * Format currency in LKR (Sri Lankan Rupees)
+     */
+    const formatCurrencyLKR = (amount) => {
+        if (amount >= 1000000) {
+            return `LKR ${(amount / 1000000).toFixed(2)}M`;
         }
-        return `${carbonKg.toFixed(2)} kg CO₂e`;
-    };
-
-    const formatCurrency = (amount) => {
-        return new Intl.NumberFormat('en-US', {
+        return new Intl.NumberFormat('en-LK', {
             style: 'currency',
-            currency: 'USD',
+            currency: 'LKR',
             minimumFractionDigits: 0,
         }).format(amount);
+    };
+
+    /**
+     * Get color class based on risk level
+     */
+    const getRiskColor = (level) => {
+        const colors = {
+            low: 'text-green-400',
+            medium: 'text-yellow-400',
+            high: 'text-red-400',
+        };
+        return colors[level] || colors.medium;
+    };
+
+    /**
+     * Get color class based on sustainability score
+     */
+    const getScoreColor = (score) => {
+        if (score >= 70) return 'text-green-400';
+        if (score >= 40) return 'text-yellow-400';
+        return 'text-red-400';
     };
 
     return {
         loading,
         error,
-        quantityData,
-        hasQuantityData,
-        result: sustainabilityResult,
-        hasResult: sustainabilityResult !== null,
-        materials,
-        addMaterial,
-        removeMaterial,
-        calculateSustainability,
+        result,
+        hasResult: result !== null,
+        mlServiceStatus,
+        analyzeProject,
         clearResults,
-        formatCarbon,
-        formatCurrency,
+        formatCurrencyLKR,
+        getRiskColor,
+        getScoreColor
     };
 };
-
-function generateMockSustainabilityResult(formValues, quantityData, materials) {
-    const wallArea = quantityData?.wallNetSurfaceAreaM2 || 100;
-    const totalMaterialCarbon = materials.reduce((sum, m) => sum + (m.quantity * 0.5), 0);
-
-    const embodiedCarbon = totalMaterialCarbon + wallArea * 50;
-    const operationalCarbon = wallArea * 10 * (1 - formValues.renewableEnergyPercentage / 100);
-    const totalCarbon = embodiedCarbon + operationalCarbon * formValues.buildingLifespanYears;
-
-    const constructionCost = wallArea * 150;
-    const operationalCost = wallArea * 8 * formValues.buildingLifespanYears;
-    const lifecycleCost = constructionCost + operationalCost;
-
-    const score = Math.max(0, Math.min(100, 80 - (totalCarbon / 1000) + formValues.renewableEnergyPercentage * 0.5));
-
-    return {
-        lifecycleCost,
-        carbonFootprint: totalCarbon,
-        sustainabilityScore: Math.round(score),
-        breakdown: {
-            embodiedCarbon,
-            operationalCarbon,
-            constructionCost,
-            operationalCost,
-        },
-        paretoFrontier: [
-            { id: 'p1', cost: lifecycleCost * 0.8, carbon: totalCarbon * 1.3, label: 'Low Cost' },
-            { id: 'p2', cost: lifecycleCost, carbon: totalCarbon, label: 'Balanced' },
-            { id: 'p3', cost: lifecycleCost * 1.2, carbon: totalCarbon * 0.7, label: 'Green' },
-        ],
-        recommendations: [
-            'Increase recycled content in materials',
-            'Consider local sourcing to reduce transport emissions',
-            'Upgrade to higher energy efficiency rating',
-        ],
-        timestamp: new Date().toISOString(),
-    };
-}
 
 export default useSustainabilityController;
