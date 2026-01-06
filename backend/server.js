@@ -88,6 +88,7 @@ const startServer = async () => {
             console.log(`  ML Service:       ${config.pythonServiceUrl}`);
             console.log(`  Cost ML Service:  ${config.costMlServiceUrl}`);
             console.log(`  Delay ML Service: ${config.delayMlServiceUrl}`);
+            console.log(`  Sustainability:   http://localhost:8003`);
             console.log(`  Uploads:          ${config.uploadDir}`);
             console.log('----------------------------------------------------------------');
             console.log('  Endpoints:');
@@ -95,12 +96,14 @@ const startServer = async () => {
             console.log('    GET  /api/health                - Health check');
             console.log('    POST /api/upload-plan           - Upload and process plan');
             console.log('    POST /api/predict-cost-overrun  - Predict cost overrun');
-            console.log('    GET  /api/cost-ml-health        - Cost ML service health');
+            console.log('  Sustainability:');
+            console.log('    POST /api/sustainability/analyze - Full analysis');
+            console.log('    POST /api/sustainability/predict-score - Score prediction');
+            console.log('    POST /api/sustainability/predict-lifecycle - Lifecycle cost');
             console.log('  Delay Prediction:');
             console.log('    POST /api/predict-delay         - Full delay prediction');
             console.log('    POST /api/predict-delay/regression    - Predict delay days');
             console.log('    POST /api/predict-delay/classification - Predict delay category');
-            console.log('    GET  /api/delay-ml-health       - Delay ML service health');
             console.log('  Authentication:');
             console.log('    POST /api/auth/register         - Register new user');
             console.log('    POST /api/auth/login            - Login user');
