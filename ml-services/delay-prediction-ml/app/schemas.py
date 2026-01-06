@@ -48,8 +48,12 @@ class ClassificationPredictionResult(BaseModel):
         ...,
         description="Predicted delay category (On-Time, Minor Delay, Major Delay, Critical Delay)"
     )
-    category_index: int = Field(
-        ...,
+    will_delay: Optional[bool] = Field(
+        default=None,
+        description="Whether the project will be delayed (binary)"
+    )
+    category_index: Optional[int] = Field(
+        default=None,
         description="Numeric index of predicted category (0-3)"
     )
     confidence: float = Field(
