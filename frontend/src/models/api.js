@@ -142,13 +142,25 @@ export const sustainabilityApi = {
 };
 
 export const delayApi = {
+    // Full prediction (regression + classification)
     predict: async (input) => {
-        return api.post('/api/delay-forecast/predict', input);
+        return api.post('/api/predict-delay', { data: input });
     },
 
-    getHistoricalData: (region) => {
-        return api.get(`/api/delay-forecast/historical/${region}`);
+    // Regression only - predict delay days
+    predictRegression: async (input) => {
+        return api.post('/api/predict-delay/regression', { data: input });
     },
+
+    // Classification only - predict delay category
+    predictClassification: async (input) => {
+        return api.post('/api/predict-delay/classification', { data: input });
+    },
+
+    // Health check
+    checkHealth: async () => {
+        return api.get('/api/delay-ml-health');
+    }
 };
 
 export default api;
