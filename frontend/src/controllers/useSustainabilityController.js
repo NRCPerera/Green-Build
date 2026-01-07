@@ -19,7 +19,8 @@ const useSustainabilityController = () => {
             try {
                 const response = await sustainabilityApi.checkHealth();
                 setMlServiceStatus(response.data?.mlService || { status: 'healthy' });
-            } catch {
+            } catch (err) {
+                console.log('ML service health check failed:', err);
                 setMlServiceStatus({ status: 'unavailable' });
             }
         };
@@ -68,6 +69,8 @@ const useSustainabilityController = () => {
                     // Sustainability score
                     sustainabilityScore: data.sustainability_score,
                     sustainabilityInterpretation: data.sustainability_interpretation,
+                    
+                    // Lifecycle cost (already multiplied by 1,000,000 on backend)
 
                     // Lifecycle cost
                     lifecycleCostMillions: data.lifecycle_cost_millions_lkr,
@@ -115,6 +118,7 @@ const useSustainabilityController = () => {
             style: 'currency',
             currency: 'LKR',
             minimumFractionDigits: 0,
+        }).format(amount);
             maximumFractionDigits: 0,
         }).format(amount);
     };
