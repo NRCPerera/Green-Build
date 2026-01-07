@@ -77,7 +77,7 @@ router.post('/api/predict-delay/classification', handleDelayClassificationPredic
  */
 router.get('/api/delay-ml-health', async (req, res, next) => {
     try {
-        const mlServiceUrl = process.env.DELAY_ML_SERVICE_URL || 'http://localhost:8081';
+        const mlServiceUrl = config.delayMlServiceUrl;
 
         const response = await axios.get(`${mlServiceUrl}/health`, {
             timeout: 5000
