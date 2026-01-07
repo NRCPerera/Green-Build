@@ -149,4 +149,3 @@ async def health_check():
         "models_loaded": model_loader.is_loaded() if (not DEV_MODE and model_loader) else False,
         "version": "3.0-api-only"
     }
-

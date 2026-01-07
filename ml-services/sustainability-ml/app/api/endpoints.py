@@ -510,4 +510,3 @@ async def full_analysis(request: FullAnalysisRequest):
     except Exception as e:
         logger.error(f"Full analysis error: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
-
