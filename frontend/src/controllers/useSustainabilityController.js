@@ -45,11 +45,11 @@ const useSustainabilityController = () => {
                 energy_efficiency_per_sqft: parseFloat(formData.energyEfficiencyPerSqft) || 0,
                 cost_per_sqft_for_sustainability: parseFloat(formData.costPerSqftForSustainability) || 0,
                 energy_co2_impact_relative_to_cost: parseFloat(formData.energyCo2ImpactRelativeToCost) || 0,
-                
+
                 // Lifecycle cost features
                 construction_cost_per_sqft: parseFloat(formData.constructionCostPerSqft) || 0,
                 maintenance_cost_per_year: parseFloat(formData.maintenanceCostPerYear) || 0,
-                
+
                 // Risk prediction features
                 design_completeness: parseFloat(formData.designCompleteness) || 0,
                 project_complexity_score: parseFloat(formData.projectComplexityScore) || 0,
@@ -71,21 +71,23 @@ const useSustainabilityController = () => {
                     sustainabilityInterpretation: data.sustainability_interpretation,
                     
                     // Lifecycle cost (already multiplied by 1,000,000 on backend)
+
+                    // Lifecycle cost
                     lifecycleCostMillions: data.lifecycle_cost_millions_lkr,
                     lifecycleCostLkr: data.lifecycle_cost_lkr,
                     lifecycleInterpretation: data.lifecycle_interpretation,
-                    
+
                     // Risk
                     isHighRisk: data.is_high_risk,
                     riskProbability: data.risk_probability,
                     riskLevel: data.risk_level,
                     riskRecommendations: data.risk_recommendations || [],
-                    
+
                     timestamp: new Date().toISOString()
                 });
                 return { success: true, data: response.data.data };
             }
-            
+
             throw new Error(response.data?.message || 'Analysis failed');
         } catch (err) {
             console.error('[Sustainability] API Error:', err);
@@ -117,6 +119,18 @@ const useSustainabilityController = () => {
             currency: 'LKR',
             minimumFractionDigits: 0,
         }).format(amount);
+            maximumFractionDigits: 0,
+        }).format(amount);
+    };
+
+    /**
+     * Format carbon emissions
+     */
+    const formatCarbon = (carbonKg) => {
+        if (carbonKg >= 1000) {
+            return `${(carbonKg / 1000).toFixed(2)} t CO₂e`;
+        }
+        return `${carbonKg.toFixed(2)} kg CO₂e`;
     };
 
     /**
@@ -149,6 +163,7 @@ const useSustainabilityController = () => {
         analyzeProject,
         clearResults,
         formatCurrencyLKR,
+        formatCarbon,
         getRiskColor,
         getScoreColor
     };
