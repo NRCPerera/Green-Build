@@ -43,47 +43,40 @@ class MockInferenceService:
     
     def predict_lifecycle_cost(self, data: dict) -> dict:
         """
-        Mock lifecycle cost prediction.
+        Mock lifecycle cost prediction - Multi-Output Model.
         
-        Features: construction_cost_per_sqft, maintenance_cost_per_year, energy_kwh_year,
-                  energy_efficiency, sustainability_score, energy_efficiency_per_sqft,
-                  cost_per_sqft_for_sustainability, energy_co2_impact_relative_to_cost
+        Returns 3 scaled predictions:
+        - Initial Cost (scaled by 1,000,000)
+        - Annual Maintenance Cost (scaled by 100,000)
+        - Sustainability Cost Factor (scaled by 10,000)
         """
-        logger.info("Using MOCK lifecycle cost prediction")
+        logger.info("Using MOCK lifecycle cost prediction (Multi-Output)")
         
-        # Calculate realistic lifecycle cost based on inputs
-        construction_cost = data.get("construction_cost_per_sqft", 10000)
-        maintenance_cost = data.get("maintenance_cost_per_year", 100000)
-        energy_kwh = data.get("energy_kwh_year", 10000)
+        # Get input features
+        construction_cost_sqft = data.get("construction_cost_per_sqft", 13000)
+        maintenance_cost_year = data.get("maintenance_cost_per_year", 520000)
+        energy_efficiency = data.get("energy_efficiency", 72)
+        sustainability_score = data.get("sustainability_score", 65)
+        area_sqft = data.get("area_sqft", 2000)
         
-        # Assume 2000 sqft average home, 30-year lifecycle
-        estimated_sqft = 2000
-        lifecycle_years = 30
+        # Generate realistic scaled predictions (as if from multi-output model)
+        # Simulating model output that's been scaled down during training
         
-        total_construction = construction_cost * estimated_sqft
-        total_maintenance = maintenance_cost * lifecycle_years
-        energy_cost_per_kwh = 25  # LKR per kWh
-        total_energy = energy_kwh * energy_cost_per_kwh * lifecycle_years
+        # Initial cost typically 20-80 million LKR, so scaled value 20-80
+        base_initial = construction_cost_sqft * area_sqft / 1_000_000
+        scaled_initial = base_initial * random.uniform(0.95, 1.05)
         
-        lifecycle_cost_lkr = total_construction + total_maintenance + total_energy
-        lifecycle_cost_millions = lifecycle_cost_lkr / 1_000_000
+        # Annual maintenance 300k-1M LKR, so scaled value 3-10
+        scaled_maintenance = (maintenance_cost_year / 100_000) * random.uniform(0.9, 1.1)
         
-        # Add some randomness
-        lifecycle_cost_millions *= random.uniform(0.95, 1.05)
+        # Sustainability cost factor 100-500 LKR/sqft, so scaled value 0.01-0.05
+        base_sust = construction_cost_sqft * 0.15 / 10_000
+        scaled_sust = base_sust * (1 + (sustainability_score / 100) * 0.3) * random.uniform(0.95, 1.05)
         
-        if lifecycle_cost_millions < 20:
-            interpretation = "Low lifecycle cost - economical project"
-        elif lifecycle_cost_millions < 40:
-            interpretation = "Moderate lifecycle cost"
-        elif lifecycle_cost_millions < 60:
-            interpretation = "Above average lifecycle cost"
-        else:
-            interpretation = "High lifecycle cost - consider optimizations"
-        
+        # Return in multi-output format (scaled values as model would return)
         return {
-            "lifecycle_cost_millions_lkr": round(lifecycle_cost_millions, 2),
-            "lifecycle_cost_lkr": round(lifecycle_cost_millions * 1_000_000, 2),
-            "interpretation": interpretation
+            "multi_output_predictions": [scaled_initial, scaled_maintenance, scaled_sust],
+            "is_multioutput": True
         }
     
     def predict_risk(self, data: dict) -> dict:

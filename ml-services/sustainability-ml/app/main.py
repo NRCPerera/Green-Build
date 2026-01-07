@@ -1,4 +1,4 @@
-"""Main FastAPI application"""
+"""Main FastAPI application - API Only (UI served by React)"""
 
 import logging
 from contextlib import asynccontextmanager
@@ -45,6 +45,7 @@ async def lifespan(app: FastAPI):
     
     logger.info("=" * 60)
     logger.info("Starting Sustainability Prediction API")
+    logger.info("(API Only - UI served by React frontend)")
     logger.info("=" * 60)
     
     try:
@@ -99,7 +100,10 @@ async def lifespan(app: FastAPI):
         endpoints.set_inference_service(inference_service)
         
         logger.info("=" * 60)
-        logger.info("Application startup complete - Ready to serve requests")
+        logger.info("API startup complete - Ready to serve requests")
+        logger.info("API Docs:  http://localhost:8003/docs")
+        logger.info("Health:    http://localhost:8003/health")
+        logger.info("Predict:   POST http://localhost:8003/predict")
         logger.info("=" * 60)
         
         yield
@@ -130,16 +134,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include routers
+# Include API routers
 from app.api import endpoints
 app.include_router(endpoints.router)
 
-# Additional health check endpoint
+
+# Health check endpoint
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
     return {
         "status": "healthy",
         "mode": "development (mock predictions)" if DEV_MODE else "production (real models)",
-        "models_loaded": model_loader.is_loaded() if (not DEV_MODE and model_loader) else False
+        "models_loaded": model_loader.is_loaded() if (not DEV_MODE and model_loader) else False,
+        "version": "3.0-api-only"
     }
