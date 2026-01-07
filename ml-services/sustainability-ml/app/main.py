@@ -1,14 +1,10 @@
-"""Main FastAPI application with Dashboard UI"""
+"""Main FastAPI application - API Only (UI served by React)"""
 
 import logging
 from contextlib import asynccontextmanager
-from pathlib import Path
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import HTMLResponse
-from fastapi.templating import Jinja2Templates
 
 from app.config import (
     API_TITLE,
@@ -34,11 +30,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Paths for static files and templates
-BASE_DIR = Path(__file__).resolve().parent.parent
-STATIC_DIR = BASE_DIR / "static"
-TEMPLATES_DIR = BASE_DIR / "templates"
-
 # Global variables for models and services
 model_loader = None
 inference_service = None
@@ -54,6 +45,7 @@ async def lifespan(app: FastAPI):
     
     logger.info("=" * 60)
     logger.info("Starting Sustainability Prediction API")
+    logger.info("(API Only - UI served by React frontend)")
     logger.info("=" * 60)
     
     try:
@@ -108,8 +100,10 @@ async def lifespan(app: FastAPI):
         endpoints.set_inference_service(inference_service)
         
         logger.info("=" * 60)
-        logger.info("Application startup complete - Ready to serve requests")
-        logger.info(f"Dashboard available at: http://localhost:8003/")
+        logger.info("API startup complete - Ready to serve requests")
+        logger.info("API Docs:  http://localhost:8003/docs")
+        logger.info("Health:    http://localhost:8003/health")
+        logger.info("Predict:   POST http://localhost:8003/predict")
         logger.info("=" * 60)
         
         yield
@@ -140,39 +134,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Mount static files
-if STATIC_DIR.exists():
-    app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
-    logger.info(f"Static files mounted from: {STATIC_DIR}")
-
-# Setup templates
-templates = None
-if TEMPLATES_DIR.exists():
-    templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
-    logger.info(f"Templates loaded from: {TEMPLATES_DIR}")
-
 # Include API routers
 from app.api import endpoints
 app.include_router(endpoints.router)
-
-
-# Dashboard route - serves the main UI
-@app.get("/", response_class=HTMLResponse)
-async def dashboard(request: Request):
-    """Serve the Quantity Surveying Dashboard"""
-    if templates:
-        return templates.TemplateResponse("index.html", {"request": request})
-    else:
-        return HTMLResponse(content="""
-            <html>
-                <head><title>QS Dashboard</title></head>
-                <body style="font-family: sans-serif; padding: 2rem;">
-                    <h1>🏗️ Quantity Surveying Dashboard</h1>
-                    <p>Templates not found. Please ensure the templates/ folder exists.</p>
-                    <p>API is running at <a href="/docs">/docs</a></p>
-                </body>
-            </html>
-        """)
 
 
 # Health check endpoint
@@ -182,5 +146,7 @@ async def health_check():
     return {
         "status": "healthy",
         "mode": "development (mock predictions)" if DEV_MODE else "production (real models)",
-        "models_loaded": model_loader.is_loaded() if (not DEV_MODE and model_loader) else False
+        "models_loaded": model_loader.is_loaded() if (not DEV_MODE and model_loader) else False,
+        "version": "3.0-api-only"
     }
+
