@@ -25,21 +25,27 @@ const useDelayController = () => {
         setError(null);
 
         try {
-            // Build input matching the ML model's expected features
+            // Build input matching the ML model's ACTUAL feature names from training
             const input = {
+                // Categorical features (will be one-hot encoded by predictor)
                 District: formValues.district || 'Colombo',
-                Project_Type: formValues.projectType || 'Commercial Building',
-                Contractor_ICTAD_Grade: formValues.contractorGrade || 'CIDA 1',
-                Contract_Value_LKR: formValues.contractValue || 100000000,
-                Land_Area_Sqft: formValues.landArea || 10000,
-                Planned_Duration_Days: (formValues.plannedDurationMonths || 12) * 30,
-                Weather_Impact_Score: formValues.weatherImpactScore || 2.5,
+                Project_Type: formValues.projectType || 'House',
+                Contractor_ICTAD_Grade: formValues.contractorGrade || 'M1',
+
+                // Numeric features - MUST match training data column names
+                Project_Area_SqM: formValues.projectArea || formValues.landArea || 10000,
+                Floors: formValues.numberOfFloors || formValues.floors || 5,
                 Contractor_Experience_Years: formValues.contractorExperience || 10,
-                Labor_Availability_Score: formValues.laborAvailability || 3.0,
-                Material_Cost_Index: formValues.materialCostIndex || 100,
-                Inflation_Rate: formValues.inflationRate || 0.08,
-                Rainfall_mm: formValues.rainfall || 150,
-                Equipment_Availability_Score: formValues.equipmentAvailability || 3.5,
+                Contractor_Past_Delay_Rate: formValues.contractorPastDelayRate || 0.15,
+                Contractor_Previous_Projects: formValues.contractorPreviousProjects || 15,
+                Labor_Availability: formValues.laborAvailability || 3.0,
+                Material_Delivery_Delay_Days: formValues.materialDeliveryDelay || 5,
+                Payment_Delay_History: formValues.paymentDelayHistory || 10,
+                Financial_Issues: formValues.financialIssues || 0,
+                Weather_Impact_Days: formValues.weatherImpactDays || formValues.weatherImpactScore * 10 || 25,
+
+                // NEW: Planned duration feature (requires model retraining)
+                Planned_Duration_Days: (formValues.plannedDurationMonths || 12) * 30,
             };
 
             console.log('📤 Delay Prediction Request:', input);
@@ -174,9 +180,13 @@ function transformApiResponse(apiResponse, formValues) {
     const confidence = classification_result?.confidence || 0;
     const classProbabilities = classification_result?.class_probabilities || {};
 
-    // Calculate completion dates
-    const startDate = new Date();
-    const plannedDays = (formValues.plannedDurationMonths || 12) * 30;
+    // Calculate completion dates using USER-PROVIDED values
+    const startDate = formValues.projectStartDate
+        ? new Date(formValues.projectStartDate)
+        : new Date();
+    const plannedDurationMonths = formValues.plannedDurationMonths || 12;
+    const plannedDays = plannedDurationMonths * 30; // Convert months to days
+
     const plannedEnd = new Date(startDate);
     plannedEnd.setDate(plannedEnd.getDate() + plannedDays);
 
@@ -190,6 +200,11 @@ function transformApiResponse(apiResponse, formValues) {
         predictedCategory,
         categoryConfidence: confidence,
         classProbabilities,
+
+        // User-provided timeline values
+        projectStartDate: startDate.toISOString(),
+        plannedDurationMonths,
+        plannedDurationDays: plannedDays,
 
         // Computed Values
         predictedDelayMonths: predictedDelayDays / 30,
@@ -281,13 +296,16 @@ function getRecommendations(category, delayDays) {
  * Generate mock forecast data when API is unavailable
  */
 function generateMockDelayForecast(formValues) {
-    const plannedDays = (formValues.plannedDurationMonths || 12) * 30;
+    const plannedDurationMonths = formValues.plannedDurationMonths || 12;
+    const plannedDays = plannedDurationMonths * 30;
 
     // Simple mock calculation
     const baseDelayDays = Math.random() * 60 + 20; // 20-80 days
     const predictedDelayDays = Math.round(baseDelayDays);
 
-    const startDate = new Date();
+    const startDate = formValues.projectStartDate
+        ? new Date(formValues.projectStartDate)
+        : new Date();
     const plannedEnd = new Date(startDate);
     plannedEnd.setDate(plannedEnd.getDate() + plannedDays);
 
@@ -309,6 +327,11 @@ function generateMockDelayForecast(formValues) {
             'Major Delay': 0.3,
             'Critical Delay': 0.1,
         },
+        // User-provided timeline values
+        projectStartDate: startDate.toISOString(),
+        plannedDurationMonths,
+        plannedDurationDays: plannedDays,
+        // Computed values
         predictedDelayMonths: predictedDelayDays / 30,
         plannedCompletionDate: plannedEnd.toISOString(),
         predictedCompletionDate: predictedEnd.toISOString(),

@@ -524,6 +524,10 @@ const SustainabilityView = () => {
 
     return (
         <div className="space-y-6">
+            {/* Load Chart.js and jsPDF from CDN */}
+            <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js" />
+            <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" />
+
             {/* Header */}
             <div className="bg-gradient-to-r from-green-500/15 via-emerald-500/10 to-transparent border border-green-500/25 rounded-2xl p-6">
                 <div className="flex items-center justify-between gap-4 flex-wrap">
@@ -772,7 +776,6 @@ const SustainabilityView = () => {
                                         {(prediction.risk_probability * 100).toFixed(0)}% probability
                                     </p>
                                 </div>
-                            </div>
 
                             {/* ============================================== */}
                             {/* MAIN CONTENT: 70% Data / 30% Chart */}

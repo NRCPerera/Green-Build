@@ -50,7 +50,7 @@ export const parseApiError = (error) => {
 
     // Network connection failed
     if (error.code === 'ECONNREFUSED' || error.message.includes('Network Error')) {
-        return 'Cannot connect to the backend server. Please ensure it is running on port 5000.';
+        return 'Cannot connect to the backend server. Please ensure it is running on port 5001.';
     }
 
     // Request timed out

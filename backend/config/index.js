@@ -9,7 +9,7 @@ require('dotenv').config();
 
 const config = {
     // Server settings
-    port: process.env.PORT || 5000,
+    port: process.env.PORT || 5001,
     nodeEnv: process.env.NODE_ENV || 'development',
 
     // External service URLs

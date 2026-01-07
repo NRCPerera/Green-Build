@@ -2,6 +2,15 @@ const express = require('express');
 const cors = require('cors');
 const morgan = require('morgan');
 const config = require('./config');
+const { 
+    healthRoutes, 
+    uploadRoutes, 
+    costPredictionRoutes, 
+    sustainabilityRoutes,
+    authRoutes, 
+    projectRoutes, 
+    floorPlanRoutes, 
+    boqRoutes 
 const connectDB = require('./config/database');
 const {
     healthRoutes,
@@ -72,11 +81,18 @@ app.use(multerErrorHandler);
 app.use(notFoundHandler);
 app.use(globalErrorHandler);
 
+// Flag to track MongoDB connection status
+let mongoConnected = false;
+
+// Try to connect to MongoDB, but don't fail if it's not available
+const tryConnectMongo = async () => {
 // Start the server with database connection
 const startServer = async () => {
     try {
-        // Connect to MongoDB
+        const connectDB = require('./config/database');
         await connectDB();
+        mongoConnected = true;
+        console.log('  ✅ MongoDB:          Connected');
 
         // Start listening for requests
         app.listen(config.port, () => {
@@ -122,9 +138,43 @@ const startServer = async () => {
             console.log('');
         });
     } catch (error) {
-        console.error('Failed to start server:', error);
-        process.exit(1);
+        mongoConnected = false;
+        console.log('  ⚠️  MongoDB:          Not available (auth features disabled)');
+        console.log('     Install MongoDB to enable user authentication');
     }
+};
+
+// Start the server
+const startServer = async () => {
+    // Try to connect to MongoDB (but continue if it fails)
+    await tryConnectMongo();
+
+    // Start listening for requests
+    app.listen(config.port, () => {
+        console.log('');
+        console.log('================================================================');
+        console.log('         Green Build Backend Server Started                     ');
+        console.log('================================================================');
+        console.log(`  Server:              http://localhost:${config.port}`);
+        console.log(`  ML Service:          ${config.pythonServiceUrl}`);
+        console.log(`  Cost ML Service:     ${config.costMlServiceUrl}`);
+        console.log(`  Sustainability ML:   http://localhost:8003`);
+        console.log(`  Uploads:             ${config.uploadDir}`);
+        console.log('----------------------------------------------------------------');
+        console.log('  Features:');
+        console.log('    ✅ Sustainability Analysis   - Working');
+        console.log('    ✅ Cost Prediction           - Working');
+        console.log('    ✅ Floor Plan Upload         - Working');
+        if (mongoConnected) {
+            console.log('    ✅ User Authentication       - Working');
+            console.log('    ✅ Projects Management       - Working');
+        } else {
+            console.log('    ❌ User Authentication       - Requires MongoDB');
+            console.log('    ❌ Projects Management       - Requires MongoDB');
+        }
+        console.log('================================================================');
+        console.log('');
+    });
 };
 
 startServer();

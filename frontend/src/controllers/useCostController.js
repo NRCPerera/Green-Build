@@ -19,7 +19,7 @@ const useCostController = () => {
             console.log('📋 Form Values:', formValues);
 
             // Send the form data directly to the API, request SHAP with top_n=20
-            const response = await fetch('http://localhost:5000/api/predict-cost-overrun', {
+            const response = await fetch('http://localhost:5001/api/predict-cost-overrun', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
