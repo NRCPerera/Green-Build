@@ -62,12 +62,20 @@ class CostOverrunPredictor:
             
             # Load regression model
             regression_model_path = self.models_dir / "cost_overrun_regression_model.keras"
-            self.regression_model = keras.models.load_model(regression_model_path)
+            self.regression_model = keras.models.load_model(
+                regression_model_path,
+                compile=False,
+                safe_mode=False
+            )
             logger.info(f"Loaded regression model from {regression_model_path}")
             
             # Load classification model
             classification_model_path = self.models_dir / "cost_overrun_classification_model.keras"
-            self.classification_model = keras.models.load_model(classification_model_path)
+            self.classification_model = keras.models.load_model(
+                classification_model_path,
+                compile=False,
+                safe_mode=False
+            )
             logger.info(f"Loaded classification model from {classification_model_path}")
             
             # Load SHAP background data

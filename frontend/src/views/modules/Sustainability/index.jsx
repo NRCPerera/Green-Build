@@ -776,6 +776,7 @@ const SustainabilityView = () => {
                                         {(prediction.risk_probability * 100).toFixed(0)}% probability
                                     </p>
                                 </div>
+                            </div>
 
                             {/* ============================================== */}
                             {/* MAIN CONTENT: 70% Data / 30% Chart */}
