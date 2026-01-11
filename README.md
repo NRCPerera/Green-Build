@@ -1,6 +1,6 @@
-# 🌱 Green Build: AI-Driven Collaborative Platform for Predictive & Sustainable Quantity Surveying
+#  Green Build: AI-Driven Collaborative Platform for Predictive & Sustainable Quantity Surveying
 
-## 📋 Project Information
+##  Project Information
 
 | Property | Value |
 |----------|-------|
@@ -11,7 +11,7 @@
 
 ---
 
-## 📌 Project Overview
+##  Project Overview
 
 The **Green Build** platform is a cloud-based, intelligent system designed to modernize traditional Quantity Surveying (QS) practices using Artificial Intelligence and Machine Learning.
 
@@ -24,16 +24,16 @@ Traditional quantity surveying is:
 
 ### Solution
 An integrated AI platform that automates and enhances QS processes by providing:
-- ✅ Automated quantity takeoff from 2D construction drawings
-- ✅ Construction delay forecasting with explainable predictions
-- ✅ Cost overrun prediction for risk assessment
-- ✅ Lifecycle cost and sustainability analysis
+-  Automated quantity takeoff from 2D construction drawings
+-  Construction delay forecasting with explainable predictions
+-  Cost overrun prediction for risk assessment
+- Lifecycle cost and sustainability analysis
 
 This delivers **faster**, **more accurate**, **explainable**, and **sustainable** decision support for construction professionals.
 
 ---
 
-## 🏗️ System Architecture
+##  System Architecture
 
 The platform follows a **cloud-native microservices architecture** ensuring scalability, modularity, and collaborative development.
 
@@ -55,11 +55,11 @@ The platform follows a **cloud-native microservices architecture** ensuring scal
 
 ---
 
-## 🧩 System Components & Team Contributions
+##  System Components & Team Contributions
 
 The system consists of **four main ML components**, each developed by a dedicated team member and integrated into a single collaborative platform.
 
-### 1️⃣ Automated Quantity Takeoff from Construction Drawings  
+### Automated Quantity Takeoff from Construction Drawings  
 **Developer:** Perera N. R. C (IT22152282)
 
 **Description:**  
@@ -85,7 +85,7 @@ Automated extraction of construction quantities from 2D drawings using Computer 
 
 ---
 
-### 2️⃣ Construction Delay Forecasting  
+###  Construction Delay Forecasting  
 **Developer:** Hettiarachchi A. N. M (IT22217622)
 
 **Description:**  
@@ -112,7 +112,7 @@ Machine Learning-based predictive system that forecasts construction delays usin
 
 ---
 
-### 3️⃣ Lifecycle Cost & Sustainability Analysis  
+###  Lifecycle Cost & Sustainability Analysis  
 **Developer:** Morayas G. J. G (IT22292254)
 
 **Description:**  
@@ -141,7 +141,7 @@ Comprehensive environmental and cost impact assessment across the entire project
 
 ---
 
-### 4️⃣ Cost Overrun Prediction System  
+###  Cost Overrun Prediction System  
 **Developer:** Gunasekara S. G. V. T. P (IT22333520)
 
 **Description:**  
@@ -171,7 +171,7 @@ Advanced predictive analytics module for construction cost estimation:
 
 ---
 
-## 📁 Project Structure
+##  Project Structure
 
 ```
 Green-Build/
@@ -267,7 +267,7 @@ Green-Build/
 
 ---
 
-## 🚀 Getting Started
+##  Getting Started
 
 ### Prerequisites
 
@@ -278,13 +278,13 @@ Green-Build/
 
 ### Installation & Setup
 
-#### 1️⃣ Clone the Repository
+####  Clone the Repository
 ```bash
 git clone https://github.com/your-org/Green-Build.git
 cd Green-Build
 ```
 
-#### 2️⃣ Frontend Setup
+####  Frontend Setup
 ```bash
 cd frontend
 npm install
@@ -292,7 +292,7 @@ npm run build
 npm run dev     
 ```
 
-#### 3️⃣ Backend Setup
+####  Backend Setup
 ```bash
 cd ../backend
 npm install
@@ -300,7 +300,7 @@ npm run dev
 npm start       
 ```
 
-#### 4️⃣ ML Services Setup
+####  ML Services Setup
 
 Each ML service runs independently on its own port.
 
@@ -334,7 +334,7 @@ python run.py
 
 ---
 
-## 📊 Component-Wise Details
+##  Component-Wise Details
 
 ### Frontend (React + Vite)
 **Purpose:** User-facing web application for the Green Build platform
@@ -397,7 +397,7 @@ npm start
 - `/api/health/` – Health checks
 
 
-## 🏛️ System Architecture Diagram
+##  System Architecture Diagram
 
 ```
                                     ┌─────────────────┐
@@ -461,7 +461,7 @@ npm start
 
 ---
 
-## 👥 Team
+##  Team
 
 | Role | Name | Student ID | Component |
 |------|------|-----------|-----------|
