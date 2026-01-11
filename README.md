@@ -175,22 +175,22 @@ Advanced predictive analytics module for construction cost estimation:
 
 ```
 Green-Build/
-├── frontend/                           # React.js Web Application
+├── frontend/                         
 │   ├── src/
-│   │   ├── components/                # Reusable React components
-│   │   ├── controllers/               # Business logic & hooks
-│   │   ├── models/                    # API models & Zustand stores
-│   │   ├── services/                  # API service layer
-│   │   ├── views/                     # Page layouts
-│   │   ├── App.jsx                    # Main App component
-│   │   └── main.jsx                   # Entry point
-│   ├── package.json                   # Dependencies
-│   ├── vite.config.js                 # Vite bundler config
-│   ├── tailwind.config.js             # TailwindCSS config
-│   └── eslint.config.js               # Linting rules
+│   │   ├── components/               
+│   │   ├── controllers/               
+│   │   ├── models/                   
+│   │   ├── services/                 
+│   │   ├── views/                     
+│   │   ├── App.jsx                    
+│   │   └── main.jsx                   
+│   ├── package.json                 
+│   ├── vite.config.js                 
+│   ├── tailwind.config.js             
+│   └── eslint.config.js               
 │
-├── backend/                           # Express.js API Gateway
-│   ├── controllers/                   # Request handlers
+├── backend/                          
+│   ├── controllers/                  
 │   │   ├── authController.js
 │   │   ├── projectController.js
 │   │   ├── costPredictionController.js
@@ -200,14 +200,14 @@ Green-Build/
 │   │   ├── boqController.js
 │   │   ├── uploadController.js
 │   │   └── healthController.js
-│   ├── models/                        # Database schemas
+│   ├── models/                       
 │   │   ├── User.js
 │   │   ├── Project.js
 │   │   ├── costModel.js
 │   │   ├── FloorPlan.js
 │   │   ├── BOQReport.js
 │   │   └── fileModel.js
-│   ├── routes/                        # API route definitions
+│   ├── routes/                       
 │   │   ├── authRoutes.js
 │   │   ├── projectRoutes.js
 │   │   ├── costPredictionRoutes.js
@@ -217,53 +217,52 @@ Green-Build/
 │   │   ├── boqRoutes.js
 │   │   ├── uploadRoutes.js
 │   │   └── healthRoutes.js
-│   ├── middleware/                    # Express middleware
-│   │   ├── authMiddleware.js          # JWT authentication
-│   │   └── errorHandler.js            # Error handling
-│   ├── config/                        # Configuration files
-│   │   ├── database.js                # MongoDB connection
-│   │   └── index.js                   # Environment config
-│   ├── services/                      # Business logic services
-│   │   └── pythonService.js           # Python ML service integration
-│   ├── views/                         # Response templates
+│   ├── middleware/                   
+│   │   ├── authMiddleware.js        
+│   │   └── errorHandler.js          
+│   ├── config/                       
+│   │   ├── database.js                
+│   │   └── index.js                   
+│   ├── services/                     
+│   │   └── pythonService.js          
+│   ├── views/                      
 │   │   └── errorView.js
-│   ├── package.json                   # Dependencies
-│   └── server.js                      # Application entry point
+│   ├── package.json                  
+│   └── server.js                      
 │
-├── ml-services/                       # Python ML Microservices
-│   ├── cost-overrun-prediction-ml/    # Cost prediction service
+├── ml-services/                      
+│   ├── cost-overrun-prediction-ml/   
 │   │   ├── app/
-│   │   │   ├── main.py                # FastAPI application
-│   │   │   ├── config.py              # Configuration
+│   │   │   ├── main.py               
+│   │   │   ├── config.py              
 │   │   │   ├── api/
-│   │   │   │   └── endpoints.py       # API routes
+│   │   │   │   └── endpoints.py       
 │   │   │   ├── models/
-│   │   │   │   └── schemas.py         # Pydantic models
-│   │   │   └── services/              # Business logic
-│   │   ├── models/                    # Trained ML models
-│   │   ├── run.py                     # Service launcher
+│   │   │   │   └── schemas.py        
+│   │   │   └── services/              
+│   │   ├── models/                    
+│   │   ├── run.py                     
 │   │   └── requirements.txt
 │   │
-│   ├── delay-prediction-ml/           # Delay prediction service
-│   │   ├── app/
+│   ├── delay-prediction-ml/           
 │   │   ├── models/
 │   │   ├── run.py
 │   │   └── requirements.txt
 │   │
-│   ├── quantity-takeoff-ml/           # Quantity takeoff service
+│   ├── quantity-takeoff-ml/           
 │   │   ├── app/
 │   │   ├── models/
 │   │   ├── src/
 │   │   ├── run.py
 │   │   └── requirements.txt
 │   │
-│   └── sustainability-ml/             # Sustainability analysis service
+│   └── sustainability-ml/            
 │       ├── app/
 │       ├── models/
 │       ├── run.py
 │       └── requirements.txt
 │
-└── README.md                          # Project documentation
+└── README.md                         
 ```
 
 ---
@@ -352,9 +351,9 @@ python run.py
 **Running:**
 ```bash
 cd frontend
-npm run dev     # Start dev server (http://localhost:5173)
-npm run build   # Create production bundle
-npm run lint    # Run ESLint
+npm run dev     
+npm run build   
+npm run lint    
 ```
 
 **Key Dependencies:**
@@ -383,8 +382,8 @@ npm run lint    # Run ESLint
 **Running:**
 ```bash
 cd backend
-npm run dev     # Start with nodemon (http://localhost:3000)
-npm start       # Production mode
+npm run dev     
+npm start      
 ```
 
 **API Routes:**
@@ -397,90 +396,6 @@ npm start       # Production mode
 - `/api/upload/` – File uploads
 - `/api/health/` – Health checks
 
----
-
-### ML Services (Python + FastAPI)
-
-#### Cost Overrun Prediction Service
-**Purpose:** Predict construction cost overruns and identify risk factors
-
-**API Endpoints:**
-- `POST /predict/` – Single prediction
-- `POST /predict/batch/` – Batch predictions
-- `GET /health/` – Health check
-- `GET /model-info/` – Model metadata
-
-**Input Schema:**
-```json
-{
-  "project_location": "string",
-  "project_size": "float",
-  "contractor_grade": "string",
-  "budget": "float",
-  "duration_months": "integer"
-}
-```
-
-**Output Schema:**
-```json
-{
-  "cost_overrun_percentage": "float",
-  "risk_level": "string (Low/Medium/High)",
-  "confidence_score": "float",
-  "feature_importance": "object",
-  "explanation": "string"
-}
-```
-
-**Running:**
-```bash
-cd ml-services/cost-overrun-prediction-ml
-python run.py  # Runs on http://localhost:8001
-```
-
-#### Delay Prediction Service
-**Purpose:** Forecast construction project delays
-
-**API Endpoints:**
-- `POST /predict/` – Predict delays
-- `POST /predict-all/` – Predict with all metrics
-- `GET /health/` – Health check
-
-**Running:**
-```bash
-cd ml-services/delay-prediction-ml
-python run.py  # Runs on http://localhost:8002
-```
-
-#### Quantity Takeoff Service
-**Purpose:** Extract quantities from construction drawings
-
-**API Endpoints:**
-- `POST /extract/` – Extract quantities from image
-- `POST /batch-extract/` – Process multiple drawings
-- `GET /health/` – Health check
-
-**Running:**
-```bash
-cd ml-services/quantity-takeoff-ml
-python run.py  # Runs on http://localhost:8003
-```
-
-#### Sustainability Analysis Service
-**Purpose:** Analyze environmental impact and sustainability metrics
-
-**API Endpoints:**
-- `POST /analyze/` – Analyze sustainability
-- `POST /compare-materials/` – Compare sustainable alternatives
-- `GET /health/` – Health check
-
-**Running:**
-```bash
-cd ml-services/sustainability-ml
-python run.py  # Runs on http://localhost:8004
-```
-
----
 
 ## 🏛️ System Architecture Diagram
 
@@ -555,25 +470,4 @@ python run.py  # Runs on http://localhost:8004
 | Sustainability | Morayas G. J. G | IT22292254 | ML-Optimization |
 | Cost Prediction | Gunasekara S. G. V. T. P | IT22333520 | ML-Analytics |
 
----
-
-## 📞 Contact
-
-**Institution:** Sri Lanka Institute of Information Technology (SLIIT)  
-**Program:** Bachelor of Science (Honours) in Information Technology  
-**Project Code:** RP_25_26J_347  
-**Academic Year:** 2025-2026
-
----
-
-**Last Updated:** January 2026  
-**Version:** 1.0.0  
-3. **AI & ML Layer** – ML models, CV pipelines, optimization engines  
-4. **Data Layer** – MongoDB, PostgreSQL, Redis, GridFS  
-5. **Deployment Layer** – Docker, Cloud Infrastructure (AWS)
-
-### Architecture Diagram
-*(Add the architecture diagram image to `/docs` folder and reference it below)*
-
-```md
-![System Architecture](docs/architecture-diagram.png)
+-
