@@ -3,3 +3,4 @@ export { default as Footer } from './Footer';
 export { default as UploadForm } from './UploadForm';
 export { default as ResultsPanel } from './ResultsPanel';
 export { default as ManualInputPanel } from './ManualInputPanel';
+export { default as FloorPlan3DViewer } from './FloorPlan3DViewer';

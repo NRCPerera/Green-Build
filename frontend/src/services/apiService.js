@@ -62,7 +62,35 @@ export const parseApiError = (error) => {
     return 'Failed to process the floor plan';
 };
 
+/**
+ * Generates 3D geometry data from a floor plan image for visualization.
+ * 
+ * @param {File} imageFile - The floor plan image file
+ * @param {number} scale - Scale in pixels per meter
+ * @param {number} wallHeight - Wall height in meters (default: 2.5)
+ * @returns {Promise<Object>} Geometry data with walls, doors, windows
+ * @throws {Error} Network or server errors
+ */
+export const generate3DGeometry = async (imageFile, scale, wallHeight = 2.5) => {
+    const formData = new FormData();
+    formData.append('image', imageFile);
+    formData.append('scale', scale);
+    formData.append('wallHeight', wallHeight);
+
+    const response = await axios.post(
+        `${config.apiBaseUrl}/api/generate-3d-geometry`,
+        formData,
+        {
+            headers: { 'Content-Type': 'multipart/form-data' },
+            timeout: config.requestTimeout
+        }
+    );
+
+    return response.data;
+};
+
 export default {
     uploadFloorPlan,
-    parseApiError
+    parseApiError,
+    generate3DGeometry
 };

@@ -178,6 +178,95 @@ const processFloorPlan = async (req, res) => {
     }
 };
 
+/**
+ * Generates 3D geometry data from a floor plan for visualization.
+ * Returns wall, door, and window polygons suitable for Three.js.
+ * 
+ * @param {Object} req - Express request object with uploaded file
+ * @param {Object} res - Express response object
+ */
+const generate3DGeometry = async (req, res) => {
+    let uploadedFilePath = null;
+
+    try {
+        if (!req.file) {
+            return res.status(400).json({
+                success: false,
+                error: 'No image file provided',
+                message: 'Please upload a construction plan image'
+            });
+        }
+
+        uploadedFilePath = req.file.path;
+        console.log(`[3D Geometry] Processing file: ${req.file.originalname}`);
+
+        const scale = parseFloat(req.body.scale);
+        if (isNaN(scale) || scale <= 0) {
+            await deleteFile(uploadedFilePath);
+            return res.status(400).json({
+                success: false,
+                error: 'Invalid scale value',
+                message: 'Scale must be a positive number representing pixels per meter'
+            });
+        }
+
+        const wallHeight = parseFloat(req.body.wallHeight) || 2.5;
+
+        console.log(`[3D Geometry] Parameters: Scale=${scale} ppm, Wall Height=${wallHeight}m`);
+
+        let geometry;
+        try {
+            geometry = await pythonService.generate3DGeometry(uploadedFilePath, scale, wallHeight);
+            console.log('[3D Geometry] Successfully received geometry from ML service');
+        } catch (pythonError) {
+            console.error('[3D Geometry] Python service error:', pythonError.message);
+
+            if (pythonError.code === 'ECONNREFUSED') {
+                await deleteFile(uploadedFilePath);
+                return res.status(503).json({
+                    success: false,
+                    error: 'ML service unavailable',
+                    message: 'The Python ML processing service is not running.'
+                });
+            }
+
+            if (pythonError.response) {
+                await deleteFile(uploadedFilePath);
+                return res.status(pythonError.response.status || 500).json({
+                    success: false,
+                    error: 'ML processing failed',
+                    message: pythonError.response.data?.detail || 'Error processing the image'
+                });
+            }
+
+            throw pythonError;
+        }
+
+        await deleteFile(uploadedFilePath);
+
+        res.json({
+            success: true,
+            message: '3D geometry generated successfully',
+            data: geometry
+        });
+
+    } catch (error) {
+        console.error('[3D Geometry] Unexpected error:', error.message);
+
+        if (uploadedFilePath) {
+            await deleteFile(uploadedFilePath);
+        }
+
+        res.status(500).json({
+            success: false,
+            error: 'Internal server error',
+            message: 'An unexpected error occurred while generating 3D geometry',
+            details: error.message
+        });
+    }
+};
+
 module.exports = {
-    processFloorPlan
+    processFloorPlan,
+    generate3DGeometry
 };
