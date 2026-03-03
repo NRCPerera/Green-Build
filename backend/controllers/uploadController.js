@@ -118,17 +118,34 @@ const processFloorPlan = async (req, res) => {
             throw pythonError;
         }
 
-        // Calculate costs based on the extracted quantities
-        console.log('[Upload] Calculating cost estimates...');
-        const costs = calculateCosts(quantities);
-
-        // Build the response payload
+        // Build the response payload — return detections for user review
+        // Cost calculation is now deferred to POST /api/boq/generate
         const processingTime = Date.now() - startTime;
+        console.log('[Upload] Returning detection results for user review...');
 
         const response = {
             success: true,
-            message: 'Quantity takeoff and cost estimation completed successfully',
+            message: 'Floor plan analyzed. Please review detections before generating BOQ.',
             data: {
+                // Raw ML detections (for user to review/edit)
+                detections: {
+                    walls: {
+                        totalLengthM: quantities.wall_total_length_m || 0,
+                        grossAreaM2: quantities.wall_gross_surface_area_m2 || 0,
+                        netAreaM2: quantities.wall_net_surface_area_m2 || 0,
+                        deductionsM2: quantities.deductions_area_m2 || 0
+                    },
+                    doors: quantities.item_counts?.doors || 0,
+                    windows: quantities.item_counts?.windows || 0,
+                    rooms: quantities.room_detection || null,
+                    warning: quantities.warning || null
+                },
+                // Visualizations for overlay editing
+                overlays: {
+                    detectionOverlay: quantities.detection_overlay_base64 || null,
+                    roomMap: quantities.room_detection?.room_map_base64 || null
+                },
+                // Backward compat: also include legacy shape
                 quantities: {
                     wall_total_length_m: quantities.wall_total_length_m,
                     wall_gross_surface_area_m2: quantities.wall_gross_surface_area_m2,
@@ -139,7 +156,6 @@ const processFloorPlan = async (req, res) => {
                 },
                 room_detection: quantities.room_detection || null,
                 detection_overlay_base64: quantities.detection_overlay_base64 || null,
-                costs: costs,
                 input_parameters: {
                     scale_ppm: scale,
                     wall_height_m: wallHeight,

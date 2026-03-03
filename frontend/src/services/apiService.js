@@ -89,8 +89,105 @@ export const generate3DGeometry = async (imageFile, scale, wallHeight = 2.5) => 
     return response.data;
 };
 
+/**
+ * Confirm user-reviewed detections before BOQ generation.
+ *
+ * @param {Object} detections - The confirmed/edited detection data
+ * @param {string} [floorPlanId] - Optional floor plan ID if saving to project
+ * @returns {Promise<Object>} Confirmation receipt with summary
+ */
+export const confirmDetections = async (detections, floorPlanId = null) => {
+    const response = await axios.post(
+        `${config.apiBaseUrl}/api/detections/confirm`,
+        { detections, floorPlanId },
+        { timeout: config.requestTimeout }
+    );
+
+    return response.data;
+};
+
+/**
+ * Generate full BOQ from confirmed detections using dynamic rates.
+ *
+ * @param {Object} confirmedDetections - Detection data from confirmation step
+ * @param {Object} [materialSelections] - User's material choices
+ * @param {string} [rateDate] - Effective date for rate lookup
+ * @param {string} [projectId] - Optional project ID for persistence
+ * @param {string} [floorPlanId] - Optional floor plan ID for persistence
+ * @returns {Promise<Object>} Full BOQ with sections A-F and summary
+ */
+export const generateBOQ = async (confirmedDetections, materialSelections = {}, rateDate = null, projectId = null, floorPlanId = null) => {
+    const response = await axios.post(
+        `${config.apiBaseUrl}/api/boq/generate`,
+        {
+            confirmedDetections,
+            materialSelections,
+            rateDate,
+            projectId,
+            floorPlanId
+        },
+        { timeout: config.requestTimeout }
+    );
+
+    return response.data;
+};
+
+/**
+ * Fetch available rates for a BOQ section.
+ *
+ * @param {string} [section] - Section key (earthworks, finishes, etc.)
+ * @param {string} [asOfDate] - Rate effective date
+ * @returns {Promise<Object>} List of rates with material types
+ */
+export const fetchRates = async (section = null, asOfDate = null) => {
+    const params = {};
+    if (section) params.section = section;
+    if (asOfDate) params.asOfDate = asOfDate;
+
+    const response = await axios.get(
+        `${config.apiBaseUrl}/api/rates`,
+        { params, timeout: config.requestTimeout }
+    );
+
+    return response.data;
+};
+
+/**
+ * Fetch all sections with their available items and material types.
+ *
+ * @returns {Promise<Object>} Sections structure
+ */
+export const fetchRateSections = async () => {
+    const response = await axios.get(
+        `${config.apiBaseUrl}/api/rates/sections`,
+        { timeout: config.requestTimeout }
+    );
+
+    return response.data;
+};
+
+/**
+ * Seed default rates into the database.
+ *
+ * @returns {Promise<Object>} Seeding result
+ */
+export const seedRates = async () => {
+    const response = await axios.post(
+        `${config.apiBaseUrl}/api/rates/seed`,
+        {},
+        { timeout: config.requestTimeout }
+    );
+
+    return response.data;
+};
+
 export default {
     uploadFloorPlan,
     parseApiError,
-    generate3DGeometry
+    generate3DGeometry,
+    confirmDetections,
+    generateBOQ,
+    fetchRates,
+    fetchRateSections,
+    seedRates
 };

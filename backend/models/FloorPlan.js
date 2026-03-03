@@ -94,6 +94,45 @@ const floorPlanSchema = new mongoose.Schema({
             roomSegmentation: { type: String }
         }
     },
+
+    // User-confirmed detections (post ML review)
+    confirmedDetections: {
+        isConfirmed: { type: Boolean, default: false },
+        confirmedAt: { type: Date },
+        confirmedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+        walls: {
+            totalLengthM: { type: Number },
+            grossArea: { type: Number },
+            netArea: { type: Number },
+            heightM: { type: Number }
+        },
+        doors: [{
+            id: { type: String },
+            type: { type: String, default: 'wooden' },
+            width: { type: Number },
+            height: { type: Number },
+            materialType: { type: String, default: 'standard' },
+            status: { type: String, enum: ['approved', 'edited', 'deleted', 'added'], default: 'approved' }
+        }],
+        windows: [{
+            id: { type: String },
+            type: { type: String, default: 'aluminium' },
+            width: { type: Number },
+            height: { type: Number },
+            materialType: { type: String, default: 'standard' },
+            status: { type: String, enum: ['approved', 'edited', 'deleted', 'added'], default: 'approved' }
+        }],
+        rooms: [{
+            id: { type: String },
+            type: { type: String },
+            area: { type: Number },
+            flooringMaterial: { type: String, default: 'ceramic_tile' },
+            ceilingType: { type: String, default: 'plain' }
+        }],
+        additionalInputs: {
+            type: mongoose.Schema.Types.Mixed
+        }
+    },
     manualInputs: {
         electrical: {
             outlets: { type: Number, default: 0 },
@@ -155,7 +194,7 @@ const floorPlanSchema = new mongoose.Schema({
     },
     status: {
         type: String,
-        enum: ['uploaded', 'processing', 'processed', 'failed', 'archived'],
+        enum: ['uploaded', 'processing', 'detected', 'confirmed', 'boq_generated', 'failed', 'archived'],
         default: 'uploaded'
     },
     errorMessage: {
