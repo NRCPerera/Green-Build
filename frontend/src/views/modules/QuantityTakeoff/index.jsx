@@ -39,8 +39,14 @@ const QuantityTakeoffView = () => {
     // Manual inputs for BOQ generation (collected in step 2)
     const [manualInputs, setManualInputs] = useState({});
 
+    // User-edited detections from the Review panel (step 1)
+    const [editedDetections, setEditedDetections] = useState(null);
+
     // Confirmed detections (output of step 1 review)
     const [confirmedDetections, setConfirmedDetections] = useState(null);
+
+    // Material selections from step 2
+    const [materialSelections, setMaterialSelections] = useState({});
 
     // Backend-generated BOQ data
     const [boqData, setBoqData] = useState(null);
@@ -106,8 +112,9 @@ const QuantityTakeoffView = () => {
     const handleConfirmDetections = useCallback(async () => {
         if (!results) return;
 
-        // Build confirmed detections from ML results + wall height
-        const detections = {
+        // Use user-edited detections from the Review panel (if available)
+        // Otherwise build from raw ML results
+        const detections = editedDetections || {
             walls: {
                 totalLengthM: results.quantities?.wall_total_length_m || results.detections?.walls?.totalLengthM || 0,
                 grossAreaM2: results.quantities?.wall_gross_surface_area_m2 || results.detections?.walls?.grossAreaM2 || 0,
@@ -145,7 +152,7 @@ const QuantityTakeoffView = () => {
         }
 
         setCurrentStep(2);
-    }, [results, manualInputs, uploadParams]);
+    }, [results, editedDetections, manualInputs, uploadParams]);
 
     // ── Step 2 → Step 3: Generate BOQ & 3D ──────────────────────
 
@@ -153,7 +160,7 @@ const QuantityTakeoffView = () => {
         setCurrentStep(3);
         setLoadingBOQ(true);
 
-        // Merge manual inputs into confirmed detections
+        // Merge manual inputs + material selections into confirmed detections
         const detectionsForBOQ = {
             ...(confirmedDetections || {}),
             additionalInputs: {
@@ -162,9 +169,17 @@ const QuantityTakeoffView = () => {
             }
         };
 
+        // Build material selections from both the manual step dropdowns and manualInputs
+        const mats = {
+            ...materialSelections,
+            masonryType: manualInputs.masonryType || materialSelections.masonryType,
+            doorType: manualInputs.doorType || materialSelections.doorType,
+            windowType: manualInputs.windowType || materialSelections.windowType,
+        };
+
         // Generate BOQ via backend Rate Engine
         try {
-            const boqResp = await apiGenerateBOQ(detectionsForBOQ);
+            const boqResp = await apiGenerateBOQ(detectionsForBOQ, mats);
             if (boqResp.success) {
                 setBoqData(boqResp.data.boqReport);
                 message.success('BOQ generated with dynamic rates!');
@@ -233,7 +248,9 @@ const QuantityTakeoffView = () => {
         clearFile();
         setGeometry3D(null);
         setManualInputs({});
+        setEditedDetections(null);
         setConfirmedDetections(null);
+        setMaterialSelections({});
         setBoqData(null);
         form.resetFields();
     };
@@ -307,6 +324,7 @@ const QuantityTakeoffView = () => {
                         loading={loading}
                         error={error}
                         onErrorClose={clearError}
+                        onDetectionsUpdate={setEditedDetections}
                     />
                 );
 
@@ -317,6 +335,11 @@ const QuantityTakeoffView = () => {
                         manualInputs={manualInputs}
                         onUpdate={(field, value) => {
                             setManualInputs(prev => ({ ...prev, [field]: value }));
+                        }}
+                        materialSelections={materialSelections}
+                        onMaterialUpdate={(key, value) => {
+                            setMaterialSelections(prev => ({ ...prev, [key]: value }));
+                            setManualInputs(prev => ({ ...prev, [key]: value }));
                         }}
                     />
                 );
