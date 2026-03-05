@@ -118,7 +118,6 @@ const useSustainabilityController = () => {
             style: 'currency',
             currency: 'LKR',
             minimumFractionDigits: 0,
-        }).format(amount);
             maximumFractionDigits: 0,
         }).format(amount);
     };
