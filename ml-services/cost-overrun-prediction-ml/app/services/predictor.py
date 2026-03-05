@@ -60,6 +60,14 @@ class CostOverrunPredictor:
             self.feature_names_encoded = joblib.load(feature_names_encoded_path)
             logger.info(f"Loaded {len(self.feature_names_encoded)} encoded feature names")
             
+            # Patch Dense layer to handle quantization_config from newer Keras versions
+            Dense = keras.layers.Dense
+            _orig_dense_init = Dense.__init__
+            def _patched_dense_init(self_layer, *args, **kwargs):
+                kwargs.pop('quantization_config', None)
+                _orig_dense_init(self_layer, *args, **kwargs)
+            Dense.__init__ = _patched_dense_init
+            
             # Load regression model
             regression_model_path = self.models_dir / "cost_overrun_regression_model.keras"
             self.regression_model = keras.models.load_model(regression_model_path)
