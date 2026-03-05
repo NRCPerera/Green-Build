@@ -1,12 +1,3 @@
-/**
- * Manual Input Step — Step 2 (UPDATED)
- *
- * Collapsible sections aligned with the 6 BOQ sections.
- * Pre-fills ML-detected values (doors, windows, areas).
- * Now includes material type selection and rate preview.
- * User can override ML values or add quantities for items ML cannot detect.
- */
-
 import { useState, useEffect } from 'react';
 import {
     Card, InputNumber, Row, Col, Typography, Collapse,
@@ -26,8 +17,6 @@ import {
 
 const { Text, Title, Paragraph } = Typography;
 const { Option } = Select;
-
-/* ── Material type options ─────────────────────────────────── */
 
 const MASONRY_MATERIALS = [
     { value: 'standard', label: 'Standard Block' },
