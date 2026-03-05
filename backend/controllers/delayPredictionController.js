@@ -5,6 +5,7 @@
  */
 
 const axios = require('axios');
+const config = require('../config');
 
 /**
  * Handle delay prediction request (Full - both regression and classification)
@@ -27,7 +28,7 @@ const handleDelayPrediction = async (req, res, next) => {
         }
 
         // Get ML service URL from environment or use default
-        const mlServiceUrl = process.env.DELAY_ML_SERVICE_URL || 'http://localhost:8081';
+        const mlServiceUrl = config.delayMlServiceUrl;
 
         console.log(`[Delay Prediction] Sending request to ML service: ${mlServiceUrl}`);
         console.log(`[Delay Prediction] Project data:`, JSON.stringify(data, null, 2));
@@ -74,7 +75,7 @@ const handleDelayPrediction = async (req, res, next) => {
                 success: false,
                 error: 'ML service unavailable',
                 message: 'Could not connect to the Delay Prediction ML service. Please ensure it is running.',
-                mlServiceUrl: process.env.DELAY_ML_SERVICE_URL || 'http://localhost:8081'
+                mlServiceUrl: config.delayMlServiceUrl
             });
         } else {
             return res.status(500).json({
@@ -106,7 +107,7 @@ const handleDelayRegressionPrediction = async (req, res, next) => {
             });
         }
 
-        const mlServiceUrl = process.env.DELAY_ML_SERVICE_URL || 'http://localhost:8081';
+        const mlServiceUrl = config.delayMlServiceUrl;
 
         console.log(`[Delay Regression] Sending request to ML service: ${mlServiceUrl}`);
 
@@ -150,7 +151,7 @@ const handleDelayRegressionPrediction = async (req, res, next) => {
                 success: false,
                 error: 'ML service unavailable',
                 message: 'Could not connect to the Delay Prediction ML service. Please ensure it is running.',
-                mlServiceUrl: process.env.DELAY_ML_SERVICE_URL || 'http://localhost:8081'
+                mlServiceUrl: config.delayMlServiceUrl
             });
         } else {
             return res.status(500).json({
@@ -182,7 +183,7 @@ const handleDelayClassificationPrediction = async (req, res, next) => {
             });
         }
 
-        const mlServiceUrl = process.env.DELAY_ML_SERVICE_URL || 'http://localhost:8081';
+        const mlServiceUrl = config.delayMlServiceUrl;
 
         console.log(`[Delay Classification] Sending request to ML service: ${mlServiceUrl}`);
 
@@ -226,7 +227,7 @@ const handleDelayClassificationPrediction = async (req, res, next) => {
                 success: false,
                 error: 'ML service unavailable',
                 message: 'Could not connect to the Delay Prediction ML service. Please ensure it is running.',
-                mlServiceUrl: process.env.DELAY_ML_SERVICE_URL || 'http://localhost:8081'
+                mlServiceUrl: config.delayMlServiceUrl
             });
         } else {
             return res.status(500).json({

@@ -62,7 +62,132 @@ export const parseApiError = (error) => {
     return 'Failed to process the floor plan';
 };
 
+/**
+ * Generates 3D geometry data from a floor plan image for visualization.
+ * 
+ * @param {File} imageFile - The floor plan image file
+ * @param {number} scale - Scale in pixels per meter
+ * @param {number} wallHeight - Wall height in meters (default: 2.5)
+ * @returns {Promise<Object>} Geometry data with walls, doors, windows
+ * @throws {Error} Network or server errors
+ */
+export const generate3DGeometry = async (imageFile, scale, wallHeight = 2.5) => {
+    const formData = new FormData();
+    formData.append('image', imageFile);
+    formData.append('scale', scale);
+    formData.append('wallHeight', wallHeight);
+
+    const response = await axios.post(
+        `${config.apiBaseUrl}/api/generate-3d-geometry`,
+        formData,
+        {
+            headers: { 'Content-Type': 'multipart/form-data' },
+            timeout: config.requestTimeout
+        }
+    );
+
+    return response.data;
+};
+
+/**
+ * Confirm user-reviewed detections before BOQ generation.
+ *
+ * @param {Object} detections - The confirmed/edited detection data
+ * @param {string} [floorPlanId] - Optional floor plan ID if saving to project
+ * @returns {Promise<Object>} Confirmation receipt with summary
+ */
+export const confirmDetections = async (detections, floorPlanId = null) => {
+    const response = await axios.post(
+        `${config.apiBaseUrl}/api/detections/confirm`,
+        { detections, floorPlanId },
+        { timeout: config.requestTimeout }
+    );
+
+    return response.data;
+};
+
+/**
+ * Generate full BOQ from confirmed detections using dynamic rates.
+ *
+ * @param {Object} confirmedDetections - Detection data from confirmation step
+ * @param {Object} [materialSelections] - User's material choices
+ * @param {string} [rateDate] - Effective date for rate lookup
+ * @param {string} [projectId] - Optional project ID for persistence
+ * @param {string} [floorPlanId] - Optional floor plan ID for persistence
+ * @returns {Promise<Object>} Full BOQ with sections A-F and summary
+ */
+export const generateBOQ = async (confirmedDetections, materialSelections = {}, rateDate = null, projectId = null, floorPlanId = null) => {
+    const response = await axios.post(
+        `${config.apiBaseUrl}/api/boq/generate`,
+        {
+            confirmedDetections,
+            materialSelections,
+            rateDate,
+            projectId,
+            floorPlanId
+        },
+        { timeout: config.requestTimeout }
+    );
+
+    return response.data;
+};
+
+/**
+ * Fetch available rates for a BOQ section.
+ *
+ * @param {string} [section] - Section key (earthworks, finishes, etc.)
+ * @param {string} [asOfDate] - Rate effective date
+ * @returns {Promise<Object>} List of rates with material types
+ */
+export const fetchRates = async (section = null, asOfDate = null) => {
+    const params = {};
+    if (section) params.section = section;
+    if (asOfDate) params.asOfDate = asOfDate;
+
+    const response = await axios.get(
+        `${config.apiBaseUrl}/api/rates`,
+        { params, timeout: config.requestTimeout }
+    );
+
+    return response.data;
+};
+
+/**
+ * Fetch all sections with their available items and material types.
+ *
+ * @returns {Promise<Object>} Sections structure
+ */
+export const fetchRateSections = async () => {
+    const response = await axios.get(
+        `${config.apiBaseUrl}/api/rates/sections`,
+        { timeout: config.requestTimeout }
+    );
+
+    return response.data;
+};
+
+/**
+ * Seed default rates into the database.
+ *
+ * @returns {Promise<Object>} Seeding result
+ */
+export const seedRates = async () => {
+    const response = await axios.post(
+        `${config.apiBaseUrl}/api/rates/seed`,
+        {},
+        { timeout: config.requestTimeout }
+    );
+
+    return response.data;
+};
+
 export default {
     uploadFloorPlan,
-    parseApiError
+    parseApiError,
+    generate3DGeometry,
+    confirmDetections,
+    generateBOQ,
+    fetchRates,
+    fetchRateSections,
+    seedRates
 };

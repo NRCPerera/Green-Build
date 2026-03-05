@@ -8,10 +8,19 @@
 const mongoose = require('mongoose');
 
 const boqItemSchema = new mongoose.Schema({
-    category: {
+    itemNo: {
+        type: String,
+        trim: true
+    },
+    section: {
         type: String,
         required: true,
-        enum: ['walls', 'doors', 'windows', 'electrical', 'plumbing', 'hvac', 'flooring', 'ceiling', 'structural', 'other']
+        enum: ['earthworks', 'concrete_works', 'masonry_works', 'finishes', 'doors_windows', 'mep_works']
+    },
+    category: {
+        type: String,
+        enum: ['walls', 'doors', 'windows', 'electrical', 'plumbing', 'hvac', 'flooring',
+            'ceiling', 'structural', 'earthworks', 'concrete', 'masonry', 'finishes', 'mep', 'other']
     },
     itemName: {
         type: String,
@@ -29,10 +38,21 @@ const boqItemSchema = new mongoose.Schema({
         required: true,
         min: 0
     },
+    materialType: {
+        type: String,
+        default: 'standard'
+    },
     unitRate: {
         type: Number,
         required: true,
         min: 0
+    },
+    rateRef: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Rate'
+    },
+    rateEffectiveDate: {
+        type: Date
     },
     totalCost: {
         type: Number,
@@ -80,6 +100,14 @@ const boqReportSchema = new mongoose.Schema({
     },
     items: [boqItemSchema],
     summary: {
+        sectionSubtotals: {
+            earthworks: { type: Number, default: 0 },
+            concrete_works: { type: Number, default: 0 },
+            masonry_works: { type: Number, default: 0 },
+            finishes: { type: Number, default: 0 },
+            doors_windows: { type: Number, default: 0 },
+            mep_works: { type: Number, default: 0 }
+        },
         totalMLDetectedCost: { type: Number, default: 0 },
         totalManualInputCost: { type: Number, default: 0 },
         subtotal: { type: Number, default: 0 },
@@ -90,6 +118,7 @@ const boqReportSchema = new mongoose.Schema({
         profitPercent: { type: Number, default: 10 },
         profitAmount: { type: Number, default: 0 },
         grandTotal: { type: Number, default: 0 },
+        rateDate: { type: Date },
         currency: { type: String, default: 'LKR' }
     },
     finishType: {

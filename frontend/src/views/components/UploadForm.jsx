@@ -176,7 +176,7 @@ const UploadForm = ({
                         block
                         className="submit-button"
                     >
-                        {loading ? 'Processing...' : 'Generate BOQ'}
+                        {loading ? 'Processing...' : 'Analyze Floor Plan'}
                     </Button>
                 </Form.Item>
 

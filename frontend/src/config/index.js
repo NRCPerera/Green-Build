@@ -6,7 +6,7 @@
 
 const config = {
     // Backend server URL
-    apiBaseUrl: 'http://localhost:5001',
+    apiBaseUrl: 'http://localhost:5000',
 
     // Request timeout in milliseconds (2 minutes for ML processing)
     requestTimeout: 120000,
