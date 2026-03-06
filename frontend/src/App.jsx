@@ -266,7 +266,12 @@ function App() {
       handleSelectProject(project);
       return;
     }
-    if (key !== 'project-detail') setSelectedProject(null);
+    // If navigating to cost or delay from project detail, keep project selected
+    if ((key === 'cost' || key === 'delay') && project) {
+      setSelectedProject(project);
+    } else if (key !== 'project-detail') {
+      setSelectedProject(null);
+    }
     setActiveModule(key);
   };
 
@@ -298,15 +303,19 @@ function App() {
 
       case 'project-detail':
         return isAuthenticated && selectedProject ? (
-          <ProjectDetailView project={selectedProject} onBack={() => setActiveModule('projects')} />
+          <ProjectDetailView 
+            project={selectedProject} 
+            onBack={() => setActiveModule('projects')}
+            onNavigate={(module) => handleModuleChange(module)}
+          />
         ) : (
           <ProjectsListView onSelectProject={handleSelectProject} />
         );
 
       case 'quantity': return <QuantityTakeoffView />;
-      case 'cost': return <CostPredictionView />;
+      case 'cost': return <CostPredictionView project={selectedProject} onBack={() => selectedProject ? setActiveModule('project-detail') : setActiveModule('dashboard')} />;
       case 'sustainability': return <SustainabilityView />;
-      case 'delay': return <DelayForecastView />;
+      case 'delay': return <DelayForecastView project={selectedProject} onBack={() => selectedProject ? setActiveModule('project-detail') : setActiveModule('dashboard')} />;
       case 'profile': return <ProfileView />;
 
       case 'dashboard':

@@ -78,9 +78,15 @@ let mongoConnected = false;
 const tryConnectMongo = async () => {
     try {
         const connectDB = require('./config/database');
-        await connectDB();
-        mongoConnected = true;
-        console.log('  ✅ MongoDB:          Connected');
+        const conn = await connectDB();
+        mongoConnected = !!conn;
+
+        if (mongoConnected) {
+            console.log('  ✅ MongoDB:          Connected');
+        } else {
+            console.log('  ⚠️  MongoDB:          Not available (auth features disabled)');
+            console.log('     Check MONGODB_URI / DNS / internet connectivity');
+        }
     } catch (error) {
         mongoConnected = false;
         console.log('  ⚠️  MongoDB:          Not available (auth features disabled)');
@@ -90,7 +96,6 @@ const tryConnectMongo = async () => {
 
 // Start the server
 const startServer = async () => {
-    // Try to connect to MongoDB (but continue if it fails)
     await tryConnectMongo();
 
     // Start listening for requests

@@ -154,7 +154,7 @@ boqReportSchema.pre('save', async function () {
 
 boqReportSchema.index({ project: 1, status: 1 });
 boqReportSchema.index({ generatedBy: 1 });
-boqReportSchema.index({ reportNumber: 1 });
+
 
 const BOQReport = mongoose.model('BOQReport', boqReportSchema);
 

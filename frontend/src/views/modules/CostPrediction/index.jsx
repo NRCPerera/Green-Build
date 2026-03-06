@@ -13,7 +13,7 @@ const provinceDistrictMap = {
     'Sabaragamuwa': ['Ratnapura', 'Kegalle']
 };
 
-const CostPredictionView = () => {
+const CostPredictionView = ({ project, onBack }) => {
     const [formValues, setFormValues] = useState({
         // Type_of_Project: '',
         // Province: '',
@@ -77,6 +77,43 @@ const CostPredictionView = () => {
     const overrunPct = prediction?.predicted_cost_overrun_pct;
     const hasProbability = typeof prediction?.overrun_probability === 'number';
 
+    // Pre-fill form with project data
+    useEffect(() => {
+        if (project) {
+            const getProjectType = (type) => {
+                if (!type) return 'Residential-House';
+                const typeMap = {
+                    'residential': 'Residential-House',
+                    'commercial': 'Commercial',
+                    'infrastructure': 'Infrastructure'
+                };
+                return typeMap[type.toLowerCase()] || type;
+            };
+
+            const getProvince = (location) => {
+                if (typeof location === 'object' && location.province) return location.province;
+                return 'Western';
+            };
+
+            const getDistrict = (location) => {
+                if (typeof location === 'object' && location.district) return location.district;
+                return 'Colombo';
+            };
+
+            const budget = typeof project.budget === 'number' ? project.budget : (project.budget?.estimated || 0);
+
+            setFormValues(prev => ({
+                ...prev,
+                Type_of_Project: getProjectType(project.projectType),
+                Province: getProvince(project.location),
+                District: getDistrict(project.location),
+                Initial_Contract_Value: budget,
+                Start_Date: project.startDate ? new Date(project.startDate).toISOString().split('T')[0] : '',
+                End_Date: project.expectedEndDate ? new Date(project.expectedEndDate).toISOString().split('T')[0] : '',
+            }));
+        }
+    }, [project]);
+
     useEffect(() => {
         const districts = formValues.Province ? provinceDistrictMap[formValues.Province] || [] : [];
         setAvailableDistricts(districts);
@@ -111,12 +148,23 @@ const CostPredictionView = () => {
             <div className="bg-gradient-to-r from-yellow-500/15 via-orange-500/10 to-transparent border border-yellow-500/25 rounded-2xl p-6">
                 <div className="flex items-center justify-between gap-4 flex-wrap">
                     <div className="flex items-center gap-3">
+                        {onBack && (
+                            <button
+                                onClick={onBack}
+                                className="w-10 h-10 rounded-xl bg-yellow-500/20 border border-yellow-500/40 flex items-center justify-center text-yellow-200 hover:bg-yellow-500/30 transition-colors"
+                                title="Back to Project"
+                            >
+                                ←
+                            </button>
+                        )}
                         <div className="w-12 h-12 rounded-2xl bg-yellow-500/20 border border-yellow-500/40 flex items-center justify-center text-xl font-bold text-yellow-200">
                             CP
                         </div>
                         <div>
-                            <h2 className="text-2xl font-bold text-white">Cost Prediction</h2>
-                            <p className="text-gray-300 text-sm">ANN regression + classification with SHAP explanations.</p>
+                            <h2 className="text-2xl font-bold text-white">
+                                Cost Prediction{project ? ` - ${project.name}` : ''}
+                            </h2>
+                            <p className="text-gray-300 text-sm">classification with SHAP explanations.</p>
                         </div>
                     </div>
                     <div className="flex items-center gap-2 text-sm text-yellow-300 bg-yellow-500/10 border border-yellow-500/30 px-3 py-1 rounded-full">

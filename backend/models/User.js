@@ -53,7 +53,8 @@ const userSchema = new mongoose.Schema({
     timestamps: true
 });
 
-userSchema.index({ email: 1 });
+// Email index is already created by 'unique: true' option above
+// userSchema.index({ email: 1 }); // REMOVED - duplicate index
 
 const User = mongoose.model('User', userSchema);
 

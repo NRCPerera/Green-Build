@@ -51,10 +51,9 @@ const ProgressRing = ({ percentage }) => {
     );
 };
 
-const ProjectDetailView = ({ project, onBack }) => {
+const ProjectDetailView = ({ project, onBack, onNavigate }) => {
     const projectId = project?._id || project?.id;
 
-    // Role-based default tab
     const userRole = usePMStore((s) => s.userRole);
     const defaultTab = ROLES.find((r) => r.key === userRole)?.defaultTab || 'overview';
 
@@ -83,7 +82,7 @@ const ProjectDetailView = ({ project, onBack }) => {
         }
     }, [projectId]);
 
-    // ── Floor Plan Handlers (preserved) ──
+
     const fetchBOQReports = async () => {
         if (!projectId) return;
         setBOQLoading(true);
@@ -157,7 +156,6 @@ const ProjectDetailView = ({ project, onBack }) => {
         logProjectEvent(projectId, `Project status changed to "${PROJECT_STATUSES.find((s) => s.key === newStatus)?.label || newStatus}"`);
     };
 
-    // ─── Tab Items ──────────────────────────────────────────────
     const tabItems = [
         {
             key: 'overview',
@@ -166,7 +164,6 @@ const ProjectDetailView = ({ project, onBack }) => {
                 <div className="space-y-6">
                   
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        {/* Info */}
                         <div style={{ gridColumn: 'span 2', background: 'rgba(30,41,59,0.5)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '0.75rem', padding: '1.25rem' }}>
                             <h3 style={{ color: '#e2e8f0', fontWeight: 600, marginBottom: '0.75rem' }}>Project Information</h3>
                             <div className="grid grid-cols-2 gap-4">
@@ -207,6 +204,35 @@ const ProjectDetailView = ({ project, onBack }) => {
                         <Col span={6}><Card className="!bg-dark-800/50 !border-white/10"><Statistic title={<span className="text-gray-400">Doors</span>} value={totals.totalDoors} valueStyle={{ color: '#fff' }} /></Card></Col>
                         <Col span={6}><Card className="!bg-dark-800/50 !border-white/10"><Statistic title={<span className="text-gray-400">Windows</span>} value={totals.totalWindows} valueStyle={{ color: '#fff' }} /></Card></Col>
                     </Row>
+
+                    {/* Prediction Tools Navigation */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div style={{ background: 'rgba(30,41,59,0.5)', border: '1px solid rgba(255,193,7,0.2)', borderRadius: '0.75rem', padding: '1.5rem', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} className="hover:border-yellow-500/40 transition-all">
+                            <div style={{ fontSize: '2rem', marginBottom: '0.75rem' }}>💰</div>
+                            <h4 style={{ color: '#e2e8f0', fontSize: '1rem', fontWeight: 600, marginBottom: '0.5rem' }}>Cost Overrun Prediction</h4>
+                            <p style={{ color: '#64748b', fontSize: '0.8125rem', textAlign: 'center', marginBottom: '1rem' }}>Predict cost overruns and identify risk factors with ANN-based analysis</p>
+                            <Button 
+                                type="primary" 
+                                style={{ background: 'linear-gradient(to right, #fbbf24, #f97316)', border: 'none' }}
+                                onClick={() => onNavigate?.('cost')}
+                            >
+                                Go to Cost Prediction
+                            </Button>
+                        </div>
+
+                        <div style={{ background: 'rgba(30,41,59,0.5)', border: '1px solid rgba(239,68,68,0.2)', borderRadius: '0.75rem', padding: '1.5rem', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }} className="hover:border-red-500/40 transition-all">
+                            <div style={{ fontSize: '2rem', marginBottom: '0.75rem' }}>⏱️</div>
+                            <h4 style={{ color: '#e2e8f0', fontSize: '1rem', fontWeight: 600, marginBottom: '0.5rem' }}>Delay Prediction</h4>
+                            <p style={{ color: '#64748b', fontSize: '0.8125rem', textAlign: 'center', marginBottom: '1rem' }}>Forecast construction delays and risk categories using ML models</p>
+                            <Button 
+                                type="primary"
+                                style={{ background: 'linear-gradient(to right, #f87171, #dc2626)', border: 'none' }}
+                                onClick={() => onNavigate?.('delay')}
+                            >
+                                Go to Delay Prediction
+                            </Button>
+                        </div>
+                    </div>
 
                     {/* Overdue + Upcoming */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -394,6 +420,23 @@ const ProjectDetailView = ({ project, onBack }) => {
                         </Select.Option>
                     ))}
                 </Select>
+            </div>
+
+            <div className="flex gap-3 flex-wrap">
+                <Button
+                    type="primary"
+                    onClick={() => onNavigate && onNavigate('cost', project)}
+                    className="!bg-gradient-to-r !from-blue-500 !to-blue-600 !border-0"
+                >
+                    💰 Cost Overrun Prediction
+                </Button>
+                <Button
+                    type="primary"
+                    onClick={() => onNavigate && onNavigate('delay', project)}
+                    className="!bg-gradient-to-r !from-orange-500 !to-orange-600 !border-0"
+                >
+                    ⏱️ Delay Prediction
+                </Button>
             </div>
 
             {/* Main Tabs */}
