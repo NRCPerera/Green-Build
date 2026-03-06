@@ -14,6 +14,11 @@ const projectSchema = new mongoose.Schema({
         trim: true,
         maxlength: [200, 'Project name cannot exceed 200 characters']
     },
+    projectCode: {
+        type: String,
+        trim: true,
+        maxlength: [50, 'Project code cannot exceed 50 characters']
+    },
     description: {
         type: String,
         trim: true,
@@ -33,19 +38,34 @@ const projectSchema = new mongoose.Schema({
     location: {
         address: { type: String, trim: true },
         city: { type: String, trim: true },
+        province: { type: String, trim: true },
+        district: { type: String, trim: true },
         state: { type: String, trim: true },
         country: { type: String, trim: true, default: 'Sri Lanka' },
         postalCode: { type: String, trim: true }
     },
     projectType: {
         type: String,
-        enum: ['residential', 'commercial', 'industrial', 'institutional', 'mixed-use', 'other'],
+        enum: ['residential', 'commercial', 'industrial', 'institutional', 'infrastructure', 'mixed-use', 'other'],
         default: 'residential'
     },
     status: {
         type: String,
-        enum: ['draft', 'in-progress', 'review', 'completed', 'archived'],
+        enum: ['draft', 'active', 'on-hold', 'completed', 'cancelled', 'in-progress', 'review', 'archived'],
         default: 'draft'
+    },
+    priority: {
+        type: String,
+        enum: ['high', 'medium', 'low'],
+        default: 'medium'
+    },
+    contractorGrade: {
+        type: String,
+        trim: true
+    },
+    constructionPeriod: {
+        type: Number,
+        min: 0
     },
     startDate: {
         type: Date

@@ -8,7 +8,7 @@ import useDelayController from '../../../controllers/useDelayController';
  * - Regression: Predicts total delay days
  * - Classification: Categorizes delay severity (On-Time, Minor, Major, Critical)
  */
-const DelayForecastView = () => {
+const DelayForecastView = ({ project, onBack }) => {
     const [formValues, setFormValues] = useState({
         // ==========================================
         // DISPLAY-ONLY FIELDS (Not sent to ML model)
@@ -67,6 +67,42 @@ const DelayForecastView = () => {
         checkMlHealth();
     }, [checkMlHealth]);
 
+    // Pre-fill form with project data
+    useEffect(() => {
+        if (project) {
+            const getProvince = (location) => {
+                if (typeof location === 'object' && location.province) return location.province;
+                return 'Western';
+            };
+
+            const getDistrict = (location) => {
+                if (typeof location === 'object' && location.district) return location.district;
+                return 'Colombo';
+            };
+
+            const getLocation = (location) => {
+                if (typeof location === 'string') return location;
+                const addressParts = [location?.address, location?.city, location?.district, location?.province].filter(Boolean);
+                return addressParts.join(', ');
+            };
+
+            const budget = typeof project.budget === 'number' ? project.budget : (project.budget?.estimated || 0);
+            const clientName = project.clientName || project.client?.name || '';
+
+            setFormValues(prev => ({
+                ...prev,
+                projectName: project.name || prev.projectName,
+                clientName: clientName || prev.clientName,
+                projectStartDate: project.startDate ? new Date(project.startDate).toISOString().split('T')[0] : prev.projectStartDate,
+                siteLocation: getLocation(project.location) || prev.siteLocation,
+                contractValue: budget || prev.contractValue,
+                province: getProvince(project.location),
+                district: getDistrict(project.location),
+                projectType: project.projectType === 'residential' ? 'House' : prev.projectType,
+            }));
+        }
+    }, [project]);
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         await predictDelay(formValues);
@@ -118,9 +154,20 @@ const DelayForecastView = () => {
             <div className="bg-gradient-to-r from-blue-500/10 to-purple-500/10 border border-blue-500/20 rounded-2xl p-6">
                 <div className="flex items-center justify-between">
                     <div className="flex items-center gap-4">
+                        {onBack && (
+                            <button
+                                onClick={onBack}
+                                className="w-10 h-10 rounded-xl bg-blue-500/20 border border-blue-500/40 flex items-center justify-center text-blue-200 hover:bg-blue-500/30 transition-colors"
+                                title="Back to Project"
+                            >
+                                ←
+                            </button>
+                        )}
                         <span className="text-4xl">⏱️</span>
                         <div>
-                            <h2 className="text-2xl font-bold text-white">Delay Prediction Module</h2>
+                            <h2 className="text-2xl font-bold text-white">
+                                Delay Prediction{project ? ` - ${project.name}` : ' Module'}
+                            </h2>
                             <p className="text-gray-400 mt-1">
                                 AI-powered construction delay forecasting for Sri Lanka projects
                             </p>
