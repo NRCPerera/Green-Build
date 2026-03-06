@@ -345,10 +345,15 @@ const ProjectsListView = ({ onSelectProject }) => {
                             <Form.Item name="projectCode" label={<span className="text-gray-300 font-medium">Project Code / ID</span>}>
                                 <Input placeholder="e.g., PRJ-2026-001" className="!bg-dark-700/70 !border-white/15 !text-white hover:!border-primary-400/50 focus:!border-primary-400 focus:!ring-1 focus:!ring-primary-400/30" />
                             </Form.Item>
-                            <Form.Item name="typeOfProject" label={<span className="text-gray-300 font-medium">Project Type</span>} initialValue="residential-house">
+                            <Form.Item name="typeOfProject" label={<span className="text-gray-300 font-medium">Project Type</span>} initialValue="residential">
                                 <Select className="!text-white" style={{ borderColor: 'rgba(255,255,255,0.15)' }}>
-                                    <Option value="residential-house">Residential House</Option>
-                                    <Option value="apartment-building">Apartment Building</Option>
+                                    <Option value="residential">🏠 Residential</Option>
+                                    <Option value="commercial">🏢 Commercial</Option>
+                                    <Option value="industrial">🏭 Industrial</Option>
+                                    <Option value="institutional">🏛️ Institutional</Option>
+                                    <Option value="infrastructure">🛣️ Infrastructure</Option>
+                                    <Option value="mixed-use">🏙️ Mixed Use</Option>
+                                    <Option value="other">📐 Other</Option>
                                 </Select>
                             </Form.Item>
                         </div>
@@ -461,10 +466,10 @@ const ProjectsListView = ({ onSelectProject }) => {
                     {/* Action Buttons */}
                     <Form.Item className="mb-0 mt-6">
                         <div className="flex gap-3 justify-end">
-                            <Button 
+                            <Button
                                 onClick={() => { setCreateModalVisible(false); form.resetFields(); }}
-                                style={{ 
-                                    borderColor: 'rgba(255,255,255,0.15)', 
+                                style={{
+                                    borderColor: 'rgba(255,255,255,0.15)',
                                     color: '#94a3b8',
                                     background: 'rgba(255,255,255,0.05)',
                                     padding: '0.5rem 1.5rem'
@@ -473,9 +478,9 @@ const ProjectsListView = ({ onSelectProject }) => {
                             >
                                 Cancel
                             </Button>
-                            <Button 
-                                type="primary" 
-                                htmlType="submit" 
+                            <Button
+                                type="primary"
+                                htmlType="submit"
                                 loading={loading}
                                 className="!bg-gradient-to-r !from-primary-500 !to-primary-600 !border-0 !text-white !font-semibold hover:!from-primary-600 hover:!to-primary-700 transition-all"
                                 style={{ padding: '0.5rem 2rem' }}

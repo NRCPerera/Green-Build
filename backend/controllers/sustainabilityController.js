@@ -50,28 +50,38 @@ const handleFullAnalysis = async (req, res) => {
         // Map Flask response back to frontend expected format
         if (response.data.success) {
             const data = response.data.data;
-            
+
             res.json({
                 success: true,
                 data: {
                     // Sustainability
                     sustainability_score: data.sustainability_score,
                     sustainability_interpretation: data.sustainability_rating,
-                    
+
                     // Lifecycle Cost
                     lifecycle_cost_millions_lkr: data.lifecycle_cost_millions,
                     lifecycle_cost_lkr: data.lifecycle_cost_lkr,
                     lifecycle_interpretation: `Estimated ${data.lifecycle_cost_millions}M LKR total lifecycle cost`,
-                    
+
                     // Risk
                     is_high_risk: data.is_high_risk,
                     risk_probability: data.risk_probability,
                     risk_level: data.risk_level,
-                    risk_recommendations: generateRiskRecommendations(data, flaskData),
-                    
-                    // Analysis details (calculated features)
+                    risk_recommendations: data.smart_suggestions || [],
+
+                    // Analysis details
                     analysis_details: data.analysis_details,
-                    
+
+                    // Financials & Engineering
+                    financials: data.financials,
+                    engineering: data.engineering,
+                    cost_breakdown: data.cost_breakdown,
+                    smart_suggestions: data.smart_suggestions,
+
+                    // NEW: SHAP Explainability & Confidence Intervals
+                    shap_analysis: data.shap_analysis || {},
+                    confidence_intervals: data.confidence_intervals || {},
+
                     // Mode
                     mode: data.mode
                 },
@@ -90,33 +100,20 @@ const handleFullAnalysis = async (req, res) => {
 };
 
 /**
- * Generate risk recommendations based on analysis
+ * Handle feature importance request (proxies to ML service)
  */
-function generateRiskRecommendations(data, input) {
-    const recommendations = [];
-    
-    if (data.risk_probability > 0.5) {
-        recommendations.push('Review contractor credentials and project timeline');
+const handleFeatureImportance = async (req, res) => {
+    try {
+        const mlServiceUrl = getMLServiceUrl();
+        const response = await axios.get(
+            `${mlServiceUrl}/feature-importance`,
+            { timeout: 10000 }
+        );
+        res.json(response.data);
+    } catch (error) {
+        handleMLServiceError(error, res, 'Feature importance');
     }
-    
-    if (input.Design_Completeness < 70) {
-        recommendations.push(`Increase design completeness (currently ${input.Design_Completeness}%)`);
-    }
-    
-    if (input.Contractor_Experience < 5) {
-        recommendations.push('Consider partnering with more experienced contractor');
-    }
-    
-    if (data.analysis_details?.project_complexity_score > 60) {
-        recommendations.push('Consider phased approach to reduce complexity');
-    }
-    
-    if (recommendations.length === 0) {
-        recommendations.push('Project parameters are within acceptable ranges');
-    }
-    
-    return recommendations;
-}
+};
 
 /**
  * Handle sustainability score prediction
@@ -178,5 +175,6 @@ module.exports = {
     handleFullAnalysis,
     handleSustainabilityPrediction,
     handleLifecycleCostPrediction,
-    handleRiskPrediction
+    handleRiskPrediction,
+    handleFeatureImportance
 };

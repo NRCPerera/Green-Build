@@ -6,9 +6,27 @@ from pathlib import Path
 from typing import Any
 
 import joblib
-from tensorflow.keras.models import load_model
+import keras
+from keras.layers import Dense as _OriginalDense
 
 from app.config import AppConfig
+
+# Monkey-patch Dense to accept (and ignore) the ``quantization_config``
+# keyword that Keras >=3.12 writes into saved model configs but whose
+# ``__init__`` does not yet handle on this installed version.
+_original_dense_init = _OriginalDense.__init__
+
+
+def _patched_dense_init(self, *args, **kwargs):
+    kwargs.pop("quantization_config", None)
+    _original_dense_init(self, *args, **kwargs)
+
+
+_OriginalDense.__init__ = _patched_dense_init
+
+
+def _load_model(path: Path):
+    return keras.saving.load_model(path)
 
 logger = logging.getLogger(__name__)
 
@@ -69,8 +87,8 @@ def load_pre_project_artifacts(config: AppConfig) -> PreProjectArtifacts:
     _validate_feature_cols(metadata, "pre_project")
 
     return PreProjectArtifacts(
-        ann_reg_model=load_model(config.pre_project_ann_reg_model),
-        ann_clf_model=load_model(config.pre_project_ann_clf_model),
+        ann_reg_model=_load_model(config.pre_project_ann_reg_model),
+        ann_clf_model=_load_model(config.pre_project_ann_clf_model),
         preprocess=joblib.load(config.pre_project_preprocess),
         scaler=joblib.load(config.pre_project_scaler),
         metadata=metadata,
@@ -92,7 +110,7 @@ def load_in_progress_artifacts(config: AppConfig) -> InProgressArtifacts:
     _validate_feature_cols(metadata, "in_progress")
 
     return InProgressArtifacts(
-        ann_reg_model=load_model(config.in_progress_ann_reg_model),
+        ann_reg_model=_load_model(config.in_progress_ann_reg_model),
         preprocess=joblib.load(config.in_progress_preprocess),
         scaler=joblib.load(config.in_progress_scaler),
         metadata=metadata,

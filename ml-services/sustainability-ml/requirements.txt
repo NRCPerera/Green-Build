@@ -1,4 +1,4 @@
-# Sustainability ML Service - Flask Requirements
+# Sustainability ML Service Requirements
 # ================================================
 
 # Machine Learning
@@ -6,6 +6,13 @@ tensorflow>=2.15.0
 scikit-learn>=1.4.0
 joblib>=1.3.2
 
+# Explainability
+shap>=0.43.0
+
 # Data processing
 pandas>=2.2.0
 numpy>=1.26.3
+
+# API Framework
+fastapi>=0.109.0
+uvicorn>=0.27.0
