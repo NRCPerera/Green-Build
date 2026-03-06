@@ -78,7 +78,7 @@ router.post('/in-progress', handleInProgressPrediction);
  */
 router.get('/health', async (req, res, next) => {
     try {
-        const mlServiceUrl = process.env.COST_ML_SERVICE_URL || 'http://localhost:8080';
+        const mlServiceUrl = process.env.COST_ML_SERVICE_URL || 'http://localhost:8085';
         
         const response = await axios.get(`${mlServiceUrl}/health`, {
             timeout: 5000
@@ -98,7 +98,7 @@ router.get('/health', async (req, res, next) => {
             success: false,
             error: 'ML service unavailable',
             message: error.message,
-            mlServiceUrl: process.env.COST_ML_SERVICE_URL || 'http://localhost:8080'
+            mlServiceUrl: process.env.COST_ML_SERVICE_URL || 'http://localhost:8085'
         });
     }
 });

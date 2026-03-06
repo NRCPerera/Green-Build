@@ -30,7 +30,7 @@ const handlePreProjectPrediction = async (req, res) => {
         }
 
         // Get ML service URL from environment or use default
-        const mlServiceUrl = process.env.COST_ML_SERVICE_URL || 'http://localhost:8080';
+        const mlServiceUrl = process.env.COST_ML_SERVICE_URL || 'http://localhost:8085';
 
         console.log(`[Pre-Project Prediction] Sending request to: ${mlServiceUrl}/predict/pre-project`);
         console.log(`[Pre-Project Prediction] Features:`, JSON.stringify(features, null, 2));
@@ -57,23 +57,27 @@ const handlePreProjectPrediction = async (req, res) => {
 
     } catch (error) {
         console.error('[Pre-Project Prediction] Error:', error.message);
+        console.error('[Pre-Project Prediction] Full error:', error);
+        console.error('[Pre-Project Prediction] Error code:', error.code);
+        console.error('[Pre-Project Prediction] Error response:', error.response?.data);
 
         if (error.response) {
             const status = error.response.status;
-            const detail = error.response.data?.detail || error.message;
+            const detail = error.response.data?.detail || error.response.data || error.message;
 
             return res.status(status).json({
                 success: false,
                 error: 'ML service error',
-                message: detail,
+                message: typeof detail === 'string' ? detail : JSON.stringify(detail),
                 statusCode: status
             });
         } else if (error.request) {
+            console.error('[Pre-Project Prediction] Request was made but no response received');
             return res.status(503).json({
                 success: false,
                 error: 'ML service unavailable',
-                message: 'Could not connect to the ML service. Please ensure it is running on port 8080.',
-                mlServiceUrl: process.env.COST_ML_SERVICE_URL || 'http://localhost:8080'
+                message: `Could not connect to the ML service at ${process.env.COST_ML_SERVICE_URL || 'http://localhost:8085'}. Error: ${error.code || error.message}`,
+                mlServiceUrl: process.env.COST_ML_SERVICE_URL || 'http://localhost:8085'
             });
         } else {
             return res.status(500).json({
@@ -106,7 +110,7 @@ const handleInProgressPrediction = async (req, res) => {
         }
 
         // Get ML service URL from environment or use default
-        const mlServiceUrl = process.env.COST_ML_SERVICE_URL || 'http://localhost:8080';
+        const mlServiceUrl = process.env.COST_ML_SERVICE_URL || 'http://localhost:8085';
 
         console.log(`[In-Progress Prediction] Sending request to: ${mlServiceUrl}/predict/in-progress`);
         console.log(`[In-Progress Prediction] Features:`, JSON.stringify(features, null, 2));
@@ -148,8 +152,8 @@ const handleInProgressPrediction = async (req, res) => {
             return res.status(503).json({
                 success: false,
                 error: 'ML service unavailable',
-                message: 'Could not connect to the ML service. Please ensure it is running on port 8080.',
-                mlServiceUrl: process.env.COST_ML_SERVICE_URL || 'http://localhost:8080'
+                message: 'Could not connect to the ML service. Please ensure it is running on port 8085.',
+                mlServiceUrl: process.env.COST_ML_SERVICE_URL || 'http://localhost:8085'
             });
         } else {
             return res.status(500).json({

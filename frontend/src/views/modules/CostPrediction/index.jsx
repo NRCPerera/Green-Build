@@ -15,38 +15,67 @@ const provinceDistrictMap = {
 
 const CostPredictionView = () => {
     const [formValues, setFormValues] = useState({
-        Type_of_Project: '',
-        Province: '',
-        District: '',
-        Season_of_Start: '',
-        Grade_of_contractor: '',
-        Floors: '',
-        Area_SQFT: '',
-        Year_of_Tender: '',
-        Rate_per_SQFT: '',
-        Initial_Contract_Value: '',
-        Initial_period_construction: '',
-        Design_Completeness: '',
-        Project_Complexity_Score: '',
-        Inflation_Rate: '',
-        Material_Price_Index: '',
-        Exchange_Rate: '',
-        Interest_Rate: '',
-        Contractor_Experience_Years: '',
-        Contractor_Previous_Projects: '',
-        Change_Order_Frequency: '',
-        Amount_Variations: '',
-        Amount_S_Change: '',
-        Amount_PF: '',
-        Adjusted_Contract_Sum: '',
-        Start_Date: '',
-        End_Date: ''
+        // Type_of_Project: '',
+        // Province: '',
+        // District: '',
+        // Season_of_Start: '',
+        // Grade_of_contractor: '',
+        // Floors: '',
+        // Area_SQFT: '',
+        // Year_of_Tender: '',
+        // Rate_per_SQFT: '',
+        // Initial_Contract_Value: '',
+        // Initial_period_construction: '',
+        // Design_Completeness: '',
+        // Project_Complexity_Score: '',
+        // Inflation_Rate: '',
+        // Material_Price_Index: '',
+        // Exchange_Rate: '',
+        // Interest_Rate: '',
+        // Contractor_Experience_Years: '',
+        // Contractor_Previous_Projects: '',
+        // Change_Order_Frequency: '',
+        // Amount_Variations: '',
+        // Amount_S_Change: '',
+        // Amount_PF: '',
+        // Adjusted_Contract_Sum: '',
+        // Start_Date: '',
+        // End_Date: ''
+        "Type_of_Project": "Residential-House",
+  "Province": "Western",
+  "District": "Colombo",
+  "Season_of_Start": "Dry Season",
+  "Grade_of_contractor": "C1",
+  "Floors": 2,
+  "Area_SQFT": 2500,
+  "Year_of_Tender": 2024,
+  "Rate_per_SQFT": 9500,
+  "Initial_Contract_Value": 23750000,
+  "Initial_period_construction": 10,
+  "Design_Completeness": 90,
+  "Project_Complexity_Score": 4,
+  "Inflation_Rate": 4.5,
+  "Material_Price_Index": 140,
+  "Exchange_Rate": 285,
+  "Interest_Rate": 9.5,
+  "Contractor_Experience_Years": 15,
+  "Contractor_Previous_Projects": 30,
+  "Change_Order_Frequency": 1,
+  "Amount_Variations": 500000,
+  "Amount_S_Change": 200000,
+  "Amount_PF": 150000,
+  "Adjusted_Contract_Sum": 24200000
     });
 
     const [availableDistricts, setAvailableDistricts] = useState([]);
     const [isFormExpanded, setIsFormExpanded] = useState(false);
 
     const { loading, error, prediction, hasPrediction, predictCost, clearPrediction } = useCostController();
+
+    const riskFlag = prediction?.high_risk_label;
+    const isHighRisk = riskFlag === true || riskFlag === 1 || prediction?.risk_label === 'HIGH';
+    const overrunPct = prediction?.predicted_cost_overrun_pct;
+    const hasProbability = typeof prediction?.overrun_probability === 'number';
 
     useEffect(() => {
         const districts = formValues.Province ? provinceDistrictMap[formValues.Province] || [] : [];
@@ -445,27 +474,27 @@ const CostPredictionView = () => {
                     {hasPrediction ? (
                         <div className="space-y-4">
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                                <div className={`bg-dark-800/70 border rounded-xl p-5 text-center ${prediction?.high_risk_label === true || prediction?.high_risk_label === 1 ? 'border-red-500/50 bg-red-500/10' : 'border-white/5 bg-green-500/10'}`}>
+                                <div className={`bg-dark-800/70 border rounded-xl p-5 text-center ${isHighRisk ? 'border-red-500/50 bg-red-500/10' : 'border-white/5 bg-green-500/10'}`}>
                                     <p className="text-sm text-gray-400 mb-2">Risk Status</p>
-                                    <p className={`text-3xl font-bold ${prediction?.high_risk_label === true || prediction?.high_risk_label === 1 ? 'text-red-400' : 'text-green-400'}`}>
-                                        {prediction?.high_risk_label === true || prediction?.high_risk_label === 1 ? 'High' : 'Low'}
+                                    <p className={`text-3xl font-bold ${isHighRisk ? 'text-red-400' : 'text-green-400'}`}>
+                                        {prediction?.risk_label || (isHighRisk ? 'HIGH' : 'LOW')}
                                     </p>
                                 </div>
                                 <div className="bg-dark-800/70 border border-white/5 rounded-xl p-5 text-center">
                                     <p className="text-sm text-gray-400 mb-2">Cost Overrun %</p>
-                                    <p className={`text-3xl font-bold ${(prediction?.predicted_cost_overrun_pct ?? 0) > 10 ? 'text-red-400' : 'text-green-400'}`}>
-                                        {prediction?.predicted_cost_overrun_pct != null ? prediction.predicted_cost_overrun_pct.toFixed(2) : '0.00'}%
+                                    <p className={`text-3xl font-bold ${(overrunPct ?? 0) > 10 ? 'text-red-400' : 'text-green-400'}`}>
+                                        {overrunPct != null ? overrunPct.toFixed(2) : 'N/A'}{overrunPct != null ? '%' : ''}
                                     </p>
                                 </div>
                                 <div className="bg-dark-800/70 border border-white/5 rounded-xl p-5 text-center">
                                     <p className="text-sm text-gray-400 mb-2">Overrun Probability</p>
                                     <p className="text-3xl font-bold text-white">
-                                        {prediction?.overrun_probability != null ? (prediction.overrun_probability * 100).toFixed(1) : '0.0'}%
+                                        {hasProbability ? `${(prediction.overrun_probability * 100).toFixed(1)}%` : 'N/A'}
                                     </p>
                                     <div className="w-full h-2 bg-dark-700 rounded-full mt-2 overflow-hidden">
                                         <div
-                                            className={`h-full transition-all ${(prediction?.overrun_probability ?? 0) > 0.7 ? 'bg-red-500' : (prediction?.overrun_probability ?? 0) > 0.4 ? 'bg-yellow-500' : 'bg-green-500'}`}
-                                            style={{ width: `${((prediction?.overrun_probability ?? 0) * 100)}%` }}
+                                            className={`h-full transition-all ${hasProbability ? ((prediction?.overrun_probability ?? 0) > 0.7 ? 'bg-red-500' : (prediction?.overrun_probability ?? 0) > 0.4 ? 'bg-yellow-500' : 'bg-green-500') : 'bg-gray-500'}`}
+                                            style={{ width: hasProbability ? `${((prediction?.overrun_probability ?? 0) * 100)}%` : '0%' }}
                                         />
                                     </div>
                                 </div>
@@ -477,19 +506,19 @@ const CostPredictionView = () => {
                                     <div className="p-4 bg-dark-700/50 rounded-lg">
                                         <p className="text-gray-400 mb-1">Predicted Overrun</p>
                                         <p className="text-2xl font-bold text-yellow-400">
-                                            {prediction?.predicted_cost_overrun_pct != null ? prediction.predicted_cost_overrun_pct.toFixed(2) : '0.00'}%
+                                            {overrunPct != null ? `${overrunPct.toFixed(2)}%` : 'N/A'}
                                         </p>
                                     </div>
                                     <div className="p-4 bg-dark-700/50 rounded-lg">
                                         <p className="text-gray-400 mb-1">Risk Probability</p>
                                         <p className="text-2xl font-bold text-orange-400">
-                                            {prediction?.overrun_probability != null ? (prediction.overrun_probability * 100).toFixed(1) : '0.0'}%
+                                            {hasProbability ? `${(prediction.overrun_probability * 100).toFixed(1)}%` : 'N/A'}
                                         </p>
                                     </div>
                                     <div className="p-4 bg-dark-700/50 rounded-lg">
                                         <p className="text-gray-400 mb-1">Risk Classification</p>
-                                        <p className={`text-lg font-bold ${prediction?.high_risk_label === true || prediction?.high_risk_label === 1 ? 'text-red-400' : 'text-green-400'}`}>
-                                            {prediction?.high_risk_label === true || prediction?.high_risk_label === 1 ? 'HIGH RISK' : 'LOW RISK'}
+                                        <p className={`text-lg font-bold ${isHighRisk ? 'text-red-400' : 'text-green-400'}`}>
+                                            {prediction?.risk_label ? `${prediction.risk_label} RISK` : (isHighRisk ? 'HIGH RISK' : 'LOW RISK')}
                                         </p>
                                     </div>
                                     <div className="p-4 bg-dark-700/50 rounded-lg">
@@ -520,6 +549,9 @@ const CostPredictionView = () => {
                                 <h3 className="text-lg font-semibold text-white mb-4">Model Information</h3>
                                 <div className="space-y-2 text-sm text-gray-400">
                                     <p><span className="text-gray-300 font-medium">Model Type:</span> ANN Regression + Classification</p>
+                                    {prediction?.model_version && (
+                                        <p><span className="text-gray-300 font-medium">Model Version:</span> {prediction.model_version}</p>
+                                    )}
                                     <p><span className="text-gray-300 font-medium">Input Features:</span> 25 parameters</p>
                                     {prediction.timestamp && (
                                         <p><span className="text-gray-300 font-medium">Prediction Timestamp:</span> {new Date(prediction.timestamp).toLocaleString()}</p>

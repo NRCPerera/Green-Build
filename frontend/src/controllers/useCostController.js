@@ -40,9 +40,23 @@ const useCostController = () => {
             console.log('📥 Response Data:', response.data);
 
             if (response.data.success) {
-                // Map the API response to the expected format
+                // Normalize backend fields so the UI can handle both old and new API shapes.
+                const raw = response.data.data || {};
+                const normalizedOverrun =
+                    raw.predicted_cost_overrun_pct ?? raw.predicted_cost_overrun_percentage ?? null;
+                const normalizedRiskFlag =
+                    raw.high_risk_label ??
+                    raw.predicted_high_risk_project ??
+                    (raw.risk_label === 'HIGH' ? 1 : raw.risk_label === 'LOW' ? 0 : null);
+
                 const predictionData = {
-                    ...response.data.data,
+                    ...raw,
+                    predicted_cost_overrun_pct: normalizedOverrun,
+                    predicted_cost_overrun_percentage: normalizedOverrun,
+                    high_risk_label: normalizedRiskFlag,
+                    predicted_high_risk_project: normalizedRiskFlag,
+                    overrun_probability: raw.overrun_probability ?? null,
+                    threshold: raw.threshold ?? null,
                     timestamp: response.data.timestamp
                 };
                 console.log('✅ Prediction Data:', predictionData);
@@ -61,7 +75,7 @@ const useCostController = () => {
                 console.error('❌ Server Error:', err.response.data);
             } else if (err.request) {
                 // No response received
-                errorMessage = 'ML service unavailable. Please ensure the service is running on port 8080.';
+                errorMessage = 'ML service unavailable. Please ensure the service is running on port 8085.';
                 console.error('❌ No Response:', err.request);
             } else {
                 // Request setup error

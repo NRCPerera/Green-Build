@@ -15,7 +15,7 @@ def _env_bool(value: str | None, default: bool = False) -> bool:
 def main() -> None:
     load_dotenv()
 
-    port = int(os.getenv("PORT", "8080"))
+    port = int(os.getenv("PORT", "8085"))
     dev_mode = _env_bool(os.getenv("DEV_MODE"), default=False)
 
     uvicorn.run(
