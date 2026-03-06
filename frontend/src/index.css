@@ -539,3 +539,452 @@ input[type="range"]:disabled::-webkit-slider-thumb {
 .quantity-takeoff-module {
   animation: fade-in 0.3s ease-out;
 }
+
+/* =============================================================================
+ * PROJECT MANAGEMENT STYLES
+ * ============================================================================= */
+
+/* ── Kanban Board ────────────────────────────────────────────────── */
+.kanban-board {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1rem;
+  min-height: 400px;
+}
+
+.kanban-column {
+  background: rgba(15, 23, 42, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 0.75rem;
+  padding: 0.75rem;
+  display: flex;
+  flex-direction: column;
+  min-height: 300px;
+  transition: all 0.2s;
+}
+
+.kanban-column.drag-over {
+  border-color: rgba(34, 197, 94, 0.4);
+  background: rgba(34, 197, 94, 0.05);
+  box-shadow: inset 0 0 20px rgba(34, 197, 94, 0.08);
+}
+
+.kanban-column-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0.25rem;
+  margin-bottom: 0.75rem;
+  border-bottom: 2px solid rgba(255, 255, 255, 0.06);
+}
+
+.kanban-column-title {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #94a3b8;
+}
+
+.kanban-column-count {
+  font-size: 0.6875rem;
+  font-weight: 600;
+  background: rgba(255, 255, 255, 0.08);
+  color: #94a3b8;
+  padding: 0.125rem 0.5rem;
+  border-radius: 9999px;
+}
+
+.kanban-cards {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  overflow-y: auto;
+  padding-right: 0.25rem;
+}
+
+/* ── Task Card ───────────────────────────────────────────────────── */
+.task-card {
+  background: rgba(30, 41, 59, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0.625rem;
+  padding: 0.75rem;
+  cursor: grab;
+  transition: all 0.15s;
+  user-select: none;
+}
+
+.task-card:hover {
+  border-color: rgba(255, 255, 255, 0.15);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.task-card:active {
+  cursor: grabbing;
+}
+
+.task-card.dragging {
+  opacity: 0.5;
+  transform: rotate(2deg) scale(1.02);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+
+.task-card-title {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: #e2e8f0;
+  margin-bottom: 0.5rem;
+  line-height: 1.4;
+}
+
+.task-card-meta {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+
+/* ── Priority Badges ─────────────────────────────────────────────── */
+.priority-dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 9999px;
+  flex-shrink: 0;
+}
+
+.priority-dot.high { background: #ff4d4f; box-shadow: 0 0 6px rgba(255,77,79,0.5); }
+.priority-dot.medium { background: #faad14; box-shadow: 0 0 6px rgba(250,173,20,0.5); }
+.priority-dot.low { background: #8c8c8c; }
+
+.priority-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.0625rem 0.5rem;
+  border-radius: 9999px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+}
+
+.priority-badge.high {
+  background: rgba(255,77,79,0.15);
+  color: #ff7875;
+  border: 1px solid rgba(255,77,79,0.3);
+}
+
+.priority-badge.medium {
+  background: rgba(250,173,20,0.15);
+  color: #ffc53d;
+  border: 1px solid rgba(250,173,20,0.3);
+}
+
+.priority-badge.low {
+  background: rgba(140,140,140,0.15);
+  color: #8c8c8c;
+  border: 1px solid rgba(140,140,140,0.3);
+}
+
+/* ── Status Badges ───────────────────────────────────────────────── */
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.125rem 0.625rem;
+  border-radius: 9999px;
+  font-size: 0.6875rem;
+  font-weight: 600;
+}
+
+.status-badge .status-dot {
+  width: 0.375rem;
+  height: 0.375rem;
+  border-radius: 9999px;
+}
+
+.status-badge.draft        { background:rgba(140,140,140,0.15); color:#a0a0a0; }
+.status-badge.draft .status-dot        { background:#8c8c8c; }
+.status-badge.active       { background:rgba(82,196,26,0.15);  color:#73d13d; }
+.status-badge.active .status-dot       { background:#52c41a; box-shadow:0 0 6px rgba(82,196,26,0.6); }
+.status-badge.on-hold      { background:rgba(250,173,20,0.15); color:#ffc53d; }
+.status-badge.on-hold .status-dot      { background:#faad14; }
+.status-badge.completed    { background:rgba(24,144,255,0.15); color:#69b1ff; }
+.status-badge.completed .status-dot    { background:#1890ff; }
+.status-badge.cancelled    { background:rgba(255,77,79,0.15);  color:#ff7875; }
+.status-badge.cancelled .status-dot    { background:#ff4d4f; }
+
+/* ── Overdue Badge ───────────────────────────────────────────────── */
+.overdue-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.0625rem 0.5rem;
+  border-radius: 9999px;
+  font-size: 0.625rem;
+  font-weight: 600;
+  background: rgba(255,77,79,0.15);
+  color: #ff7875;
+  border: 1px solid rgba(255,77,79,0.3);
+  animation: pulse-overdue 2s infinite;
+}
+
+@keyframes pulse-overdue {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+/* ── Tag Pill ────────────────────────────────────────────────────── */
+.tag-pill {
+  display: inline-flex;
+  padding: 0.0625rem 0.375rem;
+  border-radius: 0.25rem;
+  font-size: 0.625rem;
+  font-weight: 500;
+  background: rgba(255,255,255,0.06);
+  color: #94a3b8;
+  border: 1px solid rgba(255,255,255,0.08);
+}
+
+/* ── Milestone Timeline ──────────────────────────────────────────── */
+.milestone-timeline {
+  position: relative;
+  padding-left: 2rem;
+}
+
+.milestone-timeline::before {
+  content: '';
+  position: absolute;
+  left: 0.6875rem;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: linear-gradient(to bottom, rgba(34,197,94,0.4), rgba(34,197,94,0.1));
+}
+
+.milestone-item {
+  position: relative;
+  padding-bottom: 1.5rem;
+}
+
+.milestone-item:last-child {
+  padding-bottom: 0;
+}
+
+.milestone-dot {
+  position: absolute;
+  left: -1.625rem;
+  top: 0.25rem;
+  width: 0.875rem;
+  height: 0.875rem;
+  border-radius: 9999px;
+  border: 2px solid rgba(34,197,94,0.5);
+  background: var(--color-dark-900);
+  z-index: 1;
+  transition: all 0.2s;
+}
+
+.milestone-dot.complete {
+  background: #52c41a;
+  border-color: #52c41a;
+  box-shadow: 0 0 8px rgba(82,196,26,0.5);
+}
+
+.milestone-dot.overdue {
+  background: #ff4d4f;
+  border-color: #ff4d4f;
+  box-shadow: 0 0 8px rgba(255,77,79,0.5);
+}
+
+.milestone-card {
+  background: rgba(30, 41, 59, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0.625rem;
+  padding: 0.75rem 1rem;
+  transition: all 0.15s;
+}
+
+.milestone-card:hover {
+  border-color: rgba(255, 255, 255, 0.15);
+}
+
+.milestone-card.complete {
+  border-color: rgba(82, 196, 26, 0.2);
+}
+
+/* ── Activity Feed ───────────────────────────────────────────────── */
+.activity-feed {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.activity-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.625rem 0.75rem;
+  border-radius: 0.5rem;
+  transition: background 0.15s;
+}
+
+.activity-item:hover {
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.activity-icon {
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 0.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  flex-shrink: 0;
+  margin-top: 0.125rem;
+}
+
+.activity-icon.task {
+  background: rgba(24, 144, 255, 0.15);
+  color: #69b1ff;
+}
+
+.activity-icon.milestone {
+  background: rgba(82, 196, 26, 0.15);
+  color: #73d13d;
+}
+
+.activity-icon.project {
+  background: rgba(250, 173, 20, 0.15);
+  color: #ffc53d;
+}
+
+/* ── Global Search Overlay ───────────────────────────────────────── */
+.search-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding-top: 15vh;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+  animation: fade-in 0.15s ease-out;
+}
+
+.search-modal {
+  width: 100%;
+  max-width: 600px;
+  background: rgba(15, 23, 42, 0.98);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 1rem;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  overflow: hidden;
+}
+
+.search-input-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.search-input-wrapper input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: white;
+  font-size: 1rem;
+}
+
+.search-input-wrapper input::placeholder {
+  color: #64748b;
+}
+
+.search-results {
+  max-height: 400px;
+  overflow-y: auto;
+  padding: 0.5rem;
+}
+
+.search-result-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.625rem 0.75rem;
+  border-radius: 0.5rem;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.search-result-item:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+/* ── Quick Add Input ─────────────────────────────────────────────── */
+.quick-add-input {
+  display: flex;
+  gap: 0.5rem;
+  padding: 0.375rem;
+  border: 1px dashed rgba(255, 255, 255, 0.1);
+  border-radius: 0.5rem;
+  margin-top: 0.5rem;
+  transition: all 0.15s;
+}
+
+.quick-add-input:focus-within {
+  border-color: rgba(34, 197, 94, 0.4);
+  background: rgba(34, 197, 94, 0.03);
+}
+
+.quick-add-input input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #e2e8f0;
+  font-size: 0.8125rem;
+  padding: 0.25rem 0.5rem;
+}
+
+.quick-add-input input::placeholder {
+  color: #475569;
+}
+
+/* ── Progress Ring ───────────────────────────────────────────────── */
+.progress-ring {
+  position: relative;
+  width: 4.5rem;
+  height: 4.5rem;
+}
+
+.progress-ring svg {
+  transform: rotate(-90deg);
+}
+
+.progress-ring-text {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: #e2e8f0;
+}
+
+/* ── Responsive Kanban ───────────────────────────────────────────── */
+@media (max-width: 1024px) {
+  .kanban-board {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 640px) {
+  .kanban-board {
+    grid-template-columns: 1fr;
+  }
+}
