@@ -3,6 +3,7 @@ import json
 import logging
 import os
 import sys
+import math
 from pathlib import Path
 from typing import List, Dict, Any
 
@@ -40,13 +41,12 @@ def setup_args():
     return parser.parse_args()
 
 def mask_to_polygons(mask: np.ndarray, tolerance: float = 1.0) -> List[Polygon]:
-    """Convert binary mask to simplified shapely Polygons."""
+    """Convert binary mask to simplified shapely Polygons (Used for doors/windows)."""
     contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     polygons = []
     for cnt in contours:
         if cv2.contourArea(cnt) < 50:  # Filter small noise
             continue
-        # cnt is (N, 1, 2) -> (N, 2)
         points = cnt.squeeze().tolist()
         if len(points) < 3:
             continue
@@ -64,10 +64,68 @@ def mask_to_polygons(mask: np.ndarray, tolerance: float = 1.0) -> List[Polygon]:
             polygons.append(poly)
     return polygons
 
+def extract_wall_polygons_hough(mask: np.ndarray, pixel_thickness: float = 10.0) -> List[Polygon]:
+    """
+    Convert continuous binary wall mask into distinct, thickened 
+    Shapely Polygons using the Hough Line Transform.
+    """
+    if isinstance(mask, torch.Tensor):
+        mask = mask.cpu().numpy()
+    if len(mask.shape) > 2:
+        mask = mask.squeeze()
+    
+    if mask.dtype != np.uint8 or mask.max() <= 1.0:
+        mask = (mask > 0.5).astype(np.uint8) * 255
+        
+    _, binary_mask = cv2.threshold(mask, 127, 255, cv2.THRESH_BINARY)
+    edges = cv2.Canny(binary_mask, 50, 150, apertureSize=3)
+
+    # LOOSENED PARAMETERS: Much more forgiving line detection
+    lines = cv2.HoughLinesP(
+        edges, 
+        rho=1, 
+        theta=np.pi/180, 
+        threshold=15,      # Lowered from 30
+        minLineLength=10,  # Lowered from 25
+        maxLineGap=20      # Increased from 15
+    )
+
+    # --- DEBUG VISUALIZATION ---
+    # Creates an image to visually verify if walls are being detected
+    debug_img = cv2.cvtColor(binary_mask, cv2.COLOR_GRAY2BGR)
+
+    polygons = []
+    if lines is not None:
+        for line in lines:
+            x1, y1, x2, y2 = line[0]
+            
+            # Draw the detected line in RED for the debug image
+            cv2.line(debug_img, (x1, y1), (x2, y2), (0, 0, 255), 2)
+            
+            # Create 4-point thick polygon
+            angle = math.atan2(y2 - y1, x2 - x1)
+            dx = (pixel_thickness / 2.0) * math.sin(angle)
+            dy = (pixel_thickness / 2.0) * math.cos(angle)
+            
+            p1 = (x1 - dx, y1 + dy)
+            p2 = (x1 + dx, y1 - dy)
+            p3 = (x2 + dx, y2 - dy)
+            p4 = (x2 - dx, y2 + dy)
+            
+            poly = Polygon([p1, p2, p3, p4])
+            
+            if poly.is_valid and not poly.is_empty:
+                polygons.append(poly)
+                
+    # Save the debug image so you can see the results
+    cv2.imwrite("debug_hough_lines.png", debug_img)
+    logger.info("Saved wall detection debug image to debug_hough_lines.png")
+
+    return polygons
+
 def process_image(image_path: str, output_path: str):
     logger.info(f"Processing {image_path}...")
     
-    # Load Image
     if not os.path.exists(image_path):
         logger.error(f"Image not found: {image_path}")
         sys.exit(1)
@@ -75,28 +133,15 @@ def process_image(image_path: str, output_path: str):
     image = cv2.imread(image_path)
     image_rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
     
-    # Load Models
     logger.info("Loading models...")
     unet = load_unet_model(UNET_MODEL_PATH, DEVICE)
     rcnn = load_rcnn_model(RCNN_MODEL_PATH, DEVICE)
     
-    # Prepare Inputs
-    # Normalization for models - assuming models expect 0-1 float or normalized
-    # run_unet_inference expects tensor. check inference.py
-    # inference.py: image_tensor.unsqueeze(0).to(DEVICE)
-    # usually needs ToTensor() which divides by 255.
-    
     import albumentations as A
     from albumentations.pytorch import ToTensorV2
     
-    # U-Net preprocessing (Resize 800x800 done in inference logic? NO, inference.py for unet doesn't resize)
-    # Actually unet was trained on 512x512 or similar? config says INFERENCE_SIZE = (800, 800)
-    # Let's resize image to standard size or keep original?
-    # R-CNN handles different sizes usually. U-Net needs fixed size often or divisible by 32.
-    
     h, w = image.shape[:2]
     
-    # Transform for Inference
     transform = A.Compose([
         A.Normalize(),
         ToTensorV2()
@@ -106,10 +151,6 @@ def process_image(image_path: str, output_path: str):
     
     # --- Walls (U-Net) ---
     logger.info("Running Wall Segmentation (U-Net)...")
-    # For U-Net, we might need resizing if the model expects it.
-    # But let's try running on original size (if memory allows) or resize.
-    # To be safe and consistent with typical pipelines:
-    # Resize to nearest multiple of 32
     new_h = (h // 32) * 32
     new_w = (w // 32) * 32
     if new_h != h or new_w != w:
@@ -119,64 +160,44 @@ def process_image(image_path: str, output_path: str):
          transformed_unet = transformed
          
     wall_mask = run_unet_inference(unet, transformed_unet)
-    # Resize mask back to original if needed
     if wall_mask.shape != (h, w):
         wall_mask = cv2.resize(wall_mask, (w, h), interpolation=cv2.INTER_NEAREST)
         
     # --- Windows/Doors (R-CNN) ---
     logger.info("Running Window/Door Detection (Mask R-CNN)...")
-    # R-CNN handles resizing internally usually (GeneralizedRCNNTransform)
     detections = run_rcnn_inference(rcnn, transformed)
     
-    # Process Detections
     window_polys = []
     door_polys = []
     
     for det in detections:
-        # det: box, label, score, mask
         label = det["label"]
         mask = det["mask"]
-        score = det["score"]
         
-        # Threshold mask
         bin_mask = (mask > 0.5).astype(np.uint8)
-        
-        # Convert to Polygon
-        # Note: mask from RCNN is usually 28x28 (soft mask) or full size? 
-        # inference.py says: masks = output["masks"].cpu().numpy().
-        # In torchvision, masks are usually N, 1, H, W.
-        # Check inference.py:
-        # for i, score in enumerate(scores):
-        #    ... "mask": masks[i]
-        # masks[i] is likely (1, H, W) or (H, W).
         
         if len(bin_mask.shape) == 3:
             bin_mask = bin_mask[0]
             
         polys = mask_to_polygons(bin_mask)
         
-        if label == 1: # Door (based on config RCNN_CLASSES = {1: "door", 2: "window"}) -> Wait, config says 1: door.
-            # config.py: RCNN_CLASSES = {1: "door", 2: "window"}
+        if label == 1: 
             door_polys.extend(polys)
-        elif label == 2: # Window
+        elif label == 2: 
             window_polys.extend(polys)
 
-    # Process Walls
+    # --- Process Walls ---
     logger.info("Processing Geometry...")
-    raw_wall_polys = mask_to_polygons(wall_mask, tolerance=2.0)
+    raw_wall_polys = extract_wall_polygons_hough(wall_mask, pixel_thickness=6.0)
     
-    # Merge MultiPolygons/Lists into a single list of localized polygons
     all_walls = []
     for p in raw_wall_polys:
-        # Cut holes
         cut_wall = p
         
-        # Difference with Windows
         for wp in window_polys:
             if cut_wall.intersects(wp):
                 cut_wall = cut_wall.difference(wp)
         
-        # Difference with Doors
         for dp in door_polys:
             if cut_wall.intersects(dp):
                 cut_wall = cut_wall.difference(dp)
@@ -187,23 +208,19 @@ def process_image(image_path: str, output_path: str):
              else:
                  all_walls.append(cut_wall)
                  
-    # Format for JSON
     def format_poly(poly):
         if poly.is_empty: return None
-        # Exterior
         try:
             outline = list(poly.exterior.coords)
         except AttributeError:
-            return None # Not a polygon
+            return None 
             
-        # Holes
         holes = []
         for interior in poly.interiors:
             holes.append(list(interior.coords))
             
-        # Scale to meters
-        outline_m = [[x * SCALE_METERS_PER_PIXEL, y * SCALE_METERS_PER_PIXEL] for x, y in outline]
-        holes_m = [[[x * SCALE_METERS_PER_PIXEL, y * SCALE_METERS_PER_PIXEL] for x, y in h] for h in holes]
+        outline_m = [[round(x * SCALE_METERS_PER_PIXEL, 3), round(y * SCALE_METERS_PER_PIXEL, 3)] for x, y in outline]
+        holes_m = [[[round(x * SCALE_METERS_PER_PIXEL, 3), round(y * SCALE_METERS_PER_PIXEL, 3)] for x, y in h] for h in holes]
         
         return {
             "outline": outline_m,

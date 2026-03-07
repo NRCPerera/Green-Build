@@ -284,10 +284,8 @@ const uploadFloorPlan = async (req, res) => {
 
         await project.save();
 
-        // Clean up temp file
-        if (tempFilePath && fs.existsSync(tempFilePath)) {
-            fs.unlinkSync(tempFilePath);
-        }
+        // Note: Keep the uploaded file in uploads/ — it's referenced by floorPlan.filePath
+        // and needed for reanalysis, serving to frontend, etc.
 
         const processingTime = Date.now() - startTime;
         console.log(`[FloorPlan] Complete in ${processingTime}ms`);
