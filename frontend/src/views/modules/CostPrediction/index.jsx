@@ -15,56 +15,34 @@ const provinceDistrictMap = {
 
 const CostPredictionView = ({ project, onBack }) => {
     const [formValues, setFormValues] = useState({
-        // Type_of_Project: '',
-        // Province: '',
-        // District: '',
-        // Season_of_Start: '',
-        // Grade_of_contractor: '',
-        // Floors: '',
-        // Area_SQFT: '',
-        // Year_of_Tender: '',
-        // Rate_per_SQFT: '',
-        // Initial_Contract_Value: '',
-        // Initial_period_construction: '',
-        // Design_Completeness: '',
-        // Project_Complexity_Score: '',
-        // Inflation_Rate: '',
-        // Material_Price_Index: '',
-        // Exchange_Rate: '',
-        // Interest_Rate: '',
-        // Contractor_Experience_Years: '',
-        // Contractor_Previous_Projects: '',
-        // Change_Order_Frequency: '',
-        // Amount_Variations: '',
-        // Amount_S_Change: '',
-        // Amount_PF: '',
-        // Adjusted_Contract_Sum: '',
-        // Start_Date: '',
-        // End_Date: ''
-        "Type_of_Project": "Residential-House",
-  "Province": "Western",
-  "District": "Colombo",
-  "Season_of_Start": "Dry Season",
-  "Grade_of_contractor": "C1",
-  "Floors": 2,
-  "Area_SQFT": 2500,
-  "Year_of_Tender": 2024,
-  "Rate_per_SQFT": 9500,
-  "Initial_Contract_Value": 23750000,
-  "Initial_period_construction": 10,
-  "Design_Completeness": 90,
-  "Project_Complexity_Score": 4,
-  "Inflation_Rate": 4.5,
-  "Material_Price_Index": 140,
-  "Exchange_Rate": 285,
-  "Interest_Rate": 9.5,
-  "Contractor_Experience_Years": 15,
-  "Contractor_Previous_Projects": 30,
-  "Change_Order_Frequency": 1,
-  "Amount_Variations": 500000,
-  "Amount_S_Change": 200000,
-  "Amount_PF": 150000,
-  "Adjusted_Contract_Sum": 24200000
+                Project_Type: 'Apartment',
+                Province: 'Western',
+                District: 'Gampaha',
+                CIDA_Grade: 'C5',
+                Season: 'Monsoon',
+                Floors: 14,
+                Area_SQFT: 85000,
+                Year_of_Tender: 2022,
+                Contractor_Experience_Years: 5,
+                Complexity_Score: 9,
+                Change_Order_Freq: 14,
+                Start_Month: 6,
+                Start_Quarter: 2,
+                Start_Weekday: 1,
+                Initial_Period_Months: 30,
+                Time_Overrun_Months: 11,
+                Actual_Duration_Months: 41,
+                Inflation_Rate: 55,
+                Exchange_Rate_LKR: 360,
+                Material_Index: 420,
+                Design_Completeness: 0.42,
+                Project_Size_Index: 120,
+                Economic_Risk_Index: 60,
+                Design_Risk_Score: 5.8,
+                Contractor_Risk_Score: 4.7,
+                Weather_Risk_Score: 5.2,
+                Rate_per_SQFT: 64000,
+                Initial_Value: 5440000000
     });
 
     const [availableDistricts, setAvailableDistricts] = useState([]);
@@ -72,18 +50,29 @@ const CostPredictionView = ({ project, onBack }) => {
 
     const { loading, error, prediction, hasPrediction, predictCost, clearPrediction } = useCostController();
 
-    const riskFlag = prediction?.high_risk_label;
-    const isHighRisk = riskFlag === true || riskFlag === 1 || prediction?.risk_label === 'HIGH';
+    const riskFlag = prediction?.predicted_high_risk_class;
+    const isHighRisk = riskFlag === true || riskFlag === 1;
     const overrunPct = prediction?.predicted_cost_overrun_pct;
-    const hasProbability = typeof prediction?.overrun_probability === 'number';
+    const probabilityValue = prediction?.predicted_high_risk_probability ?? null;
+    const hasProbability = typeof probabilityValue === 'number';
+    const topRiskFactors = Array.isArray(prediction?.top_risk_factors) ? prediction.top_risk_factors : [];
+    const riskScorecard = Array.isArray(prediction?.risk_scorecard) ? prediction.risk_scorecard : [];
+    const maxImpact = topRiskFactors.length > 0
+        ? Math.max(...topRiskFactors.map((item) => Number(item.impact) || 0), 0.0001)
+        : 1;
 
-    // Pre-fill form with project data
+    const getImpactColor = (impactLevel) => {
+        if (impactLevel === 'High') return 'text-red-300 border-red-500/40 bg-red-500/15';
+        if (impactLevel === 'Medium') return 'text-yellow-300 border-yellow-500/40 bg-yellow-500/15';
+        return 'text-green-300 border-green-500/40 bg-green-500/15';
+    };
+
     useEffect(() => {
         if (project) {
             const getProjectType = (type) => {
-                if (!type) return 'Residential-House';
+                if (!type) return 'Apartment';
                 const typeMap = {
-                    'residential': 'Residential-House',
+                    'residential': 'House',
                     'commercial': 'Commercial',
                     'infrastructure': 'Infrastructure'
                 };
@@ -104,12 +93,10 @@ const CostPredictionView = ({ project, onBack }) => {
 
             setFormValues(prev => ({
                 ...prev,
-                Type_of_Project: getProjectType(project.projectType),
+                Project_Type: getProjectType(project.projectType),
                 Province: getProvince(project.location),
                 District: getDistrict(project.location),
-                Initial_Contract_Value: budget,
-                Start_Date: project.startDate ? new Date(project.startDate).toISOString().split('T')[0] : '',
-                End_Date: project.expectedEndDate ? new Date(project.expectedEndDate).toISOString().split('T')[0] : '',
+                Initial_Value: budget,
             }));
         }
     }, [project]);
@@ -206,8 +193,8 @@ const CostPredictionView = ({ project, onBack }) => {
                             <div className="col-span-2">
                                 <label className="block text-xs font-medium text-gray-400 mb-1">Type of Project</label>
                                 <select
-                                    value={formValues.Type_of_Project}
-                                    onChange={handleChange('Type_of_Project')}
+                                    value={formValues.Project_Type}
+                                    onChange={handleChange('Project_Type')}
                                     className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
                                 >
                                     <option value="">Select Project Type</option>
@@ -216,6 +203,8 @@ const CostPredictionView = ({ project, onBack }) => {
                                     <option value="Townhouse">Townhouse</option>
                                     <option value="Apartment">Apartment</option>
                                     <option value="Condominium">Condominium</option>
+                                    <option value="Commercial">Commercial</option>
+                                    <option value="Infrastructure">Infrastructure</option>
                                 </select>
                             </div>
                             <div>
@@ -247,15 +236,14 @@ const CostPredictionView = ({ project, onBack }) => {
                             <div>
                                 <label className="block text-xs font-medium text-gray-400 mb-1">Season of Start</label>
                                 <select
-                                    value={formValues.Season_of_Start}
-                                    onChange={handleChange('Season_of_Start')}
+                                    value={formValues.Season}
+                                    onChange={handleChange('Season')}
                                     className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
                                 >
                                     <option value="">Select Season</option>
-                                    <option>Southwest Monsoon</option>
-                                    <option>Northeast Monsoon</option>
-                                    <option>Inter Monsoon</option>
-                                    <option>Dry Season</option>
+                                    <option value="Monsoon">Monsoon</option>
+                                    <option value="Dry">Dry</option>
+                                    <option value="Inter-Monsoon">Inter-Monsoon</option>
                                 </select>
                             </div>
                             <div>
@@ -269,12 +257,11 @@ const CostPredictionView = ({ project, onBack }) => {
                                 />
                             </div>
                             <div>
-                                <label className="block text-xs font-medium text-gray-400 mb-1">Grade of Contractor</label>
+                                <label className="block text-xs font-medium text-gray-400 mb-1">CIDA Grade</label>
                                 <input
-                                    type="number"
-                                    min="0"
-                                    value={formValues.Grade_of_contractor}
-                                    onChange={handleChange('Grade_of_contractor', parseIntOrEmpty)}
+                                    type="text"
+                                    value={formValues.CIDA_Grade}
+                                    onChange={handleChange('CIDA_Grade')}
                                     className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
                                 />
                             </div>
@@ -312,22 +299,22 @@ const CostPredictionView = ({ project, onBack }) => {
                                 />
                             </div>
                             <div>
-                                <label className="block text-xs font-medium text-gray-400 mb-1">Initial Contract Value</label>
+                                <label className="block text-xs font-medium text-gray-400 mb-1">Initial Value</label>
                                 <input
                                     type="number"
                                     min="0"
-                                    value={formValues.Initial_Contract_Value}
-                                    onChange={handleChange('Initial_Contract_Value', parseFloatOrEmpty)}
+                                    value={formValues.Initial_Value}
+                                    onChange={handleChange('Initial_Value', parseFloatOrEmpty)}
                                     className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
                                 />
                             </div>
                             <div>
-                                <label className="block text-xs font-medium text-gray-400 mb-1">Adjusted Contract Sum</label>
+                                <label className="block text-xs font-medium text-gray-400 mb-1">Actual Duration (months)</label>
                                 <input
                                     type="number"
                                     min="0"
-                                    value={formValues.Adjusted_Contract_Sum}
-                                    onChange={handleChange('Adjusted_Contract_Sum', parseFloatOrEmpty)}
+                                    value={formValues.Actual_Duration_Months}
+                                    onChange={handleChange('Actual_Duration_Months', parseFloatOrEmpty)}
                                     className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
                                 />
                             </div>
@@ -339,27 +326,52 @@ const CostPredictionView = ({ project, onBack }) => {
                                 <input
                                     type="number"
                                     min="1"
-                                    value={formValues.Initial_period_construction}
-                                    onChange={handleChange('Initial_period_construction', parseIntOrEmpty)}
+                                    value={formValues.Initial_Period_Months}
+                                    onChange={handleChange('Initial_Period_Months', parseFloatOrEmpty)}
                                     className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
                                 />
                             </div>
-                            <div className="grid grid-cols-2 gap-3 col-span-full">
+                            <div>
+                                <label className="block text-xs font-medium text-gray-400 mb-1">Time Overrun (months)</label>
+                                <input
+                                    type="number"
+                                    min="0"
+                                    value={formValues.Time_Overrun_Months}
+                                    onChange={handleChange('Time_Overrun_Months', parseFloatOrEmpty)}
+                                    className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                                />
+                            </div>
+                            <div className="grid grid-cols-3 gap-3 col-span-full">
                                 <div>
-                                    <label className="block text-xs font-medium text-gray-400 mb-1">Start Date</label>
+                                    <label className="block text-xs font-medium text-gray-400 mb-1">Start Month</label>
                                     <input
-                                        type="date"
-                                        value={formValues.Start_Date}
-                                        onChange={handleChange('Start_Date')}
+                                        type="number"
+                                        min="1"
+                                        max="12"
+                                        value={formValues.Start_Month}
+                                        onChange={handleChange('Start_Month', parseIntOrEmpty)}
                                         className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-medium text-gray-400 mb-1">End Date</label>
+                                    <label className="block text-xs font-medium text-gray-400 mb-1">Start Quarter</label>
                                     <input
-                                        type="date"
-                                        value={formValues.End_Date}
-                                        onChange={handleChange('End_Date')}
+                                        type="number"
+                                        min="1"
+                                        max="4"
+                                        value={formValues.Start_Quarter}
+                                        onChange={handleChange('Start_Quarter', parseIntOrEmpty)}
+                                        className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-medium text-gray-400 mb-1">Start Weekday</label>
+                                    <input
+                                        type="number"
+                                        min="0"
+                                        max="6"
+                                        value={formValues.Start_Weekday}
+                                        onChange={handleChange('Start_Weekday', parseIntOrEmpty)}
                                         className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
                                     />
                                 </div>
@@ -383,8 +395,8 @@ const CostPredictionView = ({ project, onBack }) => {
                                 <input
                                     type="number"
                                     min="0"
-                                    value={formValues.Material_Price_Index}
-                                    onChange={handleChange('Material_Price_Index', parseFloatOrEmpty)}
+                                    value={formValues.Material_Index}
+                                    onChange={handleChange('Material_Index', parseFloatOrEmpty)}
                                     className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
                                 />
                             </div>
@@ -393,19 +405,19 @@ const CostPredictionView = ({ project, onBack }) => {
                                 <input
                                     type="number"
                                     min="0"
-                                    value={formValues.Exchange_Rate}
-                                    onChange={handleChange('Exchange_Rate', parseFloatOrEmpty)}
+                                    value={formValues.Exchange_Rate_LKR}
+                                    onChange={handleChange('Exchange_Rate_LKR', parseFloatOrEmpty)}
                                     className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
                                 />
                             </div>
                             <div>
-                                <label className="block text-xs font-medium text-gray-400 mb-1">Interest Rate</label>
+                                <label className="block text-xs font-medium text-gray-400 mb-1">Project Size Index</label>
                                 <input
                                     type="number"
                                     min="0"
                                     step="0.01"
-                                    value={formValues.Interest_Rate}
-                                    onChange={handleChange('Interest_Rate', parseFloatOrEmpty)}
+                                    value={formValues.Project_Size_Index}
+                                    onChange={handleChange('Project_Size_Index', parseFloatOrEmpty)}
                                     className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
                                 />
                             </div>
@@ -423,12 +435,12 @@ const CostPredictionView = ({ project, onBack }) => {
                                 />
                             </div>
                             <div>
-                                <label className="block text-xs font-medium text-gray-400 mb-1">Contractor Previous Projects</label>
+                                <label className="block text-xs font-medium text-gray-400 mb-1">Economic Risk Index</label>
                                 <input
                                     type="number"
                                     min="0"
-                                    value={formValues.Contractor_Previous_Projects}
-                                    onChange={handleChange('Contractor_Previous_Projects', parseIntOrEmpty)}
+                                    value={formValues.Economic_Risk_Index}
+                                    onChange={handleChange('Economic_Risk_Index', parseFloatOrEmpty)}
                                     className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
                                 />
                             </div>
@@ -437,8 +449,8 @@ const CostPredictionView = ({ project, onBack }) => {
                                 <input
                                     type="number"
                                     min="0"
-                                    value={formValues.Change_Order_Frequency}
-                                    onChange={handleChange('Change_Order_Frequency', parseIntOrEmpty)}
+                                    value={formValues.Change_Order_Freq}
+                                    onChange={handleChange('Change_Order_Freq', parseIntOrEmpty)}
                                     className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
                                 />
                             </div>
@@ -448,8 +460,8 @@ const CostPredictionView = ({ project, onBack }) => {
                                     type="number"
                                     min="0"
                                     step="0.01"
-                                    value={formValues.Project_Complexity_Score}
-                                    onChange={handleChange('Project_Complexity_Score', parseFloatOrEmpty)}
+                                    value={formValues.Complexity_Score}
+                                    onChange={handleChange('Complexity_Score', parseIntOrEmpty)}
                                     className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
                                 />
                             </div>
@@ -457,32 +469,32 @@ const CostPredictionView = ({ project, onBack }) => {
 
                         <div className={`grid ${isFormExpanded ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4' : 'grid-cols-2'} gap-3`}>
                             <div>
-                                <label className="block text-xs font-medium text-gray-400 mb-1">Amount Variations</label>
+                                <label className="block text-xs font-medium text-gray-400 mb-1">Design Risk Score</label>
                                 <input
                                     type="number"
                                     min="0"
-                                    value={formValues.Amount_Variations}
-                                    onChange={handleChange('Amount_Variations', parseFloatOrEmpty)}
+                                    value={formValues.Design_Risk_Score}
+                                    onChange={handleChange('Design_Risk_Score', parseFloatOrEmpty)}
                                     className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
                                 />
                             </div>
                             <div>
-                                <label className="block text-xs font-medium text-gray-400 mb-1">Amount S Change</label>
+                                <label className="block text-xs font-medium text-gray-400 mb-1">Contractor Risk Score</label>
                                 <input
                                     type="number"
                                     min="0"
-                                    value={formValues.Amount_S_Change}
-                                    onChange={handleChange('Amount_S_Change', parseFloatOrEmpty)}
+                                    value={formValues.Contractor_Risk_Score}
+                                    onChange={handleChange('Contractor_Risk_Score', parseFloatOrEmpty)}
                                     className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
                                 />
                             </div>
                             <div>
-                                <label className="block text-xs font-medium text-gray-400 mb-1">Amount PF</label>
+                                <label className="block text-xs font-medium text-gray-400 mb-1">Weather Risk Score</label>
                                 <input
                                     type="number"
                                     min="0"
-                                    value={formValues.Amount_PF}
-                                    onChange={handleChange('Amount_PF', parseFloatOrEmpty)}
+                                    value={formValues.Weather_Risk_Score}
+                                    onChange={handleChange('Weather_Risk_Score', parseFloatOrEmpty)}
                                     className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
                                 />
                             </div>
@@ -537,12 +549,12 @@ const CostPredictionView = ({ project, onBack }) => {
                                 <div className="bg-dark-800/70 border border-white/5 rounded-xl p-5 text-center">
                                     <p className="text-sm text-gray-400 mb-2">Overrun Probability</p>
                                     <p className="text-3xl font-bold text-white">
-                                        {hasProbability ? `${(prediction.overrun_probability * 100).toFixed(1)}%` : 'N/A'}
+                                        {hasProbability ? `${(probabilityValue * 100).toFixed(1)}%` : 'N/A'}
                                     </p>
                                     <div className="w-full h-2 bg-dark-700 rounded-full mt-2 overflow-hidden">
                                         <div
-                                            className={`h-full transition-all ${hasProbability ? ((prediction?.overrun_probability ?? 0) > 0.7 ? 'bg-red-500' : (prediction?.overrun_probability ?? 0) > 0.4 ? 'bg-yellow-500' : 'bg-green-500') : 'bg-gray-500'}`}
-                                            style={{ width: hasProbability ? `${((prediction?.overrun_probability ?? 0) * 100)}%` : '0%' }}
+                                            className={`h-full transition-all ${hasProbability ? ((probabilityValue ?? 0) > 0.7 ? 'bg-red-500' : (probabilityValue ?? 0) > 0.4 ? 'bg-yellow-500' : 'bg-green-500') : 'bg-gray-500'}`}
+                                            style={{ width: hasProbability ? `${((probabilityValue ?? 0) * 100)}%` : '0%' }}
                                         />
                                     </div>
                                 </div>
@@ -560,35 +572,78 @@ const CostPredictionView = ({ project, onBack }) => {
                                     <div className="p-4 bg-dark-700/50 rounded-lg">
                                         <p className="text-gray-400 mb-1">Risk Probability</p>
                                         <p className="text-2xl font-bold text-orange-400">
-                                            {hasProbability ? `${(prediction.overrun_probability * 100).toFixed(1)}%` : 'N/A'}
+                                            {hasProbability ? `${(probabilityValue * 100).toFixed(1)}%` : 'N/A'}
                                         </p>
                                     </div>
                                     <div className="p-4 bg-dark-700/50 rounded-lg">
                                         <p className="text-gray-400 mb-1">Risk Classification</p>
                                         <p className={`text-lg font-bold ${isHighRisk ? 'text-red-400' : 'text-green-400'}`}>
-                                            {prediction?.risk_label ? `${prediction.risk_label} RISK` : (isHighRisk ? 'HIGH RISK' : 'LOW RISK')}
+                                            {isHighRisk ? 'HIGH RISK' : 'LOW RISK'}
                                         </p>
                                     </div>
                                     <div className="p-4 bg-dark-700/50 rounded-lg">
-                                        <p className="text-gray-400 mb-1">Threshold</p>
-                                        <p className="text-lg font-bold text-blue-400">{prediction?.threshold ?? 'N/A'}</p>
+                                        <p className="text-gray-400 mb-1">Top Drivers</p>
+                                        <p className="text-lg font-bold text-blue-400">{topRiskFactors.length}</p>
                                     </div>
                                 </div>
                             </div>
 
-                            {prediction.shap_explanation && prediction.shap_explanation.length > 0 && (
+                            {topRiskFactors.length > 0 && (
                                 <div className="bg-dark-800/70 border border-white/5 rounded-2xl p-6">
-                                    <h3 className="text-lg font-semibold text-white mb-4">Top SHAP Drivers</h3>
-                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 text-sm">
-                                        {prediction.shap_explanation.map((item, idx) => (
-                                            <div key={`${item.feature}-${idx}`} className="p-3 bg-dark-700/50 rounded-lg border border-white/5">
-                                                <p className="text-gray-300 font-semibold truncate">{item.feature}</p>
-                                                <p className="text-sm text-gray-400">Impact: {item.impact}</p>
-                                                <p className={`text-sm font-semibold ${item.direction === 'increase' ? 'text-red-400' : 'text-green-400'}`}>
-                                                    {item.direction === 'increase' ? 'Increases risk' : 'Lowers risk'}
-                                                </p>
-                                            </div>
-                                        ))}
+                                    <h3 className="text-lg font-semibold text-white mb-4">Top Risk Factors Diagram</h3>
+                                    <div className="space-y-3">
+                                        {topRiskFactors.slice(0, 10).map((item, idx) => {
+                                            const impact = Number(item.impact) || 0;
+                                            const widthPct = Math.max(4, (impact / maxImpact) * 100);
+
+                                            return (
+                                                <div key={`${item.feature}-${idx}`} className="space-y-1">
+                                                    <div className="flex items-center justify-between text-sm">
+                                                        <p className="text-gray-200 font-medium truncate pr-2">{item.feature}</p>
+                                                        <p className="text-gray-400 tabular-nums">{impact.toFixed(4)}</p>
+                                                    </div>
+                                                    <div className="w-full h-2.5 bg-dark-700 rounded-full overflow-hidden border border-white/5">
+                                                        <div
+                                                            className="h-full bg-gradient-to-r from-orange-500 via-amber-400 to-yellow-300"
+                                                            style={{ width: `${widthPct}%` }}
+                                                        />
+                                                    </div>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                </div>
+                            )}
+
+                            {riskScorecard.length > 0 && (
+                                <div className="bg-dark-800/70 border border-white/5 rounded-2xl p-6">
+                                    <h3 className="text-lg font-semibold text-white mb-4">Risk Scorecard Diagram</h3>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+                                        {riskScorecard.slice(0, 5).map((item, idx) => {
+                                            const impactLevel = item.impact || 'Low';
+                                            const impactWidth = impactLevel === 'High' ? 100 : impactLevel === 'Medium' ? 65 : 35;
+
+                                            return (
+                                                <div key={`${item.feature}-${idx}`} className="p-4 bg-dark-700/50 rounded-lg border border-white/5">
+                                                    <div className="flex items-center justify-between gap-2 mb-2">
+                                                        <p className="text-gray-200 font-semibold truncate">{item.feature}</p>
+                                                        <span className={`text-xs px-2 py-0.5 rounded-full border ${getImpactColor(impactLevel)}`}>
+                                                            {impactLevel}
+                                                        </span>
+                                                    </div>
+                                                    <p className="text-gray-400 mb-2">
+                                                        Value: <span className="text-gray-200 font-medium">{String(item.feature_value)}</span>
+                                                    </p>
+                                                    <div className="w-full h-2 bg-dark-800 rounded-full overflow-hidden border border-white/5 mb-2">
+                                                        <div
+                                                            className={`h-full ${impactLevel === 'High' ? 'bg-red-500' : impactLevel === 'Medium' ? 'bg-yellow-500' : 'bg-green-500'}`}
+                                                            style={{ width: `${impactWidth}%` }}
+                                                        />
+                                                    </div>
+                                                    <p className="text-xs text-gray-300">{item.status}</p>
+                                                </div>
+                                            );
+                                        })}
                                     </div>
                                 </div>
                             )}
@@ -596,11 +651,11 @@ const CostPredictionView = ({ project, onBack }) => {
                             <div className="bg-dark-800/70 border border-white/5 rounded-2xl p-6">
                                 <h3 className="text-lg font-semibold text-white mb-4">Model Information</h3>
                                 <div className="space-y-2 text-sm text-gray-400">
-                                    <p><span className="text-gray-300 font-medium">Model Type:</span> ANN Regression + Classification</p>
+                                    <p><span className="text-gray-300 font-medium">Model Type:</span> GradientBoosting + RandomForest + SHAP</p>
                                     {prediction?.model_version && (
                                         <p><span className="text-gray-300 font-medium">Model Version:</span> {prediction.model_version}</p>
                                     )}
-                                    <p><span className="text-gray-300 font-medium">Input Features:</span> 25 parameters</p>
+                                    <p><span className="text-gray-300 font-medium">Input Features:</span> 28 parameters</p>
                                     {prediction.timestamp && (
                                         <p><span className="text-gray-300 font-medium">Prediction Timestamp:</span> {new Date(prediction.timestamp).toLocaleString()}</p>
                                     )}

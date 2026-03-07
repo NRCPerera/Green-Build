@@ -39,9 +39,10 @@ const useCostController = () => {
 
             console.log('📥 Response Data:', response.data);
 
-            if (response.data.success) {
+            const isSuccess = response.data?.success ?? true;
+            if (isSuccess) {
                 // Normalize backend fields so the UI can handle both old and new API shapes.
-                const raw = response.data.data || {};
+                const raw = response.data?.data ?? response.data ?? {};
                 const normalizedOverrun =
                     raw.predicted_cost_overrun_pct ?? raw.predicted_cost_overrun_percentage ?? null;
                 const normalizedRiskFlag =
@@ -50,14 +51,15 @@ const useCostController = () => {
                     (raw.risk_label === 'HIGH' ? 1 : raw.risk_label === 'LOW' ? 0 : null);
 
                 const predictionData = {
-                    ...raw,
                     predicted_cost_overrun_pct: normalizedOverrun,
-                    predicted_cost_overrun_percentage: normalizedOverrun,
-                    high_risk_label: normalizedRiskFlag,
-                    predicted_high_risk_project: normalizedRiskFlag,
-                    overrun_probability: raw.overrun_probability ?? null,
-                    threshold: raw.threshold ?? null,
-                    timestamp: response.data.timestamp
+                    predicted_high_risk_class:
+                        raw.predicted_high_risk_class ?? raw.predicted_high_risk_project ?? normalizedRiskFlag,
+                    predicted_high_risk_probability:
+                        raw.predicted_high_risk_probability ?? raw.overrun_probability ?? null,
+                    top_risk_factors: Array.isArray(raw.top_risk_factors) ? raw.top_risk_factors : [],
+                    risk_scorecard: Array.isArray(raw.risk_scorecard) ? raw.risk_scorecard : [],
+                    model_version: raw.model_version ?? null,
+                    timestamp: response.data?.timestamp
                 };
                 console.log('✅ Prediction Data:', predictionData);
                 setCostPrediction(predictionData);
