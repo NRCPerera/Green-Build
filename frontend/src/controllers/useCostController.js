@@ -12,15 +12,59 @@ const useCostController = () => {
     const costPrediction = useProjectStore((state) => state.costPrediction);
     const setCostPrediction = useProjectStore((state) => state.setCostPrediction);
 
+    // ML model expects these fields only
+    const ML_EXPECTED_FIELDS = [
+        'Project_Type',
+        'Province',
+        'District',
+        'CIDA_Grade',
+        'Season',
+        'Floors',
+        'Area_SQFT',
+        'Year_of_Tender',
+        'Contractor_Experience_Years',
+        'Complexity_Score',
+        'Change_Order_Freq',
+        'Start_Month',
+        'Start_Quarter',
+        'Start_Weekday',
+        'Initial_Period_Months',
+        'Inflation_Rate',
+        'Exchange_Rate_LKR',
+        'Material_Index',
+        'Design_Completeness',
+        'Project_Size_Index',
+        'Economic_Risk_Index',
+        'Design_Risk_Score',
+        'Contractor_Risk_Score',
+        'Weather_Risk_Score',
+        'Rate_per_SQFT',
+        'Initial_Value'
+    ];
+
+    const buildMLPayload = (formValues) => {
+        // Filter to only send ML-expected fields
+        const payload = {};
+        ML_EXPECTED_FIELDS.forEach(field => {
+            if (field in formValues) {
+                payload[field] = formValues[field];
+            }
+        });
+        return payload;
+    };
+
     const predictCost = useCallback(async (formValues) => {
         setLoading(true);
         setError(null);
 
         try {
-            console.log('📤 Request Data:', formValues);
-            console.log('📋 Form Values:', formValues);
+            // Build whitelisted payload (excludes UI-only fields)
+            const mlPayload = buildMLPayload(formValues);
+            
+            console.log('📤 Request Data (filtered):', mlPayload);
+            console.log('📋 Full Form Values:', formValues);
 
-            const response = await costApi.predictCost(formValues);
+            const response = await costApi.predictCost(mlPayload);
 
             console.log('📥 Response Data:', response.data);
 

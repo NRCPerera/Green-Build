@@ -69,6 +69,10 @@ api.interceptors.response.use(
 
 export const parseApiError = (error) => {
     if (axios.isAxiosError(error)) {
+        if (error.response?.data?.userMessage) {
+            return error.response.data.userMessage;
+        }
+
         if (error.response?.data?.message) {
             return error.response.data.message;
         }

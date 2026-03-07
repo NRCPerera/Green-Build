@@ -45,8 +45,12 @@ const CostPredictionView = ({ project, onBack }) => {
         Initial_Value: 0
     });
 
+    const [initialValueMode, setInitialValueMode] = useState('auto'); // 'auto' or 'manual'
+    const [startDate, setStartDate] = useState(''); // Store the selected start date
+
     const [availableDistricts, setAvailableDistricts] = useState([]);
     const [isFormExpanded, setIsFormExpanded] = useState(false);
+    const [validationErrors, setValidationErrors] = useState([]);
     const [indicatorTouched, setIndicatorTouched] = useState({
         Inflation_Rate: false,
         Exchange_Rate_LKR: false,
@@ -118,27 +122,37 @@ const CostPredictionView = ({ project, onBack }) => {
 
             // Derive timeline fields from startDate
             let startMonth = 0, startQuarter = 0, startWeekday = 0, yearOfTender = 0, season = '';
+            let formattedStartDate = '';
             if (project.startDate) {
-                const startDate = new Date(project.startDate);
-                if (!isNaN(startDate.getTime())) {
-                    startMonth = startDate.getMonth() + 1; // 1-12
+                const startDateObj = new Date(project.startDate);
+                if (!isNaN(startDateObj.getTime())) {
+                    startMonth = startDateObj.getMonth() + 1; // 1-12
                     startQuarter = Math.ceil(startMonth / 3); // 1-4
-                    startWeekday = startDate.getDay(); // 0-6
-                    yearOfTender = startDate.getFullYear();
+                    startWeekday = startDateObj.getDay(); // 0-6
+                    yearOfTender = startDateObj.getFullYear();
+                    
+                    // Format date for input[type="date"] (YYYY-MM-DD)
+                    formattedStartDate = startDateObj.toISOString().split('T')[0];
+                    
                     // Determine season based on Sri Lanka monsoon patterns
-                    // May-Sep = Monsoon (SW), Oct-Jan = Monsoon (NE), Feb-Apr = Dry
                     if (startMonth >= 5 && startMonth <= 9) {
-                        season = 'Monsoon';
+                        season = 'Southwest-Monsoon'; // May-Sep
                     } else if (startMonth >= 10 || startMonth <= 1) {
-                        season = 'Monsoon';
+                        season = 'Northeast-Monsoon'; // Oct-Jan
+                    } else if (startMonth >= 2 && startMonth <= 4) {
+                        season = 'Inter-Monsoon'; // Feb-Apr
                     } else {
-                        season = 'Dry';
+                        season = 'Dry-Season';
                     }
                 }
             }
 
             // Compute Rate per SQFT if we have both budget and area
             const ratePerSqft = (areaSqft > 0 && budget > 0) ? Math.round(budget / areaSqft) : 0;
+
+            if (formattedStartDate) {
+                setStartDate(formattedStartDate);
+            }
 
             setFormValues(prev => ({
                 ...prev,
@@ -168,6 +182,18 @@ const CostPredictionView = ({ project, onBack }) => {
         }
     }, [formValues.Province]);
 
+    // Auto-calculate Initial_Value from Area_SQFT × Rate_per_SQFT
+    useEffect(() => {
+        if (initialValueMode === 'auto') {
+            const area = Number(formValues.Area_SQFT) || 0;
+            const rate = Number(formValues.Rate_per_SQFT) || 0;
+            const calculated = area * rate;
+            if (calculated !== formValues.Initial_Value) {
+                setFormValues(prev => ({ ...prev, Initial_Value: Math.round(calculated * 100) / 100 }));
+            }
+        }
+    }, [formValues.Area_SQFT, formValues.Rate_per_SQFT, initialValueMode]);
+
     useEffect(() => {
         return () => {
             if (fetchDebounceRef.current) {
@@ -176,8 +202,55 @@ const CostPredictionView = ({ project, onBack }) => {
         };
     }, []);
 
+    const validateForm = () => {
+        const errors = [];
+
+        // Required dropdown fields
+        if (!formValues.Project_Type) errors.push('Please select a Project Type');
+        if (!formValues.Province) errors.push('Please select a Province');
+        if (!formValues.CIDA_Grade) errors.push('Please select a CIDA Grade');
+        if (!formValues.Season) errors.push('Please select a Season');
+
+        // Numeric range validations
+        const val = formValues;
+        if (val.Floors < 1 || val.Floors > 60) errors.push('Floors must be between 1 and 60');
+        if (val.Area_SQFT < 500 || val.Area_SQFT > 200000) errors.push('Area must be between 500 and 200,000 SQFT');
+        if (val.Rate_per_SQFT < 2000 || val.Rate_per_SQFT > 100000) errors.push('Rate per SQFT must be between 2,000 and 100,000 LKR');
+        if (val.Year_of_Tender < 2015 || val.Year_of_Tender > 2026) errors.push('Year of Tender must be between 2015 and 2026');
+        if (val.Initial_Period_Months < 1 || val.Initial_Period_Months > 100) errors.push('Initial Duration must be between 1 and 100 months');
+        if (val.Contractor_Experience_Years < 0 || val.Contractor_Experience_Years > 50) errors.push('Contractor Experience must be between 0 and 50 years');
+        if (val.Change_Order_Freq < 0 || val.Change_Order_Freq > 50) errors.push('Change Order Frequency must be between 0 and 50');
+        if (val.Complexity_Score < 1 || val.Complexity_Score > 10) errors.push('Complexity Score must be between 1 and 10');
+        
+        // Economic indicators
+        if (val.Inflation_Rate < -10 || val.Inflation_Rate > 50) errors.push('Inflation Rate must be between -10% and 50%');
+        if (val.Material_Index < 50 || val.Material_Index > 500) errors.push('Material Index must be between 50 and 500');
+        if (val.Exchange_Rate_LKR < 100 || val.Exchange_Rate_LKR > 500) errors.push('Exchange Rate must be between 100 and 500');
+        if (val.Project_Size_Index < 0 || val.Project_Size_Index > 10) errors.push('Project Size Index must be between 0 and 10');
+        if (val.Economic_Risk_Index < 0 || val.Economic_Risk_Index > 10) errors.push('Economic Risk Index must be between 0 and 10');
+        
+        // Risk scores (already constrained by sliders, but double-check)
+        if (val.Design_Completeness < 0 || val.Design_Completeness > 100) errors.push('Design Completeness must be between 0% and 100%');
+        if (val.Design_Risk_Score < 1 || val.Design_Risk_Score > 10) errors.push('Design Risk Score must be between 1 and 10');
+        if (val.Contractor_Risk_Score < 1 || val.Contractor_Risk_Score > 10) errors.push('Contractor Risk Score must be between 1 and 10');
+        if (val.Weather_Risk_Score < 1 || val.Weather_Risk_Score > 10) errors.push('Weather Risk Score must be between 1 and 10');
+
+        return errors;
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
+        
+        // Validate form
+        const errors = validateForm();
+        setValidationErrors(errors);
+        
+        if (errors.length > 0) {
+            // Scroll to top to show errors
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            return;
+        }
+        
         await predictCost(formValues);
     };
 
@@ -189,6 +262,11 @@ const CostPredictionView = ({ project, onBack }) => {
     const parseFloatOrEmpty = (val) => {
         const n = parseFloat(val);
         return Number.isNaN(n) ? '' : n;
+    };
+
+    const parseFloatTwoDecimals = (val) => {
+        const n = parseFloat(val);
+        return Number.isNaN(n) ? '' : Math.round(n * 100) / 100;
     };
 
     const applyFetchedIndicators = (fetchedValues, forceUpdate = false) => {
@@ -249,6 +327,10 @@ const CostPredictionView = ({ project, onBack }) => {
             setIndicatorTouched((prev) => ({ ...prev, [key]: true }));
             clearIndicatorsError();
         }
+        // Clear validation errors when user makes changes
+        if (validationErrors.length > 0) {
+            setValidationErrors([]);
+        }
         setFormValues((prev) => ({ ...prev, [key]: parsed }));
     };
 
@@ -259,6 +341,47 @@ const CostPredictionView = ({ project, onBack }) => {
             Material_Index: false,
         });
         await runEconomicIndicatorsFetch(true);
+    };
+
+    const handleStartDateChange = (e) => {
+        const dateValue = e.target.value;
+        setStartDate(dateValue);
+        
+        if (dateValue) {
+            const date = new Date(dateValue);
+            if (!isNaN(date.getTime())) {
+                const month = date.getMonth() + 1; // 1-12
+                const quarter = Math.ceil(month / 3); // 1-4
+                const weekday = date.getDay(); // 0-6 (Sun-Sat)
+                const year = date.getFullYear();
+                
+                // Determine season based on Sri Lanka monsoon patterns
+                let season = '';
+                if (month >= 5 && month <= 9) {
+                    season = 'Southwest-Monsoon'; // May-Sep
+                } else if (month >= 10 || month <= 1) {
+                    season = 'Northeast-Monsoon'; // Oct-Jan
+                } else if (month >= 2 && month <= 4) {
+                    season = 'Inter-Monsoon'; // Feb-Apr
+                } else {
+                    season = 'Dry-Season';
+                }
+                
+                // Clear validation errors when user makes changes
+                if (validationErrors.length > 0) {
+                    setValidationErrors([]);
+                }
+                
+                setFormValues(prev => ({
+                    ...prev,
+                    Start_Month: month,
+                    Start_Quarter: quarter,
+                    Start_Weekday: weekday,
+                    Year_of_Tender: year,
+                    Season: season
+                }));
+            }
+        }
     };
 
     return (
@@ -337,11 +460,15 @@ const CostPredictionView = ({ project, onBack }) => {
                                     value={formValues.Project_Type}
                                     onChange={handleChange('Project_Type')}
                                     className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                                    required
                                 >
                                     <option value="">Select Project Type</option>
-                                    <option value="Residential">Residential</option>
-                                    <option value="Apartment">Apartment</option>
-                                    <option value="Industrial">Industrial</option>
+                                    <option value="Residential-House">Residential - House</option>
+                                    <option value="Residential-Apartment">Residential - Apartment</option>
+                                    <option value="Commercial-Building">Commercial Building</option>
+                                    <option value="Industrial-Building">Industrial Building</option>
+                                    <option value="Infrastructure">Infrastructure</option>
+                                    <option value="Mixed-Development">Mixed Development</option>
                                 </select>
                             </div>
                             <div>
@@ -376,20 +503,26 @@ const CostPredictionView = ({ project, onBack }) => {
                                     value={formValues.Season}
                                     onChange={handleChange('Season')}
                                     className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                                    required
                                 >
                                     <option value="">Select Season</option>
-                                    <option value="Dry">Dry</option>
-                                    <option value="Monsoon">Monsoon</option>
+                                    <option value="Dry-Season">Dry Season</option>
+                                    <option value="Southwest-Monsoon">Southwest Monsoon (May-Sep)</option>
+                                    <option value="Northeast-Monsoon">Northeast Monsoon (Oct-Jan)</option>
+                                    <option value="Inter-Monsoon">Inter-Monsoon (Feb-Apr)</option>
                                 </select>
                             </div>
                             <div>
                                 <label className="block text-xs font-medium text-gray-400 mb-1">Year of Tender</label>
                                 <input
                                     type="number"
-                                    min="1900"
+                                    min="2015"
+                                    max="2026"
+                                    step="1"
                                     value={formValues.Year_of_Tender}
                                     onChange={handleChange('Year_of_Tender', parseIntOrEmpty)}
                                     className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                                    required
                                 />
                             </div>
                             <div>
@@ -398,11 +531,16 @@ const CostPredictionView = ({ project, onBack }) => {
                                     value={formValues.CIDA_Grade}
                                     onChange={handleChange('CIDA_Grade')}
                                     className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                                    required
                                 >
                                     <option value="">Select CIDA Grade</option>
-                                    <option value="C1">C1</option>
-                                    <option value="C2">C2</option>
-                                    <option value="C3">C3</option>
+                                    <option value="C1">C1 - Unlimited Value</option>
+                                    <option value="C2">C2 - Up to 500M</option>
+                                    <option value="C3">C3 - Up to 200M</option>
+                                    <option value="C4">C4 - Up to 75M</option>
+                                    <option value="C5">C5 - Up to 25M</option>
+                                    <option value="C6">C6 - Up to 10M</option>
+                                    <option value="C7">C7 - Up to 3M</option>
                                 </select>
                             </div>
                         </div>
@@ -417,42 +555,73 @@ const CostPredictionView = ({ project, onBack }) => {
                                 <input
                                     type="number"
                                     min="1"
+                                    max="60"
+                                    step="1"
                                     value={formValues.Floors}
                                     onChange={handleChange('Floors', parseIntOrEmpty)}
                                     className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                                    required
                                 />
+                                <p className="text-[10px] text-gray-500 mt-0.5">Range: 1-60 floors</p>
                             </div>
                             <div>
                                 <label className="block text-xs font-medium text-gray-400 mb-1">Area (SQFT)</label>
                                 <input
                                     type="number"
-                                    min="1"
+                                    min="500"
+                                    max="200000"
+                                    step="0.01"
                                     value={formValues.Area_SQFT}
                                     onChange={handleChange('Area_SQFT', parseFloatOrEmpty)}
                                     className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                                    required
                                 />
+                                <p className="text-[10px] text-gray-500 mt-0.5">Range: 500-200,000 SQFT</p>
                             </div>
                             <div>
-                                <label className="block text-xs font-medium text-gray-400 mb-1">Rate per SQFT</label>
+                                <label className="block text-xs font-medium text-gray-400 mb-1">Rate per SQFT (LKR)</label>
                                 <input
                                     type="number"
-                                    min="0"
+                                    min="2000"
+                                    max="100000"
+                                    step="0.01"
                                     value={formValues.Rate_per_SQFT}
                                     onChange={handleChange('Rate_per_SQFT', parseFloatOrEmpty)}
                                     className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                                    required
                                 />
+                                <p className="text-[10px] text-gray-500 mt-0.5">Range: 2,000-100,000 LKR</p>
                             </div>
                             <div>
-                                <label className="block text-xs font-medium text-gray-400 mb-1">Initial Value</label>
+                                <div className="flex items-center justify-between mb-1">
+                                    <label className="block text-xs font-medium text-gray-400">Initial Value (LKR)</label>
+                                    <button
+                                        type="button"
+                                        onClick={() => setInitialValueMode(initialValueMode === 'auto' ? 'manual' : 'auto')}
+                                        className={`text-[10px] px-2 py-0.5 rounded border ${
+                                            initialValueMode === 'auto'
+                                                ? 'border-green-500/40 text-green-400 bg-green-500/10'
+                                                : 'border-yellow-500/40 text-yellow-400 bg-yellow-500/10'
+                                        }`}
+                                    >
+                                        {initialValueMode === 'auto' ? '🔄 Auto' : '✏️ Manual'}
+                                    </button>
+                                </div>
                                 <input
                                     type="number"
                                     min="0"
+                                    max="20000000000"
+                                    step="0.01"
                                     value={formValues.Initial_Value}
                                     onChange={handleChange('Initial_Value', parseFloatOrEmpty)}
+                                    onFocus={() => setInitialValueMode('manual')}
                                     className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                                    required
                                 />
+                                <p className="text-[10px] text-gray-500 mt-0.5">
+                                    {initialValueMode === 'auto' ? 'Auto: Area × Rate' : 'Manual override'}
+                                </p>
                             </div>
-
                         </div>
 
                         {/* ── Section: Timeline ── */}
@@ -465,46 +634,27 @@ const CostPredictionView = ({ project, onBack }) => {
                                 <input
                                     type="number"
                                     min="1"
+                                    max="100"
+                                    step="0.1"
                                     value={formValues.Initial_Period_Months}
                                     onChange={handleChange('Initial_Period_Months', parseFloatOrEmpty)}
                                     className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                                    required
                                 />
+                                <p className="text-[10px] text-gray-500 mt-0.5">Range: 1-100 months</p>
                             </div>
 
-                            <div className="grid grid-cols-3 gap-3 col-span-full">
-                                <div>
-                                    <label className="block text-xs font-medium text-gray-400 mb-1">Start Month</label>
-                                    <input
-                                        type="number"
-                                        min="1"
-                                        max="12"
-                                        value={formValues.Start_Month}
-                                        onChange={handleChange('Start_Month', parseIntOrEmpty)}
-                                        className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-medium text-gray-400 mb-1">Start Quarter</label>
-                                    <input
-                                        type="number"
-                                        min="1"
-                                        max="4"
-                                        value={formValues.Start_Quarter}
-                                        onChange={handleChange('Start_Quarter', parseIntOrEmpty)}
-                                        className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
-                                    />
-                                </div>
-                                <div>
-                                    <label className="block text-xs font-medium text-gray-400 mb-1">Start Weekday</label>
-                                    <input
-                                        type="number"
-                                        min="0"
-                                        max="6"
-                                        value={formValues.Start_Weekday}
-                                        onChange={handleChange('Start_Weekday', parseIntOrEmpty)}
-                                        className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
-                                    />
-                                </div>
+                            <div className="col-span-full">
+                                <label className="block text-xs font-medium text-gray-400 mb-1">Project Start Date</label>
+                                <input
+                                    type="date"
+                                    value={startDate}
+                                    onChange={handleStartDateChange}
+                                    className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                                />
+                                <p className="text-[10px] text-gray-500 mt-1">
+                                    Auto-calculates: Month ({formValues.Start_Month || '-'}), Quarter ({formValues.Start_Quarter || '-'}), Weekday ({formValues.Start_Weekday !== '' ? ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][formValues.Start_Weekday] : '-'}), Season
+                                </p>
                             </div>
                         </div>
 
@@ -514,46 +664,58 @@ const CostPredictionView = ({ project, onBack }) => {
                         </div>
                         <div className={`grid ${isFormExpanded ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4' : 'grid-cols-2'} gap-3`}>
                             <div>
-                                <label className="block text-xs font-medium text-gray-400 mb-1">Inflation Rate</label>
+                                <label className="block text-xs font-medium text-gray-400 mb-1">Inflation Rate (%)</label>
                                 <input
                                     type="number"
-                                    min="0"
+                                    min="-10"
+                                    max="50"
                                     step="0.01"
                                     value={formValues.Inflation_Rate}
                                     onChange={handleChange('Inflation_Rate', parseFloatOrEmpty)}
                                     className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
                                 />
+                                <p className="text-[10px] text-gray-500 mt-0.5">Range: -10 to 50%</p>
                             </div>
                             <div>
                                 <label className="block text-xs font-medium text-gray-400 mb-1">Material Price Index</label>
                                 <input
                                     type="number"
-                                    min="0"
+                                    min="50"
+                                    max="500"
+                                    step="0.01"
                                     value={formValues.Material_Index}
                                     onChange={handleChange('Material_Index', parseFloatOrEmpty)}
                                     className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
                                 />
+                                <p className="text-[10px] text-gray-500 mt-0.5">Range: 50-500</p>
                             </div>
                             <div>
-                                <label className="block text-xs font-medium text-gray-400 mb-1">Exchange Rate</label>
+                                <label className="block text-xs font-medium text-gray-400 mb-1">Exchange Rate (LKR/USD)</label>
                                 <input
                                     type="number"
-                                    min="0"
-                                    value={formValues.Exchange_Rate_LKR}
-                                    onChange={handleChange('Exchange_Rate_LKR', parseFloatOrEmpty)}
+                                    min="100"
+                                    max="500"
+                                    step="0.01"
+                                    value={formValues.Exchange_Rate_LKR !== '' && formValues.Exchange_Rate_LKR !== 0 
+                                        ? Number(formValues.Exchange_Rate_LKR).toFixed(2) 
+                                        : formValues.Exchange_Rate_LKR}
+                                    onChange={handleChange('Exchange_Rate_LKR', parseFloatTwoDecimals)}
                                     className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
                                 />
+                                <p className="text-[10px] text-gray-500 mt-0.5">Range: 100-500</p>
                             </div>
                             <div>
                                 <label className="block text-xs font-medium text-gray-400 mb-1">Project Size Index</label>
                                 <input
                                     type="number"
                                     min="0"
+                                    max="10"
                                     step="0.01"
                                     value={formValues.Project_Size_Index}
                                     onChange={handleChange('Project_Size_Index', parseFloatOrEmpty)}
                                     className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
                                 />
+                                <p className="text-[10px] text-gray-500 mt-0.5">Range: 0-10</p>
                             </div>
                         </div>
                         <div className="mt-3 p-3 border border-teal-500/20 bg-teal-500/5 rounded-lg">
@@ -595,41 +757,60 @@ const CostPredictionView = ({ project, onBack }) => {
                                 <input
                                     type="number"
                                     min="0"
+                                    max="50"
+                                    step="1"
                                     value={formValues.Contractor_Experience_Years}
                                     onChange={handleChange('Contractor_Experience_Years', parseIntOrEmpty)}
                                     className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
                                 />
+                                <p className="text-[10px] text-gray-500 mt-0.5">Range: 0-50 years</p>
                             </div>
                             <div>
                                 <label className="block text-xs font-medium text-gray-400 mb-1">Economic Risk Index</label>
                                 <input
                                     type="number"
                                     min="0"
+                                    max="10"
+                                    step="0.01"
                                     value={formValues.Economic_Risk_Index}
                                     onChange={handleChange('Economic_Risk_Index', parseFloatOrEmpty)}
                                     className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
                                 />
+                                <p className="text-[10px] text-gray-500 mt-0.5">Range: 0-10</p>
                             </div>
                             <div>
                                 <label className="block text-xs font-medium text-gray-400 mb-1">Change Order Frequency</label>
                                 <input
                                     type="number"
                                     min="0"
+                                    max="50"
+                                    step="1"
                                     value={formValues.Change_Order_Freq}
                                     onChange={handleChange('Change_Order_Freq', parseIntOrEmpty)}
                                     className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
                                 />
+                                <p className="text-[10px] text-gray-500 mt-0.5">Range: 0-50</p>
                             </div>
                             <div>
-                                <label className="block text-xs font-medium text-gray-400 mb-1">Project Complexity Score</label>
-                                <input
-                                    type="number"
-                                    min="0"
-                                    step="0.01"
-                                    value={formValues.Complexity_Score}
-                                    onChange={handleChange('Complexity_Score', parseIntOrEmpty)}
-                                    className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
-                                />
+                                <label className="block text-xs font-medium text-gray-400 mb-1">Project Complexity Score (1-10)</label>
+                                <div className="flex items-center gap-3">
+                                    <input
+                                        type="range"
+                                        min="1"
+                                        max="10"
+                                        step="1"
+                                        value={formValues.Complexity_Score || 1}
+                                        onChange={handleChange('Complexity_Score', parseIntOrEmpty)}
+                                        className="flex-1 h-2 bg-dark-700 rounded-lg appearance-none cursor-pointer slider-thumb"
+                                        style={{
+                                            accentColor: '#eab308'
+                                        }}
+                                    />
+                                    <span className="w-12 text-center px-2 py-1 bg-dark-700 border border-yellow-500/30 rounded text-sm text-yellow-300 font-semibold">
+                                        {formValues.Complexity_Score || 1}
+                                    </span>
+                                </div>
+                                <p className="text-[10px] text-gray-500 mt-1">1 = Simple, 10 = Highly Complex</p>
                             </div>
                         </div>
 
@@ -637,49 +818,103 @@ const CostPredictionView = ({ project, onBack }) => {
                         <div className="border-t border-white/[0.06] pt-4">
                             <p className="text-[11px] uppercase tracking-widest text-pink-400/70 font-semibold mb-3 flex items-center gap-1.5"><span>🎯</span> Risk Scores</p>
                         </div>
-                        <div className={`grid ${isFormExpanded ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4' : 'grid-cols-2'} gap-3`}>
+                        <div className={`grid ${isFormExpanded ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'} gap-4`}>
                             <div>
-                                <label className="block text-xs font-medium text-gray-400 mb-1">Design Risk Score</label>
-                                <input
-                                    type="number"
-                                    min="0"
-                                    value={formValues.Design_Risk_Score}
-                                    onChange={handleChange('Design_Risk_Score', parseFloatOrEmpty)}
-                                    className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
-                                />
+                                <label className="block text-xs font-medium text-gray-400 mb-1">Design Completeness (%)</label>
+                                <div className="flex items-center gap-3">
+                                    <input
+                                        type="range"
+                                        min="0"
+                                        max="100"
+                                        step="1"
+                                        value={formValues.Design_Completeness || 0}
+                                        onChange={handleChange('Design_Completeness', parseIntOrEmpty)}
+                                        className="flex-1 h-2 bg-dark-700 rounded-lg appearance-none cursor-pointer slider-thumb"
+                                        style={{
+                                            accentColor: '#eab308'
+                                        }}
+                                    />
+                                    <span className="w-16 text-center px-2 py-1 bg-dark-700 border border-yellow-500/30 rounded text-sm text-yellow-300 font-semibold">
+                                        {formValues.Design_Completeness || 0}%
+                                    </span>
+                                </div>
+                                <p className="text-[10px] text-gray-500 mt-1">0% = Not started, 100% = Fully complete</p>
                             </div>
                             <div>
-                                <label className="block text-xs font-medium text-gray-400 mb-1">Contractor Risk Score</label>
-                                <input
-                                    type="number"
-                                    min="0"
-                                    value={formValues.Contractor_Risk_Score}
-                                    onChange={handleChange('Contractor_Risk_Score', parseFloatOrEmpty)}
-                                    className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
-                                />
+                                <label className="block text-xs font-medium text-gray-400 mb-1">Design Risk Score (1-10)</label>
+                                <div className="flex items-center gap-3">
+                                    <input
+                                        type="range"
+                                        min="1"
+                                        max="10"
+                                        step="1"
+                                        value={formValues.Design_Risk_Score || 1}
+                                        onChange={handleChange('Design_Risk_Score', parseIntOrEmpty)}
+                                        className="flex-1 h-2 bg-dark-700 rounded-lg appearance-none cursor-pointer slider-thumb"
+                                        style={{
+                                            accentColor: '#eab308'
+                                        }}
+                                    />
+                                    <span className="w-12 text-center px-2 py-1 bg-dark-700 border border-yellow-500/30 rounded text-sm text-yellow-300 font-semibold">
+                                        {formValues.Design_Risk_Score || 1}
+                                    </span>
+                                </div>
+                                <p className="text-[10px] text-gray-500 mt-1">1 = Low risk, 10 = High risk</p>
                             </div>
                             <div>
-                                <label className="block text-xs font-medium text-gray-400 mb-1">Weather Risk Score</label>
-                                <input
-                                    type="number"
-                                    min="0"
-                                    value={formValues.Weather_Risk_Score}
-                                    onChange={handleChange('Weather_Risk_Score', parseFloatOrEmpty)}
-                                    className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
-                                />
+                                <label className="block text-xs font-medium text-gray-400 mb-1">Contractor Risk Score (1-10)</label>
+                                <div className="flex items-center gap-3">
+                                    <input
+                                        type="range"
+                                        min="1"
+                                        max="10"
+                                        step="1"
+                                        value={formValues.Contractor_Risk_Score || 1}
+                                        onChange={handleChange('Contractor_Risk_Score', parseIntOrEmpty)}
+                                        className="flex-1 h-2 bg-dark-700 rounded-lg appearance-none cursor-pointer slider-thumb"
+                                        style={{
+                                            accentColor: '#eab308'
+                                        }}
+                                    />
+                                    <span className="w-12 text-center px-2 py-1 bg-dark-700 border border-yellow-500/30 rounded text-sm text-yellow-300 font-semibold">
+                                        {formValues.Contractor_Risk_Score || 1}
+                                    </span>
+                                </div>
+                                <p className="text-[10px] text-gray-500 mt-1">1 = Low risk, 10 = High risk</p>
                             </div>
                             <div>
-                                <label className="block text-xs font-medium text-gray-400 mb-1">Design Completeness</label>
-                                <input
-                                    type="number"
-                                    min="0"
-                                    step="0.01"
-                                    value={formValues.Design_Completeness}
-                                    onChange={handleChange('Design_Completeness', parseFloatOrEmpty)}
-                                    className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
-                                />
+                                <label className="block text-xs font-medium text-gray-400 mb-1">Weather Risk Score (1-10)</label>
+                                <div className="flex items-center gap-3">
+                                    <input
+                                        type="range"
+                                        min="1"
+                                        max="10"
+                                        step="1"
+                                        value={formValues.Weather_Risk_Score || 1}
+                                        onChange={handleChange('Weather_Risk_Score', parseIntOrEmpty)}
+                                        className="flex-1 h-2 bg-dark-700 rounded-lg appearance-none cursor-pointer slider-thumb"
+                                        style={{
+                                            accentColor: '#eab308'
+                                        }}
+                                    />
+                                    <span className="w-12 text-center px-2 py-1 bg-dark-700 border border-yellow-500/30 rounded text-sm text-yellow-300 font-semibold">
+                                        {formValues.Weather_Risk_Score || 1}
+                                    </span>
+                                </div>
+                                <p className="text-[10px] text-gray-500 mt-1">1 = Low risk, 10 = High risk</p>
                             </div>
                         </div>
+
+                        {validationErrors.length > 0 && (
+                            <div className="p-4 bg-red-500/10 border border-red-500/30 rounded-lg">
+                                <p className="text-sm font-semibold text-red-400 mb-2">⚠️ Please fix the following errors:</p>
+                                <ul className="list-disc list-inside space-y-1 text-xs text-red-300">
+                                    {validationErrors.map((err, idx) => (
+                                        <li key={idx}>{err}</li>
+                                    ))}
+                                </ul>
+                            </div>
+                        )}
 
                         {error && (
                             <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg text-sm">
@@ -731,6 +966,28 @@ const CostPredictionView = ({ project, onBack }) => {
                                             className={`h-full transition-all ${hasProbability ? ((probabilityValue ?? 0) > 0.7 ? 'bg-red-500' : (probabilityValue ?? 0) > 0.4 ? 'bg-yellow-500' : 'bg-green-500') : 'bg-gray-500'}`}
                                             style={{ width: hasProbability ? `${((probabilityValue ?? 0) * 100)}%` : '0%' }}
                                         />
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="bg-dark-800/70 border border-white/5 rounded-2xl p-6">
+                                <h3 className="text-lg font-semibold text-white mb-4">Budget Summary</h3>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div className="p-4 bg-dark-700/50 rounded-lg border border-blue-500/20">
+                                        <p className="text-sm text-gray-400 mb-1">Initial Budget</p>
+                                        <p className="text-2xl font-bold text-blue-400">
+                                            {formValues.Initial_Value > 0 
+                                                ? `${(formValues.Initial_Value / 1000000).toFixed(1)}M LKR` 
+                                                : 'N/A'}
+                                        </p>
+                                    </div>
+                                    <div className="p-4 bg-dark-700/50 rounded-lg border border-amber-500/20">
+                                        <p className="text-sm text-gray-400 mb-1">Predicted Final Cost</p>
+                                        <p className="text-2xl font-bold text-amber-400">
+                                            {formValues.Initial_Value > 0 && overrunPct != null
+                                                ? `${((formValues.Initial_Value + (formValues.Initial_Value * overrunPct / 100)) / 1000000).toFixed(1)}M LKR`
+                                                : 'N/A'}
+                                        </p>
                                     </div>
                                 </div>
                             </div>
