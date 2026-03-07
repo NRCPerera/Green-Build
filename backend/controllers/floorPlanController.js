@@ -155,7 +155,7 @@ const uploadFloorPlan = async (req, res) => {
             calculatedAt: new Date()
         };
 
-        floorPlan.status = 'processed';
+        floorPlan.status = 'detected';
         await floorPlan.save();
 
         // Generate BOQ Report
@@ -164,6 +164,7 @@ const uploadFloorPlan = async (req, res) => {
         // Add wall-related items
         if (floorPlan.mlAnalysis.walls.netSurfaceArea > 0) {
             boqItems.push({
+                section: 'finishes',
                 category: 'walls',
                 itemName: 'Wall Painting',
                 description: 'Interior wall painting with primer and two coats',
@@ -174,6 +175,7 @@ const uploadFloorPlan = async (req, res) => {
                 source: 'ml-detected'
             });
             boqItems.push({
+                section: 'finishes',
                 category: 'walls',
                 itemName: 'Wall Plastering',
                 description: 'Cement plaster finishing',
@@ -188,6 +190,7 @@ const uploadFloorPlan = async (req, res) => {
         // Add door items
         if (floorPlan.mlAnalysis.doors.count > 0) {
             boqItems.push({
+                section: 'doors_windows',
                 category: 'doors',
                 itemName: 'Interior Doors',
                 description: 'Standard wooden doors with frames and hardware',
@@ -202,6 +205,7 @@ const uploadFloorPlan = async (req, res) => {
         // Add window items
         if (floorPlan.mlAnalysis.windows.count > 0) {
             boqItems.push({
+                section: 'doors_windows',
                 category: 'windows',
                 itemName: 'Windows',
                 description: 'Aluminum sliding windows with glass',
@@ -217,6 +221,7 @@ const uploadFloorPlan = async (req, res) => {
         const totalFloorArea = mlData.room_detection?.total_floor_area_m2 || 0;
         if (totalFloorArea > 0) {
             boqItems.push({
+                section: 'finishes',
                 category: 'flooring',
                 itemName: 'Floor Tiling',
                 description: 'Ceramic floor tiles with installation',
@@ -279,10 +284,8 @@ const uploadFloorPlan = async (req, res) => {
 
         await project.save();
 
-        // Clean up temp file
-        if (tempFilePath && fs.existsSync(tempFilePath)) {
-            fs.unlinkSync(tempFilePath);
-        }
+        // Note: Keep the uploaded file in uploads/ — it's referenced by floorPlan.filePath
+        // and needed for reanalysis, serving to frontend, etc.
 
         const processingTime = Date.now() - startTime;
         console.log(`[FloorPlan] Complete in ${processingTime}ms`);
@@ -577,7 +580,7 @@ const reanalyzeFloorPlan = async (req, res) => {
                 }
             });
 
-            floorPlan.status = 'processed';
+            floorPlan.status = 'detected';
             await floorPlan.save();
 
             res.json({

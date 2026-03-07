@@ -62,7 +62,42 @@ const checkHealth = async () => {
     }
 };
 
+/**
+ * Generates 3D geometry data from a floor plan image.
+ * The service extracts walls, doors, and windows as polygons
+ * suitable for Three.js visualization.
+ * 
+ * @param {string} filePath - Path to the uploaded image file
+ * @param {number} scale - Scale factor in pixels per meter
+ * @param {number} wallHeight - Wall height in meters
+ * @returns {Promise<Object>} 3D geometry data with walls, doors, windows
+ * @throws {Error} If the service is unavailable or processing fails
+ */
+const generate3DGeometry = async (filePath, scale, wallHeight) => {
+    const formData = new FormData();
+
+    formData.append('file', fs.createReadStream(filePath));
+    formData.append('scale_ppm', scale.toString());
+    formData.append('wall_height', wallHeight.toString());
+
+    const response = await axios.post(
+        `${config.pythonServiceUrl}/generate-3d-geometry`,
+        formData,
+        {
+            headers: {
+                ...formData.getHeaders()
+            },
+            timeout: 60000,
+            maxContentLength: Infinity,
+            maxBodyLength: Infinity
+        }
+    );
+
+    return response.data;
+};
+
 module.exports = {
     calculateQuantities,
-    checkHealth
+    checkHealth,
+    generate3DGeometry
 };

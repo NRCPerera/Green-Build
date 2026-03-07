@@ -1,15 +1,18 @@
-# FastAPI and server
-fastapi>=0.109.0
-uvicorn[standard]>=0.27.0
-pydantic>=2.5.3
+# Sustainability ML Service Requirements
+# ================================================
 
 # Machine Learning
-tensorflow>=2.18.0
+tensorflow>=2.15.0
 scikit-learn>=1.4.0
+joblib>=1.3.2
+
+# Explainability
+shap>=0.43.0
 
 # Data processing
 pandas>=2.2.0
-numpy>=1.26.0
+numpy>=1.26.3
 
-# Additional utilities
-python-multipart>=0.0.6
+# API Framework
+fastapi>=0.109.0
+uvicorn>=0.27.0

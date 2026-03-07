@@ -1,7 +1,7 @@
 /**
  * Sustainability Prediction Controller
  * 
- * Handles communication with the Sustainability ML Service
+ * Handles communication with the Sustainability ML Service (Flask)
  */
 
 const axios = require('axios');
@@ -11,6 +11,7 @@ const getMLServiceUrl = () => process.env.SUSTAINABILITY_ML_SERVICE_URL || 'http
 
 /**
  * Handle full sustainability analysis (all 3 models)
+ * Maps React frontend data to Flask backend format
  */
 const handleFullAnalysis = async (req, res) => {
     try {
@@ -27,20 +28,71 @@ const handleFullAnalysis = async (req, res) => {
         const mlServiceUrl = getMLServiceUrl();
         console.log(`[Full Analysis] Sending request to ML service: ${mlServiceUrl}`);
 
+        // Map React frontend field names to Flask backend format
+        const flaskData = {
+            Area_SQFT: parseFloat(inputData.areaSqft || inputData.Area_SQFT || 2000),
+            Floors: parseInt(inputData.floors || inputData.Floors || 2),
+            Design_Completeness: parseFloat(inputData.designCompleteness || inputData.Design_Completeness || 80),
+            Contractor_Experience: parseFloat(inputData.contractorExperienceYears || inputData.contractorExperience || inputData.Contractor_Experience || 10)
+        };
+
+        console.log(`[Full Analysis] Mapped data:`, flaskData);
+
         const response = await axios.post(
-            `${mlServiceUrl}/predict/full-analysis`,
-            inputData,
+            `${mlServiceUrl}/predict`,
+            flaskData,
             {
                 headers: { 'Content-Type': 'application/json' },
                 timeout: 30000
             }
         );
 
-        res.json({
-            success: true,
-            data: response.data,
-            timestamp: new Date().toISOString()
-        });
+        // Map Flask response back to frontend expected format
+        if (response.data.success) {
+            const data = response.data.data;
+
+            res.json({
+                success: true,
+                data: {
+                    // Sustainability
+                    sustainability_score: data.sustainability_score,
+                    sustainability_interpretation: data.sustainability_rating,
+
+                    // Lifecycle Cost
+                    lifecycle_cost_millions_lkr: data.lifecycle_cost_millions,
+                    lifecycle_cost_lkr: data.lifecycle_cost_lkr,
+                    lifecycle_interpretation: `Estimated ${data.lifecycle_cost_millions}M LKR total lifecycle cost`,
+
+                    // Risk
+                    is_high_risk: data.is_high_risk,
+                    risk_probability: data.risk_probability,
+                    risk_level: data.risk_level,
+                    risk_recommendations: data.smart_suggestions || [],
+
+                    // Analysis details
+                    analysis_details: data.analysis_details,
+
+                    // Financials & Engineering
+                    financials: data.financials,
+                    engineering: data.engineering,
+                    cost_breakdown: data.cost_breakdown,
+                    smart_suggestions: data.smart_suggestions,
+
+                    // NEW: SHAP Explainability & Confidence Intervals
+                    shap_analysis: data.shap_analysis || {},
+                    confidence_intervals: data.confidence_intervals || {},
+
+                    // Mode
+                    mode: data.mode
+                },
+                timestamp: new Date().toISOString()
+            });
+        } else {
+            res.status(400).json({
+                success: false,
+                error: response.data.error || 'Analysis failed'
+            });
+        }
 
     } catch (error) {
         handleMLServiceError(error, res, 'Full analysis');
@@ -48,117 +100,43 @@ const handleFullAnalysis = async (req, res) => {
 };
 
 /**
+ * Handle feature importance request (proxies to ML service)
+ */
+const handleFeatureImportance = async (req, res) => {
+    try {
+        const mlServiceUrl = getMLServiceUrl();
+        const response = await axios.get(
+            `${mlServiceUrl}/feature-importance`,
+            { timeout: 10000 }
+        );
+        res.json(response.data);
+    } catch (error) {
+        handleMLServiceError(error, res, 'Feature importance');
+    }
+};
+
+/**
  * Handle sustainability score prediction
  */
 const handleSustainabilityPrediction = async (req, res) => {
-    try {
-        const inputData = req.body;
-
-        if (!inputData || typeof inputData !== 'object') {
-            return res.status(400).json({
-                success: false,
-                error: 'Invalid request',
-                message: 'Request body must contain sustainability input data'
-            });
-        }
-
-        const mlServiceUrl = getMLServiceUrl();
-        console.log(`[Sustainability] Sending request to ML service: ${mlServiceUrl}`);
-
-        const response = await axios.post(
-            `${mlServiceUrl}/predict/sustainability`,
-            inputData,
-            {
-                headers: { 'Content-Type': 'application/json' },
-                timeout: 30000
-            }
-        );
-
-        res.json({
-            success: true,
-            data: response.data,
-            timestamp: new Date().toISOString()
-        });
-
-    } catch (error) {
-        handleMLServiceError(error, res, 'Sustainability prediction');
-    }
+    // Delegate to full analysis - Flask handles all predictions together
+    return handleFullAnalysis(req, res);
 };
 
 /**
  * Handle lifecycle cost prediction
  */
 const handleLifecycleCostPrediction = async (req, res) => {
-    try {
-        const inputData = req.body;
-
-        if (!inputData || typeof inputData !== 'object') {
-            return res.status(400).json({
-                success: false,
-                error: 'Invalid request',
-                message: 'Request body must contain lifecycle cost input data'
-            });
-        }
-
-        const mlServiceUrl = getMLServiceUrl();
-        console.log(`[Lifecycle Cost] Sending request to ML service: ${mlServiceUrl}`);
-
-        const response = await axios.post(
-            `${mlServiceUrl}/predict/lifecycle-cost`,
-            inputData,
-            {
-                headers: { 'Content-Type': 'application/json' },
-                timeout: 30000
-            }
-        );
-
-        res.json({
-            success: true,
-            data: response.data,
-            timestamp: new Date().toISOString()
-        });
-
-    } catch (error) {
-        handleMLServiceError(error, res, 'Lifecycle cost prediction');
-    }
+    // Delegate to full analysis - Flask handles all predictions together
+    return handleFullAnalysis(req, res);
 };
 
 /**
  * Handle risk prediction
  */
 const handleRiskPrediction = async (req, res) => {
-    try {
-        const inputData = req.body;
-
-        if (!inputData || typeof inputData !== 'object') {
-            return res.status(400).json({
-                success: false,
-                error: 'Invalid request',
-                message: 'Request body must contain risk prediction input data'
-            });
-        }
-
-        const mlServiceUrl = getMLServiceUrl();
-        console.log(`[Risk Prediction] Sending request to ML service: ${mlServiceUrl}`);
-
-        const response = await axios.post(
-            `${mlServiceUrl}/predict/risk`,
-            inputData,
-            {
-                headers: { 'Content-Type': 'application/json' },
-                timeout: 30000
-            }
-        );
-
-        res.json({
-            success: true,
-            data: response.data,
-            timestamp: new Date().toISOString()
-        });
-
-    } catch (error) {
-        handleMLServiceError(error, res, 'Risk prediction');
-    }
+    // Delegate to full analysis - Flask handles all predictions together
+    return handleFullAnalysis(req, res);
 };
 
 /**
@@ -169,7 +147,7 @@ const handleMLServiceError = (error, res, context) => {
 
     if (error.response) {
         const status = error.response.status;
-        const detail = error.response.data?.detail || error.message;
+        const detail = error.response.data?.error || error.message;
 
         return res.status(status).json({
             success: false,
@@ -197,5 +175,6 @@ module.exports = {
     handleFullAnalysis,
     handleSustainabilityPrediction,
     handleLifecycleCostPrediction,
-    handleRiskPrediction
+    handleRiskPrediction,
+    handleFeatureImportance
 };

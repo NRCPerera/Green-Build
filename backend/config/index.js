@@ -9,12 +9,12 @@ require('dotenv').config();
 
 const config = {
     // Server settings
-    port: process.env.PORT || 5000,
+    port: process.env.PORT || 5001,
     nodeEnv: process.env.NODE_ENV || 'development',
 
     // External service URLs
     pythonServiceUrl: process.env.PYTHON_SERVICE_URL || 'http://localhost:8000',
-    costMlServiceUrl: process.env.COST_ML_SERVICE_URL || 'http://localhost:8001',
+    costMlServiceUrl: process.env.COST_ML_SERVICE_URL || 'http://localhost:8085',
     delayMlServiceUrl: process.env.DELAY_ML_SERVICE_URL || 'http://localhost:8081',
     frontendUrl: process.env.FRONTEND_URL || '*',
 

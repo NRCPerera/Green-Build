@@ -1,4 +1,4 @@
-"""Main FastAPI application"""
+"""Main FastAPI application - API Only (UI served by React)"""
 
 import logging
 from contextlib import asynccontextmanager
@@ -21,7 +21,8 @@ from app.config import (
 )
 from app.dev_config import DEV_MODE
 from app.services import ModelLoader, Preprocessor, InferenceService
-from app.services.mock_inference import MockInferenceService
+from app.services import MockInferenceService
+from app.services.shap_explainer import SHAPExplainer
 
 # Configure logging
 logging.basicConfig(
@@ -45,6 +46,7 @@ async def lifespan(app: FastAPI):
     
     logger.info("=" * 60)
     logger.info("Starting Sustainability Prediction API")
+    logger.info("(API Only - UI served by React frontend)")
     logger.info("=" * 60)
     
     try:
@@ -86,12 +88,21 @@ async def lifespan(app: FastAPI):
                 feature_scaler=model_loader.feature_scaler
             )
             
-            # Initialize inference service
+            # Initialize SHAP explainer with loaded models
+            logger.info("Initializing SHAP explainer...")
+            shap_explainer = SHAPExplainer(
+                sustainability_model=model_loader.sustainability_model,
+                lifecycle_model=model_loader.lifecycle_cost_model,
+                risk_model=model_loader.risk_prediction_model
+            )
+            
+            # Initialize inference service with SHAP explainer
             inference_service = InferenceService(
                 sustainability_model=model_loader.sustainability_model,
                 lifecycle_cost_model=model_loader.lifecycle_cost_model,
                 risk_prediction_model=model_loader.risk_prediction_model,
-                preprocessor=preprocessor
+                preprocessor=preprocessor,
+                shap_explainer=shap_explainer
             )
         
         # Set the inference service in endpoints module
@@ -99,7 +110,10 @@ async def lifespan(app: FastAPI):
         endpoints.set_inference_service(inference_service)
         
         logger.info("=" * 60)
-        logger.info("Application startup complete - Ready to serve requests")
+        logger.info("API startup complete - Ready to serve requests")
+        logger.info("API Docs:  http://localhost:8003/docs")
+        logger.info("Health:    http://localhost:8003/health")
+        logger.info("Predict:   POST http://localhost:8003/predict")
         logger.info("=" * 60)
         
         yield
@@ -130,16 +144,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include routers
+# Include API routers
 from app.api import endpoints
 app.include_router(endpoints.router)
 
-# Additional health check endpoint
+
+# Health check endpoint
 @app.get("/health")
 async def health_check():
     """Health check endpoint"""
     return {
         "status": "healthy",
         "mode": "development (mock predictions)" if DEV_MODE else "production (real models)",
-        "models_loaded": model_loader.is_loaded() if (not DEV_MODE and model_loader) else False
+        "models_loaded": model_loader.is_loaded() if (not DEV_MODE and model_loader) else False,
+        "version": "3.0-api-only"
     }

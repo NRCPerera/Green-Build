@@ -38,52 +38,97 @@ class MockInferenceService:
         
         return {
             "sustainability_score": round(score, 2),
-            "interpretation": interpretation
+            "interpretation": interpretation,
+            "confidence_interval": {
+                "lower": round(max(0, score - random.uniform(3, 8)), 2),
+                "median": round(score, 2),
+                "upper": round(min(100, score + random.uniform(3, 8)), 2),
+                "std": round(random.uniform(1, 5), 2)
+            },
+            "shap_explanation": {
+                "available": True,
+                "shap_values": {
+                    "Energy (kWh/yr)": round(random.uniform(-5, 5), 4),
+                    "Embodied CO\u2082 (tons)": round(random.uniform(-3, 3), 4),
+                    "Operational CO\u2082 (tons)": round(random.uniform(-4, 2), 4),
+                    "Energy Efficiency": round(random.uniform(0, 8), 4),
+                    "Efficiency per sqft": round(random.uniform(-2, 2), 4),
+                    "Cost/sqft for Sustainability": round(random.uniform(-1, 4), 4),
+                    "CO\u2082 Impact vs Cost": round(random.uniform(-3, 1), 4)
+                },
+                "top_drivers": [
+                    {"feature": "Energy Efficiency", "impact": round(random.uniform(2, 8), 2), "direction": "increases", "description": "Energy Efficiency increases the prediction by " + str(round(random.uniform(2, 8), 2))},
+                    {"feature": "Energy (kWh/yr)", "impact": round(random.uniform(-5, -1), 2), "direction": "decreases", "description": "Energy (kWh/yr) decreases the prediction by " + str(round(random.uniform(1, 5), 2))},
+                    {"feature": "Embodied CO\u2082 (tons)", "impact": round(random.uniform(-3, 3), 2), "direction": "increases", "description": "Embodied CO\u2082 adjusts the prediction by " + str(round(random.uniform(0, 3), 2))}
+                ],
+                "feature_values": {},
+                "model": "sustainability (mock)"
+            }
         }
     
     def predict_lifecycle_cost(self, data: dict) -> dict:
         """
-        Mock lifecycle cost prediction.
+        Mock lifecycle cost prediction - Multi-Output Model.
         
-        Features: construction_cost_per_sqft, maintenance_cost_per_year, energy_kwh_year,
-                  energy_efficiency, sustainability_score, energy_efficiency_per_sqft,
-                  cost_per_sqft_for_sustainability, energy_co2_impact_relative_to_cost
+        Returns 3 scaled predictions:
+        - Initial Cost (scaled by 1,000,000)
+        - Annual Maintenance Cost (scaled by 100,000)
+        - Sustainability Cost Factor (scaled by 10,000)
         """
-        logger.info("Using MOCK lifecycle cost prediction")
+        logger.info("Using MOCK lifecycle cost prediction (Multi-Output)")
         
-        # Calculate realistic lifecycle cost based on inputs
-        construction_cost = data.get("construction_cost_per_sqft", 10000)
-        maintenance_cost = data.get("maintenance_cost_per_year", 100000)
-        energy_kwh = data.get("energy_kwh_year", 10000)
+        # Get input features
+        construction_cost_sqft = data.get("construction_cost_per_sqft", 13000)
+        maintenance_cost_year = data.get("maintenance_cost_per_year", 520000)
+        energy_efficiency = data.get("energy_efficiency", 72)
+        sustainability_score = data.get("sustainability_score", 65)
+        area_sqft = data.get("area_sqft", 2000)
         
-        # Assume 2000 sqft average home, 30-year lifecycle
-        estimated_sqft = 2000
-        lifecycle_years = 30
+        # Generate realistic scaled predictions (as if from multi-output model)
+        # Simulating model output that's been scaled down during training
         
-        total_construction = construction_cost * estimated_sqft
-        total_maintenance = maintenance_cost * lifecycle_years
-        energy_cost_per_kwh = 25  # LKR per kWh
-        total_energy = energy_kwh * energy_cost_per_kwh * lifecycle_years
+        # Initial cost typically 20-80 million LKR, so scaled value 20-80
+        base_initial = construction_cost_sqft * area_sqft / 1_000_000
+        scaled_initial = base_initial * random.uniform(0.95, 1.05)
         
-        lifecycle_cost_lkr = total_construction + total_maintenance + total_energy
-        lifecycle_cost_millions = lifecycle_cost_lkr / 1_000_000
+        # Annual maintenance 300k-1M LKR, so scaled value 3-10
+        scaled_maintenance = (maintenance_cost_year / 100_000) * random.uniform(0.9, 1.1)
         
-        # Add some randomness
-        lifecycle_cost_millions *= random.uniform(0.95, 1.05)
+        # Sustainability cost factor 100-500 LKR/sqft, so scaled value 0.01-0.05
+        base_sust = construction_cost_sqft * 0.15 / 10_000
+        scaled_sust = base_sust * (1 + (sustainability_score / 100) * 0.3) * random.uniform(0.95, 1.05)
         
-        if lifecycle_cost_millions < 20:
-            interpretation = "Low lifecycle cost - economical project"
-        elif lifecycle_cost_millions < 40:
-            interpretation = "Moderate lifecycle cost"
-        elif lifecycle_cost_millions < 60:
-            interpretation = "Above average lifecycle cost"
-        else:
-            interpretation = "High lifecycle cost - consider optimizations"
-        
+        # Return in multi-output format (scaled values as model would return)
         return {
-            "lifecycle_cost_millions_lkr": round(lifecycle_cost_millions, 2),
-            "lifecycle_cost_lkr": round(lifecycle_cost_millions * 1_000_000, 2),
-            "interpretation": interpretation
+            "multi_output_predictions": [scaled_initial, scaled_maintenance, scaled_sust],
+            "is_multioutput": True,
+            "confidence_interval": {
+                "lower_millions": round(max(0, scaled_initial * 0.85), 2),
+                "median_millions": round(scaled_initial, 2),
+                "upper_millions": round(scaled_initial * 1.15, 2),
+                "lower_lkr": round(max(0, scaled_initial * 0.85) * 1_000_000, 2),
+                "upper_lkr": round(scaled_initial * 1.15 * 1_000_000, 2),
+                "std_millions": round(random.uniform(0.5, 3), 2)
+            },
+            "shap_explanation": {
+                "available": True,
+                "shap_values": {
+                    "Construction Cost/sqft": round(random.uniform(-3, 6), 4),
+                    "Maintenance Cost/yr": round(random.uniform(-2, 4), 4),
+                    "Energy (kWh/yr)": round(random.uniform(-1, 2), 4),
+                    "Energy Efficiency": round(random.uniform(-3, 1), 4),
+                    "Sustainability Score": round(random.uniform(-2, 3), 4),
+                    "Efficiency per sqft": round(random.uniform(-1, 1), 4),
+                    "Cost/sqft for Sustainability": round(random.uniform(-2, 2), 4),
+                    "CO\u2082 Impact vs Cost": round(random.uniform(-1, 1), 4)
+                },
+                "top_drivers": [
+                    {"feature": "Construction Cost/sqft", "impact": round(random.uniform(2, 6), 2), "direction": "increases", "description": "Construction Cost/sqft increases lifecycle cost by " + str(round(random.uniform(2, 6), 2))},
+                    {"feature": "Energy Efficiency", "impact": round(random.uniform(-3, -1), 2), "direction": "decreases", "description": "Energy Efficiency reduces lifecycle cost by " + str(round(random.uniform(1, 3), 2))}
+                ],
+                "feature_values": {},
+                "model": "lifecycle (mock)"
+            }
         }
     
     def predict_risk(self, data: dict) -> dict:
@@ -144,5 +189,28 @@ class MockInferenceService:
             "is_high_risk": is_high_risk,
             "risk_probability": round(risk_probability, 3),
             "risk_level": risk_level,
-            "recommendations": recommendations
+            "recommendations": recommendations,
+            "confidence_interval": {
+                "lower": round(max(0, risk_probability - random.uniform(0.05, 0.15)), 3),
+                "median": round(risk_probability, 3),
+                "upper": round(min(1, risk_probability + random.uniform(0.05, 0.15)), 3),
+                "std": round(random.uniform(0.02, 0.08), 3)
+            },
+            "shap_explanation": {
+                "available": True,
+                "shap_values": {
+                    "Design Completeness": round((100 - design_completeness) * 0.005, 4),
+                    "Project Complexity": round(complexity * 0.003, 4),
+                    "Change Order Frequency": round(change_orders * 0.02, 4),
+                    "Inflation Rate": round(inflation * 0.01, 4),
+                    "Interest Rate": round(interest * 0.005, 4),
+                    "Contractor Experience (yrs)": round(-experience * 0.01, 4)
+                },
+                "top_drivers": [
+                    {"feature": "Design Completeness", "impact": round((100 - design_completeness) * 0.005, 2), "direction": "increases" if design_completeness < 80 else "decreases", "description": f"Design Completeness ({design_completeness}%) " + ("increases" if design_completeness < 80 else "decreases") + f" risk by {abs((100 - design_completeness) * 0.005):.2f}"},
+                    {"feature": "Contractor Experience (yrs)", "impact": round(-experience * 0.01, 2), "direction": "decreases", "description": f"Contractor Experience ({experience} yrs) decreases risk by {abs(experience * 0.01):.2f}"}
+                ],
+                "feature_values": {},
+                "model": "risk (mock)"
+            }
         }

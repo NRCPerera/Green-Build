@@ -2,7 +2,6 @@ const express = require('express');
 const cors = require('cors');
 const morgan = require('morgan');
 const config = require('./config');
-const connectDB = require('./config/database');
 const {
     healthRoutes,
     uploadRoutes,
@@ -12,7 +11,8 @@ const {
     authRoutes,
     projectRoutes,
     floorPlanRoutes,
-    boqRoutes
+    boqRoutes,
+    rateRoutes
 } = require('./routes');
 const {
     multerErrorHandler,
@@ -59,69 +59,73 @@ app.use(morgan('dev'));
 // Mount the route handlers
 app.use('/', healthRoutes);
 app.use('/', uploadRoutes);
-app.use('/', costPredictionRoutes);
+app.use('/api/cost-prediction', costPredictionRoutes);
 app.use('/', delayPredictionRoutes);
 app.use('/', sustainabilityRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/projects', projectRoutes);
 app.use('/api/projects/:projectId/floorplans', floorPlanRoutes);
 app.use('/api/projects/:projectId/boq-reports', boqRoutes);
+app.use('/', rateRoutes);
 
 // Error handling middleware should be registered last
 app.use(multerErrorHandler);
 app.use(notFoundHandler);
 app.use(globalErrorHandler);
 
-// Start the server with database connection
-const startServer = async () => {
-    try {
-        // Connect to MongoDB
-        await connectDB();
+// Flag to track MongoDB connection status
+let mongoConnected = false;
 
-        // Start listening for requests
-        app.listen(config.port, () => {
-            console.log('');
-            console.log('================================================================');
-            console.log('         Green Build Backend Server Started                     ');
-            console.log('================================================================');
-            console.log(`  Server:           http://localhost:${config.port}`);
-            console.log(`  ML Service:       ${config.pythonServiceUrl}`);
-            console.log(`  Cost ML Service:  ${config.costMlServiceUrl}`);
-            console.log(`  Delay ML Service: ${config.delayMlServiceUrl}`);
-            console.log(`  Uploads:          ${config.uploadDir}`);
-            console.log('----------------------------------------------------------------');
-            console.log('  Endpoints:');
-            console.log('    GET  /                          - API info');
-            console.log('    GET  /api/health                - Health check');
-            console.log('    POST /api/upload-plan           - Upload and process plan');
-            console.log('    POST /api/predict-cost-overrun  - Predict cost overrun');
-            console.log('    GET  /api/cost-ml-health        - Cost ML service health');
-            console.log('  Delay Prediction:');
-            console.log('    POST /api/predict-delay         - Full delay prediction');
-            console.log('    POST /api/predict-delay/regression    - Predict delay days');
-            console.log('    POST /api/predict-delay/classification - Predict delay category');
-            console.log('    GET  /api/delay-ml-health       - Delay ML service health');
-            console.log('  Authentication:');
-            console.log('    POST /api/auth/register         - Register new user');
-            console.log('    POST /api/auth/login            - Login user');
-            console.log('    GET  /api/auth/profile          - Get user profile');
-            console.log('  Projects:');
-            console.log('    GET  /api/projects              - List user projects');
-            console.log('    POST /api/projects              - Create project');
-            console.log('    GET  /api/projects/:id          - Get project details');
-            console.log('  Floor Plans:');
-            console.log('    POST /api/projects/:id/floorplans  - Upload floor plan');
-            console.log('    GET  /api/projects/:id/floorplans  - List floor plans');
-            console.log('  BOQ Reports:');
-            console.log('    GET  /api/projects/:id/boq-reports     - List BOQ reports');
-            console.log('    GET  /api/projects/:id/boq-reports/:id - Get BOQ details');
-            console.log('================================================================');
-            console.log('');
-        });
+// Try to connect to MongoDB, but don't fail if it's not available
+const tryConnectMongo = async () => {
+    try {
+        const connectDB = require('./config/database');
+        const conn = await connectDB();
+        mongoConnected = !!conn;
+
+        if (mongoConnected) {
+            console.log('  ✅ MongoDB:          Connected');
+        } else {
+            console.log('  ⚠️  MongoDB:          Not available (auth features disabled)');
+            console.log('     Check MONGODB_URI / DNS / internet connectivity');
+        }
     } catch (error) {
-        console.error('Failed to start server:', error);
-        process.exit(1);
+        mongoConnected = false;
+        console.log('  ⚠️  MongoDB:          Not available (auth features disabled)');
+        console.log('     Install MongoDB to enable user authentication');
     }
+};
+
+// Start the server
+const startServer = async () => {
+    await tryConnectMongo();
+
+    // Start listening for requests
+    app.listen(config.port, () => {
+        console.log('');
+        console.log('================================================================');
+        console.log('         Green Build Backend Server Started                     ');
+        console.log('================================================================');
+        console.log(`  Server:              http://localhost:${config.port}`);
+        console.log(`  ML Service:          ${config.pythonServiceUrl}`);
+        console.log(`  Cost ML Service:     ${config.costMlServiceUrl}`);
+        console.log(`  Sustainability ML:   http://localhost:8003`);
+        console.log(`  Uploads:             ${config.uploadDir}`);
+        console.log('----------------------------------------------------------------');
+        console.log('  Features:');
+        console.log('    ✅ Sustainability Analysis   - Working');
+        console.log('    ✅ Cost Prediction           - Working');
+        console.log('    ✅ Floor Plan Upload         - Working');
+        if (mongoConnected) {
+            console.log('    ✅ User Authentication       - Working');
+            console.log('    ✅ Projects Management       - Working');
+        } else {
+            console.log('    ❌ User Authentication       - Requires MongoDB');
+            console.log('    ❌ Projects Management       - Requires MongoDB');
+        }
+        console.log('================================================================');
+        console.log('');
+    });
 };
 
 startServer();

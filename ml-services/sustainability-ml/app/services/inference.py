@@ -1,70 +1,174 @@
-"""Inference service for real model predictions - matches training script features"""
+"""Inference service for real model predictions
+
+Enhanced with:
+- MC Dropout for confidence intervals (P10/P50/P90)
+- SHAP integration for per-prediction explainability
+
+All 3 models (sustainability, lifecycle, risk) expect the SAME 16 input features
+derived from the calculate_derived_features() function in endpoints.py.
+"""
 
 import logging
 import numpy as np
 
 logger = logging.getLogger(__name__)
 
+# Number of MC Dropout forward passes for uncertainty estimation
+MC_DROPOUT_SAMPLES = 50
+
+# All 3 models share the same 16-feature input vector
+# This must match the order used during model training
+COMMON_FEATURE_ORDER = [
+    'area_sqft',
+    'floors',
+    'design_completeness',
+    'contractor_experience',
+    'inflation_rate',
+    'interest_rate',
+    'energy_kwh_year',
+    'energy_efficiency',
+    'energy_efficiency_per_sqft',
+    'operational_co2_tons',
+    'embodied_co2_tons',
+    'construction_cost_per_sqft',
+    'maintenance_cost_per_year',
+    'cost_per_sqft_for_sustainability',
+    'energy_co2_impact_relative_to_cost',
+    'project_complexity_score',
+]
+
+COMMON_FEATURE_DISPLAY_NAMES = [
+    'Area (sqft)',
+    'Floors',
+    'Design Completeness (%)',
+    'Contractor Experience (yrs)',
+    'Inflation Rate (%)',
+    'Interest Rate (%)',
+    'Energy (kWh/yr)',
+    'Energy Efficiency',
+    'Efficiency per sqft',
+    'Operational CO₂ (tons)',
+    'Embodied CO₂ (tons)',
+    'Construction Cost/sqft',
+    'Maintenance Cost/yr',
+    'Cost/sqft for Sustainability',
+    'CO₂ Impact vs Cost',
+    'Project Complexity',
+]
+
 
 class InferenceService:
-    """Handles model inference and prediction logic"""
-    
-    # Feature order must match training scripts exactly
-    SUSTAINABILITY_FEATURES = [
-        'energy_kwh_year', 'embodied_co2_tons', 'operational_co2_tons',
-        'energy_efficiency', 'energy_efficiency_per_sqft',
-        'cost_per_sqft_for_sustainability', 'energy_co2_impact_relative_to_cost'
-    ]
-    
-    LIFECYCLE_COST_FEATURES = [
-        'construction_cost_per_sqft', 'maintenance_cost_per_year', 'energy_kwh_year',
-        'energy_efficiency', 'sustainability_score', 'energy_efficiency_per_sqft',
-        'cost_per_sqft_for_sustainability', 'energy_co2_impact_relative_to_cost'
-    ]
-    
-    RISK_FEATURES = [
-        'Design_Completeness', 'Project_Complexity_Score',
-        'Change_Order_Frequency', 'Inflation_Rate',
-        'Interest_Rate', 'Contractor_Experience_Years'
-    ]
+    """Handles model inference with explainability and uncertainty quantification"""
     
     def __init__(
         self,
         sustainability_model,
         lifecycle_cost_model,
         risk_prediction_model,
-        preprocessor
+        preprocessor,
+        shap_explainer=None
     ):
         self.sustainability_model = sustainability_model
         self.lifecycle_cost_model = lifecycle_cost_model
         self.risk_prediction_model = risk_prediction_model
         self.preprocessor = preprocessor
-    
+        self.shap_explainer = shap_explainer
+
+    # =========================================================================
+    # Build common feature vector from derived features dict
+    # =========================================================================
+
+    def _build_feature_vector(self, data: dict) -> np.ndarray:
+        """Build the 16-feature input vector expected by all models.
+        
+        Args:
+            data: Dict from calculate_derived_features()
+            
+        Returns:
+            numpy array of shape (1, 16)
+        """
+        values = []
+        for feat in COMMON_FEATURE_ORDER:
+            values.append(float(data.get(feat, 0)))
+        return np.array([values], dtype=np.float32)
+
+    # =========================================================================
+    # MC Dropout Uncertainty Estimation
+    # =========================================================================
+
+    def _predict_with_uncertainty(self, model, features: np.ndarray, n_samples: int = MC_DROPOUT_SAMPLES) -> dict:
+        """Run MC Dropout inference: N forward passes with dropout active.
+        
+        By calling model(features, training=True) we keep dropout layers active,
+        producing a distribution of predictions that quantifies model uncertainty.
+        """
+        features_float = features.astype(np.float32)
+        
+        # Collect stochastic predictions
+        predictions = []
+        for _ in range(n_samples):
+            pred = model(features_float, training=True).numpy()
+            # Handle multi-output models
+            if pred.shape[-1] > 1:
+                predictions.append([float(pred[0][i]) for i in range(pred.shape[-1])])
+            else:
+                predictions.append(float(pred[0][0]))
+        
+        predictions = np.array(predictions)
+        
+        # Deterministic prediction (dropout off)
+        deterministic = model.predict(features_float, verbose=0)
+        
+        if len(predictions.shape) == 1:
+            # Single output
+            return {
+                "point_estimate": float(deterministic[0][0]),
+                "mc_mean": round(float(np.mean(predictions)), 4),
+                "mc_std": round(float(np.std(predictions)), 4),
+                "p10": round(float(np.percentile(predictions, 10)), 4),
+                "p50": round(float(np.percentile(predictions, 50)), 4),
+                "p90": round(float(np.percentile(predictions, 90)), 4),
+                "n_samples": n_samples
+            }
+        else:
+            # Multi-output (lifecycle cost model has 3 outputs)
+            return {
+                "point_estimate": [float(deterministic[0][i]) for i in range(deterministic.shape[-1])],
+                "mc_mean": [round(float(np.mean(predictions[:, i])), 4) for i in range(predictions.shape[-1])],
+                "mc_std": [round(float(np.std(predictions[:, i])), 4) for i in range(predictions.shape[-1])],
+                "p10": [round(float(np.percentile(predictions[:, i], 10)), 4) for i in range(predictions.shape[-1])],
+                "p50": [round(float(np.percentile(predictions[:, i], 50)), 4) for i in range(predictions.shape[-1])],
+                "p90": [round(float(np.percentile(predictions[:, i], 90)), 4) for i in range(predictions.shape[-1])],
+                "n_samples": n_samples,
+                "is_multioutput": True
+            }
+
+    # =========================================================================
+    # Sustainability Score Prediction
+    # =========================================================================
+
     def predict_sustainability(self, data: dict) -> dict:
-        """Predict sustainability score"""
+        """Predict sustainability score with SHAP explanation and confidence intervals."""
         
         try:
-            # Create feature array in correct order
-            features = np.array([[
-                data.get('energy_kwh_year', 0),
-                data.get('embodied_co2_tons', 0),
-                data.get('operational_co2_tons', 0),
-                data.get('energy_efficiency', 0),
-                data.get('energy_efficiency_per_sqft', 0),
-                data.get('cost_per_sqft_for_sustainability', 0),
-                data.get('energy_co2_impact_relative_to_cost', 0)
-            ]])
+            features = self._build_feature_vector(data)
             
-            # Apply scaling if available
-            if self.preprocessor and self.preprocessor.sustainability_scaler:
-                features = self.preprocessor.sustainability_scaler.transform(features)
-            
-            # Make prediction
-            prediction = self.sustainability_model.predict(features, verbose=0)
-            score = float(prediction[0][0])
+            # --- MC Dropout for confidence intervals ---
+            uncertainty = self._predict_with_uncertainty(
+                self.sustainability_model, features
+            )
+            score = uncertainty["point_estimate"]
+            if isinstance(score, list):
+                score = score[0]
             
             # Clamp to valid range
             score = max(0, min(100, score))
+            
+            # Clamp confidence interval bounds
+            ci_lower = max(0, min(100, uncertainty["p10"] if not isinstance(uncertainty["p10"], list) else uncertainty["p10"][0]))
+            ci_upper = max(0, min(100, uncertainty["p90"] if not isinstance(uncertainty["p90"], list) else uncertainty["p90"][0]))
+            ci_median = max(0, min(100, uncertainty["p50"] if not isinstance(uncertainty["p50"], list) else uncertainty["p50"][0]))
+            mc_std = uncertainty["mc_std"] if not isinstance(uncertainty["mc_std"], list) else uncertainty["mc_std"][0]
             
             # Interpret the score
             if score >= 80:
@@ -76,84 +180,100 @@ class InferenceService:
             else:
                 interpretation = "Poor sustainability rating - improvements recommended"
             
+            # --- SHAP explainability ---
+            shap_result = {}
+            if self.shap_explainer and self.shap_explainer.is_available():
+                shap_result = self.shap_explainer.explain_sustainability(features)
+            
             return {
                 "sustainability_score": round(score, 2),
-                "interpretation": interpretation
+                "interpretation": interpretation,
+                "confidence_interval": {
+                    "lower": round(ci_lower, 2),
+                    "median": round(ci_median, 2),
+                    "upper": round(ci_upper, 2),
+                    "std": round(mc_std, 4)
+                },
+                "shap_explanation": shap_result
             }
             
         except Exception as e:
             logger.error(f"Sustainability prediction error: {str(e)}", exc_info=True)
             raise
     
+    # =========================================================================
+    # Lifecycle Cost Prediction
+    # =========================================================================
+
     def predict_lifecycle_cost(self, data: dict) -> dict:
-        """Predict lifecycle costs (returns millions LKR)"""
+        """Predict lifecycle costs with SHAP explanation and confidence intervals."""
         
         try:
-            # Create feature array in correct order
-            features = np.array([[
-                data.get('construction_cost_per_sqft', 0),
-                data.get('maintenance_cost_per_year', 0),
-                data.get('energy_kwh_year', 0),
-                data.get('energy_efficiency', 0),
-                data.get('sustainability_score', 50),  # Default to middle if not provided
-                data.get('energy_efficiency_per_sqft', 0),
-                data.get('cost_per_sqft_for_sustainability', 0),
-                data.get('energy_co2_impact_relative_to_cost', 0)
-            ]])
+            features = self._build_feature_vector(data)
             
-            # Apply scaling if available
-            if self.preprocessor and self.preprocessor.lifecycle_scaler:
-                features = self.preprocessor.lifecycle_scaler.transform(features)
+            # --- MC Dropout for confidence intervals ---
+            uncertainty = self._predict_with_uncertainty(
+                self.lifecycle_cost_model, features
+            )
             
-            # Make prediction (model outputs in millions LKR based on training)
-            prediction = self.lifecycle_cost_model.predict(features, verbose=0)
-            cost_millions = float(prediction[0][0])
+            point_est = uncertainty["point_estimate"]
             
-            # Ensure positive
-            cost_millions = max(0, cost_millions)
-            cost_lkr = cost_millions * 1_000_000
+            # Handle multi-output (3 outputs: initial, maintenance, sustainability)
+            if isinstance(point_est, list):
+                return {
+                    "multi_output_predictions": point_est,
+                    "is_multioutput": True,
+                    "confidence_interval": {
+                        "lower_millions": round(max(0, uncertainty["p10"][0]), 2) if isinstance(uncertainty["p10"], list) else round(max(0, uncertainty["p10"]), 2),
+                        "median_millions": round(uncertainty["p50"][0], 2) if isinstance(uncertainty["p50"], list) else round(uncertainty["p50"], 2),
+                        "upper_millions": round(uncertainty["p90"][0], 2) if isinstance(uncertainty["p90"], list) else round(uncertainty["p90"], 2),
+                        "lower_lkr": round(max(0, (uncertainty["p10"][0] if isinstance(uncertainty["p10"], list) else uncertainty["p10"])) * 1_000_000, 2),
+                        "upper_lkr": round((uncertainty["p90"][0] if isinstance(uncertainty["p90"], list) else uncertainty["p90"]) * 1_000_000, 2),
+                        "std_millions": round(uncertainty["mc_std"][0] if isinstance(uncertainty["mc_std"], list) else uncertainty["mc_std"], 4)
+                    },
+                    "shap_explanation": self.shap_explainer.explain_lifecycle(features) if self.shap_explainer and self.shap_explainer.is_available() else {}
+                }
             
-            # Interpret
-            if cost_millions < 20:
-                interpretation = "Low lifecycle cost - economical project"
-            elif cost_millions < 40:
-                interpretation = "Moderate lifecycle cost"
-            elif cost_millions < 60:
-                interpretation = "Above average lifecycle cost"
-            else:
-                interpretation = "High lifecycle cost - consider optimizations"
+            # Single output fallback
+            cost_millions = max(0, point_est)
+            mc_std = uncertainty["mc_std"]
             
             return {
                 "lifecycle_cost_millions_lkr": round(cost_millions, 2),
-                "lifecycle_cost_lkr": round(cost_lkr, 2),
-                "interpretation": interpretation
+                "lifecycle_cost_lkr": round(cost_millions * 1_000_000, 2),
+                "interpretation": "Estimated lifecycle cost",
+                "confidence_interval": {
+                    "lower_millions": round(max(0, uncertainty["p10"]), 2),
+                    "median_millions": round(uncertainty["p50"], 2),
+                    "upper_millions": round(uncertainty["p90"], 2),
+                    "lower_lkr": round(max(0, uncertainty["p10"]) * 1_000_000, 2),
+                    "upper_lkr": round(uncertainty["p90"] * 1_000_000, 2),
+                    "std_millions": round(mc_std, 4)
+                },
+                "shap_explanation": self.shap_explainer.explain_lifecycle(features) if self.shap_explainer and self.shap_explainer.is_available() else {}
             }
             
         except Exception as e:
             logger.error(f"Lifecycle cost prediction error: {str(e)}", exc_info=True)
             raise
     
+    # =========================================================================
+    # Risk Prediction
+    # =========================================================================
+
     def predict_risk(self, data: dict) -> dict:
-        """Predict project risk (binary classification)"""
+        """Predict project risk with SHAP explanation and confidence intervals."""
         
         try:
-            # Create feature array - note the different key names from request
-            features = np.array([[
-                data.get('design_completeness', 0),
-                data.get('project_complexity_score', 0),
-                data.get('change_order_frequency', 0),
-                data.get('inflation_rate', 0),
-                data.get('interest_rate', 0),
-                data.get('contractor_experience_years', 0)
-            ]])
+            features = self._build_feature_vector(data)
             
-            # Apply scaling if available
-            if self.preprocessor and self.preprocessor.risk_scaler:
-                features = self.preprocessor.risk_scaler.transform(features)
-            
-            # Make prediction (sigmoid output = probability)
-            prediction = self.risk_prediction_model.predict(features, verbose=0)
-            risk_probability = float(prediction[0][0])
+            # --- MC Dropout for confidence intervals ---
+            uncertainty = self._predict_with_uncertainty(
+                self.risk_prediction_model, features
+            )
+            risk_probability = uncertainty["point_estimate"]
+            if isinstance(risk_probability, list):
+                risk_probability = risk_probability[0]
             
             # Clamp to valid range
             risk_probability = max(0, min(1, risk_probability))
@@ -168,29 +288,92 @@ class InferenceService:
             else:
                 risk_level = "high"
             
-            # Generate recommendations
-            recommendations = []
-            if data.get('design_completeness', 100) < 80:
-                recommendations.append(f"Increase design completeness (currently {data.get('design_completeness', 0):.0f}%)")
-            if data.get('project_complexity_score', 0) > 60:
-                recommendations.append("Consider phased approach to reduce complexity")
-            if data.get('change_order_frequency', 0) > 3:
-                recommendations.append("Implement stricter change order controls")
-            if data.get('inflation_rate', 0) > 8:
-                recommendations.append("Include inflation contingency in budget")
-            if data.get('contractor_experience_years', 20) < 5:
-                recommendations.append("Consider partnering with more experienced contractor")
+            mc_std = uncertainty["mc_std"] if not isinstance(uncertainty["mc_std"], list) else uncertainty["mc_std"][0]
             
-            if not recommendations:
-                recommendations.append("Project parameters are within acceptable ranges")
+            # --- SHAP explainability ---
+            shap_result = {}
+            if self.shap_explainer and self.shap_explainer.is_available():
+                shap_result = self.shap_explainer.explain_risk(features)
+            
+            # Generate SHAP-driven recommendations
+            recommendations = self._generate_shap_recommendations(
+                data, shap_result, risk_probability
+            )
             
             return {
                 "is_high_risk": is_high_risk,
                 "risk_probability": round(risk_probability, 3),
                 "risk_level": risk_level,
-                "recommendations": recommendations
+                "recommendations": recommendations,
+                "confidence_interval": {
+                    "lower": round(max(0, min(1, uncertainty["p10"] if not isinstance(uncertainty["p10"], list) else uncertainty["p10"][0])), 3),
+                    "median": round(max(0, min(1, uncertainty["p50"] if not isinstance(uncertainty["p50"], list) else uncertainty["p50"][0])), 3),
+                    "upper": round(max(0, min(1, uncertainty["p90"] if not isinstance(uncertainty["p90"], list) else uncertainty["p90"][0])), 3),
+                    "std": round(mc_std, 4)
+                },
+                "shap_explanation": shap_result
             }
             
         except Exception as e:
             logger.error(f"Risk prediction error: {str(e)}", exc_info=True)
             raise
+
+    # =========================================================================
+    # SHAP-Driven Recommendations
+    # =========================================================================
+
+    def _generate_shap_recommendations(self, data: dict, shap_result: dict, risk_prob: float) -> list:
+        """Generate recommendations driven by SHAP feature importance."""
+        recommendations = []
+        
+        if shap_result and shap_result.get("available") and shap_result.get("top_drivers"):
+            for driver in shap_result["top_drivers"][:3]:
+                feat = driver["feature"]
+                impact = driver["impact"]
+                
+                if impact > 0:
+                    if "Design Completeness" in feat:
+                        val = data.get('design_completeness', 0)
+                        recommendations.append(
+                            f"Design completeness ({val:.0f}%) is increasing risk by {abs(impact):.2f}. "
+                            f"Increase to 85%+ to reduce risk."
+                        )
+                    elif "Complexity" in feat:
+                        recommendations.append(
+                            f"Project complexity is a key risk driver (+{abs(impact):.2f}). "
+                            f"Consider phased approach."
+                        )
+                    elif "Change Order" in feat:
+                        recommendations.append(
+                            f"Change order frequency contributes +{abs(impact):.2f} to risk. "
+                            f"Implement stricter change controls."
+                        )
+                    elif "Inflation" in feat:
+                        recommendations.append(
+                            f"Inflation rate impact: +{abs(impact):.2f}. "
+                            f"Include inflation contingency in budget."
+                        )
+                    elif "Interest" in feat:
+                        recommendations.append(
+                            f"Interest rate impact: +{abs(impact):.2f}. "
+                            f"Consider fixed-rate financing."
+                        )
+                    elif "Contractor" in feat:
+                        recommendations.append(
+                            f"Contractor experience impact: +{abs(impact):.2f}. "
+                            f"Partner with more experienced contractor."
+                        )
+        
+        # Fallback
+        if not recommendations:
+            if data.get('design_completeness', 100) < 80:
+                recommendations.append(f"Increase design completeness (currently {data.get('design_completeness', 0):.0f}%)")
+            if data.get('project_complexity_score', 0) > 60:
+                recommendations.append("Consider phased approach to reduce complexity")
+            if data.get('contractor_experience', 20) < 5:
+                recommendations.append("Consider partnering with more experienced contractor")
+        
+        if not recommendations:
+            recommendations.append("Project parameters are within acceptable ranges")
+        
+        return recommendations
