@@ -42,8 +42,6 @@ class PreProjectRequest(BaseModel):
     
     # Float features
     Initial_Period_Months: float = Field(..., description="Initial planned period in months")
-    Time_Overrun_Months: float = Field(..., description="Time overrun in months")
-    Actual_Duration_Months: float = Field(..., description="Actual project duration in months")
     Inflation_Rate: float = Field(..., description="Inflation rate")
     Exchange_Rate_LKR: float = Field(..., description="Exchange rate (LKR)")
     Material_Index: float = Field(..., description="Material price index")

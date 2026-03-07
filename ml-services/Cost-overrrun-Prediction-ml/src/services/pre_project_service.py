@@ -19,7 +19,6 @@ STATUS_MAPPING = {
     "Contractor_Risk_Score": "🔴 Review Contractor",
     "Change_Order_Freq": "🟡 Reduce Change Orders",
     "Design_Completeness": "🟡 Improve Design",
-    "Time_Overrun_Months": "🟠 Monitor Schedule",
     "Economic_Risk_Index": "🟠 Monitor Economics",
 }
 
@@ -77,8 +76,8 @@ def predict_pre_project(payload: dict[str, Any], artifacts: PreProjectArtifacts)
     # Create DataFrame from payload (keep for original value lookup)
     df_original = pd.DataFrame([payload])
     
-    # One-hot encode categorical features, drop first to avoid multicollinearity
-    df_encoded = pd.get_dummies(df_original, columns=categorical_features, drop_first=True)
+    # One-hot encode categorical features (model was trained without drop_first)
+    df_encoded = pd.get_dummies(df_original, columns=categorical_features, drop_first=False)
     
     # Align features with model_feature_names.joblib using reindex
     df_aligned = df_encoded.reindex(columns=artifacts.feature_names, fill_value=0)

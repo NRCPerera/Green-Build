@@ -46,7 +46,7 @@ const projectSchema = new mongoose.Schema({
     },
     projectType: {
         type: String,
-        enum: ['residential', 'commercial', 'industrial', 'institutional', 'infrastructure', 'mixed-use', 'other'],
+        enum: ['residential', 'commercial', 'industrial', 'institutional', 'infrastructure', 'mixed-use', 'apartment', 'other'],
         default: 'residential'
     },
     status: {
@@ -64,6 +64,14 @@ const projectSchema = new mongoose.Schema({
         trim: true
     },
     constructionPeriod: {
+        type: Number,
+        min: 0
+    },
+    floors: {
+        type: Number,
+        min: 0
+    },
+    areaSQFT: {
         type: Number,
         min: 0
     },

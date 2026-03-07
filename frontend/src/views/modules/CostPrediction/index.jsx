@@ -15,34 +15,32 @@ const provinceDistrictMap = {
 
 const CostPredictionView = ({ project, onBack }) => {
     const [formValues, setFormValues] = useState({
-                Project_Type: 'Apartment',
-                Province: 'Western',
-                District: 'Gampaha',
-                CIDA_Grade: 'C5',
-                Season: 'Monsoon',
-                Floors: 14,
-                Area_SQFT: 85000,
-                Year_of_Tender: 2022,
-                Contractor_Experience_Years: 5,
-                Complexity_Score: 9,
-                Change_Order_Freq: 14,
-                Start_Month: 6,
-                Start_Quarter: 2,
-                Start_Weekday: 1,
-                Initial_Period_Months: 30,
-                Time_Overrun_Months: 11,
-                Actual_Duration_Months: 41,
-                Inflation_Rate: 55,
-                Exchange_Rate_LKR: 360,
-                Material_Index: 420,
-                Design_Completeness: 0.42,
-                Project_Size_Index: 120,
-                Economic_Risk_Index: 60,
-                Design_Risk_Score: 5.8,
-                Contractor_Risk_Score: 4.7,
-                Weather_Risk_Score: 5.2,
-                Rate_per_SQFT: 64000,
-                Initial_Value: 5440000000
+        Project_Type: '',
+        Province: '',
+        District: '',
+        CIDA_Grade: '',
+        Season: '',
+        Floors: 0,
+        Area_SQFT: 0,
+        Year_of_Tender: 0,
+        Contractor_Experience_Years: 0,
+        Complexity_Score: 0,
+        Change_Order_Freq: 0,
+        Start_Month: 0,
+        Start_Quarter: 0,
+        Start_Weekday: 0,
+        Initial_Period_Months: 0,
+        Inflation_Rate: 0,
+        Exchange_Rate_LKR: 0,
+        Material_Index: 0,
+        Design_Completeness: 0,
+        Project_Size_Index: 0,
+        Economic_Risk_Index: 0,
+        Design_Risk_Score: 0,
+        Contractor_Risk_Score: 0,
+        Weather_Risk_Score: 0,
+        Rate_per_SQFT: 0,
+        Initial_Value: 0
     });
 
     const [availableDistricts, setAvailableDistricts] = useState([]);
@@ -70,33 +68,73 @@ const CostPredictionView = ({ project, onBack }) => {
     useEffect(() => {
         if (project) {
             const getProjectType = (type) => {
-                if (!type) return 'Apartment';
+                if (!type) return '';
                 const typeMap = {
-                    'residential': 'House',
-                    'commercial': 'Commercial',
-                    'infrastructure': 'Infrastructure'
+                    'residential': 'Residential',
+                    'apartment': 'Apartment',
+                    'industrial': 'Industrial',
+                    'commercial': 'Industrial',
+                    'infrastructure': 'Industrial'
                 };
                 return typeMap[type.toLowerCase()] || type;
             };
 
             const getProvince = (location) => {
                 if (typeof location === 'object' && location.province) return location.province;
-                return 'Western';
+                return '';
             };
 
             const getDistrict = (location) => {
                 if (typeof location === 'object' && location.district) return location.district;
-                return 'Colombo';
+                return '';
             };
 
             const budget = typeof project.budget === 'number' ? project.budget : (project.budget?.estimated || 0);
+            const areaSqft = project.areaSQFT || project.area || project.Area_SQFT || 0;
+            const floors = project.floors || project.Floors || 0;
+            const cidaGrade = project.contractorGrade || project.cidaGrade || project.CIDA_Grade || '';
+            const constructionPeriod = project.constructionPeriod || 0;
+
+            // Derive timeline fields from startDate
+            let startMonth = 0, startQuarter = 0, startWeekday = 0, yearOfTender = 0, season = '';
+            if (project.startDate) {
+                const startDate = new Date(project.startDate);
+                if (!isNaN(startDate.getTime())) {
+                    startMonth = startDate.getMonth() + 1; // 1-12
+                    startQuarter = Math.ceil(startMonth / 3); // 1-4
+                    startWeekday = startDate.getDay(); // 0-6
+                    yearOfTender = startDate.getFullYear();
+                    // Determine season based on Sri Lanka monsoon patterns
+                    // May-Sep = Monsoon (SW), Oct-Jan = Monsoon (NE), Feb-Apr = Dry
+                    if (startMonth >= 5 && startMonth <= 9) {
+                        season = 'Monsoon';
+                    } else if (startMonth >= 10 || startMonth <= 1) {
+                        season = 'Monsoon';
+                    } else {
+                        season = 'Dry';
+                    }
+                }
+            }
+
+            // Compute Rate per SQFT if we have both budget and area
+            const ratePerSqft = (areaSqft > 0 && budget > 0) ? Math.round(budget / areaSqft) : 0;
 
             setFormValues(prev => ({
                 ...prev,
                 Project_Type: getProjectType(project.projectType),
                 Province: getProvince(project.location),
                 District: getDistrict(project.location),
-                Initial_Value: budget,
+                Initial_Value: budget || prev.Initial_Value,
+                Area_SQFT: areaSqft || prev.Area_SQFT,
+                Floors: floors || prev.Floors,
+                CIDA_Grade: cidaGrade || prev.CIDA_Grade,
+                Initial_Period_Months: constructionPeriod || prev.Initial_Period_Months,
+                Start_Month: startMonth || prev.Start_Month,
+                Start_Quarter: startQuarter || prev.Start_Quarter,
+                Start_Weekday: startWeekday || prev.Start_Weekday,
+                Year_of_Tender: yearOfTender || prev.Year_of_Tender,
+                Season: season || prev.Season,
+                Rate_per_SQFT: ratePerSqft || prev.Rate_per_SQFT,
             }));
         }
     }, [project]);
@@ -132,40 +170,46 @@ const CostPredictionView = ({ project, onBack }) => {
 
     return (
         <div className="space-y-6">
-            <div className="bg-gradient-to-r from-yellow-500/15 via-orange-500/10 to-transparent border border-yellow-500/25 rounded-2xl p-6">
-                <div className="flex items-center justify-between gap-4 flex-wrap">
-                    <div className="flex items-center gap-3">
+            {/* Animated Header */}
+            <div className="relative overflow-hidden bg-gradient-to-r from-amber-600/20 via-orange-500/15 to-yellow-500/20 border border-amber-500/30 rounded-2xl p-6" style={{ backgroundSize: '200% 200%', animation: 'gradientShift 6s ease infinite' }}>
+                <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(251,191,36,0.15),transparent_60%)]" />
+                <div className="absolute top-0 right-0 w-32 h-32 bg-yellow-400/5 rounded-full blur-2xl" />
+                <div className="relative flex items-center justify-between gap-4 flex-wrap">
+                    <div className="flex items-center gap-4">
                         {onBack && (
                             <button
                                 onClick={onBack}
-                                className="w-10 h-10 rounded-xl bg-yellow-500/20 border border-yellow-500/40 flex items-center justify-center text-yellow-200 hover:bg-yellow-500/30 transition-colors"
+                                className="w-10 h-10 rounded-xl bg-white/10 backdrop-blur-sm border border-white/20 flex items-center justify-center text-yellow-200 hover:bg-white/20 hover:scale-105 transition-all duration-200"
                                 title="Back to Project"
                             >
-                                ←
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" /></svg>
                             </button>
                         )}
-                        <div className="w-12 h-12 rounded-2xl bg-yellow-500/20 border border-yellow-500/40 flex items-center justify-center text-xl font-bold text-yellow-200">
-                            CP
+                        <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-600 shadow-lg shadow-amber-500/25 flex items-center justify-center">
+                            <svg className="w-7 h-7 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                         </div>
                         <div>
-                            <h2 className="text-2xl font-bold text-white">
-                                Cost Prediction{project ? ` - ${project.name}` : ''}
+                            <h2 className="text-2xl font-bold text-white tracking-tight">
+                                Cost Prediction{project ? ` — ${project.name}` : ''}
                             </h2>
-                            <p className="text-gray-300 text-sm">classification with SHAP explanations.</p>
+                            <p className="text-amber-200/70 text-sm mt-0.5">ML-powered cost overrun classification with SHAP explanations</p>
                         </div>
                     </div>
-                    <div className="flex items-center gap-2 text-sm text-yellow-300 bg-yellow-500/10 border border-yellow-500/30 px-3 py-1 rounded-full">
-                        <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" /> Live Model
+                    <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2 text-sm text-emerald-300 bg-emerald-500/10 backdrop-blur-sm border border-emerald-500/30 px-4 py-1.5 rounded-full">
+                            <span className="relative flex h-2 w-2"><span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span><span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-400"></span></span> Live Model
+                        </div>
                     </div>
                 </div>
             </div>
+            <style>{`@keyframes gradientShift{0%,100%{background-position:0% 50%}50%{background-position:100% 50%}}`}</style>
 
             <div className={`grid grid-cols-1 ${isFormExpanded ? 'xl:grid-cols-1' : 'xl:grid-cols-3'} gap-6`}>
                 <div className={isFormExpanded ? 'xl:col-span-1' : 'xl:col-span-1'}>
-                    <form onSubmit={handleSubmit} className={`bg-dark-800/60 border border-white/5 rounded-2xl p-5 space-y-4 ${isFormExpanded ? 'max-h-none' : 'max-h-[780px]'} overflow-y-auto`}>
-                        <div className="flex items-center justify-between sticky top-0 bg-dark-800/80 pb-3">
+                    <form onSubmit={handleSubmit} className={`bg-dark-800/60 backdrop-blur-sm border border-white/[0.08] rounded-2xl p-5 space-y-5 ${isFormExpanded ? 'max-h-none' : 'max-h-[780px]'} overflow-y-auto shadow-xl shadow-black/20`}>
+                        <div className="flex items-center justify-between sticky top-0 bg-dark-800/95 backdrop-blur-md pb-3 z-10">
                             <div className="flex items-center gap-2">
-                                <span className="px-2 py-0.5 bg-yellow-500/20 text-yellow-300 text-xs rounded-full">Inputs</span>
+                                <span className="px-2.5 py-1 bg-gradient-to-r from-amber-500/20 to-orange-500/20 text-amber-300 text-xs font-semibold rounded-full border border-amber-500/30">⚡ Inputs</span>
                                 <h3 className="text-lg font-semibold text-white">Project Parameters</h3>
                             </div>
                             <div className="flex items-center gap-2">
@@ -189,6 +233,10 @@ const CostPredictionView = ({ project, onBack }) => {
                             </div>
                         </div>
 
+                        {/* ── Section: Project Classification ── */}
+                        <div className="border-t border-white/[0.06] pt-4">
+                            <p className="text-[11px] uppercase tracking-widest text-amber-400/70 font-semibold mb-3 flex items-center gap-1.5"><span>🏗️</span> Project Classification</p>
+                        </div>
                         <div className={`grid ${isFormExpanded ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4' : 'grid-cols-2'} gap-3`}>
                             <div className="col-span-2">
                                 <label className="block text-xs font-medium text-gray-400 mb-1">Type of Project</label>
@@ -198,13 +246,9 @@ const CostPredictionView = ({ project, onBack }) => {
                                     className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
                                 >
                                     <option value="">Select Project Type</option>
-                                    <option value="House">House</option>
-                                    <option value="Duplex">Duplex</option>
-                                    <option value="Townhouse">Townhouse</option>
+                                    <option value="Residential">Residential</option>
                                     <option value="Apartment">Apartment</option>
-                                    <option value="Condominium">Condominium</option>
-                                    <option value="Commercial">Commercial</option>
-                                    <option value="Infrastructure">Infrastructure</option>
+                                    <option value="Industrial">Industrial</option>
                                 </select>
                             </div>
                             <div>
@@ -241,9 +285,8 @@ const CostPredictionView = ({ project, onBack }) => {
                                     className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
                                 >
                                     <option value="">Select Season</option>
-                                    <option value="Monsoon">Monsoon</option>
                                     <option value="Dry">Dry</option>
-                                    <option value="Inter-Monsoon">Inter-Monsoon</option>
+                                    <option value="Monsoon">Monsoon</option>
                                 </select>
                             </div>
                             <div>
@@ -258,15 +301,23 @@ const CostPredictionView = ({ project, onBack }) => {
                             </div>
                             <div>
                                 <label className="block text-xs font-medium text-gray-400 mb-1">CIDA Grade</label>
-                                <input
-                                    type="text"
+                                <select
                                     value={formValues.CIDA_Grade}
                                     onChange={handleChange('CIDA_Grade')}
                                     className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
-                                />
+                                >
+                                    <option value="">Select CIDA Grade</option>
+                                    <option value="C1">C1</option>
+                                    <option value="C2">C2</option>
+                                    <option value="C3">C3</option>
+                                </select>
                             </div>
                         </div>
 
+                        {/* ── Section: Project Details ── */}
+                        <div className="border-t border-white/[0.06] pt-4">
+                            <p className="text-[11px] uppercase tracking-widest text-blue-400/70 font-semibold mb-3 flex items-center gap-1.5"><span>📐</span> Project Details</p>
+                        </div>
                         <div className={`grid ${isFormExpanded ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4' : 'grid-cols-2'} gap-3`}>
                             <div>
                                 <label className="block text-xs font-medium text-gray-400 mb-1">Floors</label>
@@ -308,18 +359,13 @@ const CostPredictionView = ({ project, onBack }) => {
                                     className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
                                 />
                             </div>
-                            <div>
-                                <label className="block text-xs font-medium text-gray-400 mb-1">Actual Duration (months)</label>
-                                <input
-                                    type="number"
-                                    min="0"
-                                    value={formValues.Actual_Duration_Months}
-                                    onChange={handleChange('Actual_Duration_Months', parseFloatOrEmpty)}
-                                    className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
-                                />
-                            </div>
+
                         </div>
 
+                        {/* ── Section: Timeline ── */}
+                        <div className="border-t border-white/[0.06] pt-4">
+                            <p className="text-[11px] uppercase tracking-widest text-violet-400/70 font-semibold mb-3 flex items-center gap-1.5"><span>📅</span> Timeline</p>
+                        </div>
                         <div className={`grid ${isFormExpanded ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4' : 'grid-cols-2'} gap-3`}>
                             <div>
                                 <label className="block text-xs font-medium text-gray-400 mb-1">Initial Duration (months)</label>
@@ -331,16 +377,7 @@ const CostPredictionView = ({ project, onBack }) => {
                                     className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
                                 />
                             </div>
-                            <div>
-                                <label className="block text-xs font-medium text-gray-400 mb-1">Time Overrun (months)</label>
-                                <input
-                                    type="number"
-                                    min="0"
-                                    value={formValues.Time_Overrun_Months}
-                                    onChange={handleChange('Time_Overrun_Months', parseFloatOrEmpty)}
-                                    className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
-                                />
-                            </div>
+
                             <div className="grid grid-cols-3 gap-3 col-span-full">
                                 <div>
                                     <label className="block text-xs font-medium text-gray-400 mb-1">Start Month</label>
@@ -378,6 +415,10 @@ const CostPredictionView = ({ project, onBack }) => {
                             </div>
                         </div>
 
+                        {/* ── Section: Economic Indicators ── */}
+                        <div className="border-t border-white/[0.06] pt-4">
+                            <p className="text-[11px] uppercase tracking-widest text-teal-400/70 font-semibold mb-3 flex items-center gap-1.5"><span>💹</span> Economic Indicators</p>
+                        </div>
                         <div className={`grid ${isFormExpanded ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4' : 'grid-cols-2'} gap-3`}>
                             <div>
                                 <label className="block text-xs font-medium text-gray-400 mb-1">Inflation Rate</label>
@@ -423,6 +464,10 @@ const CostPredictionView = ({ project, onBack }) => {
                             </div>
                         </div>
 
+                        {/* ── Section: Risk & Experience ── */}
+                        <div className="border-t border-white/[0.06] pt-4">
+                            <p className="text-[11px] uppercase tracking-widest text-rose-400/70 font-semibold mb-3 flex items-center gap-1.5"><span>⚠️</span> Risk & Experience</p>
+                        </div>
                         <div className={`grid ${isFormExpanded ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4' : 'grid-cols-2'} gap-3`}>
                             <div>
                                 <label className="block text-xs font-medium text-gray-400 mb-1">Contractor Experience (Years)</label>
@@ -467,6 +512,10 @@ const CostPredictionView = ({ project, onBack }) => {
                             </div>
                         </div>
 
+                        {/* ── Section: Risk Scores ── */}
+                        <div className="border-t border-white/[0.06] pt-4">
+                            <p className="text-[11px] uppercase tracking-widest text-pink-400/70 font-semibold mb-3 flex items-center gap-1.5"><span>🎯</span> Risk Scores</p>
+                        </div>
                         <div className={`grid ${isFormExpanded ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4' : 'grid-cols-2'} gap-3`}>
                             <div>
                                 <label className="block text-xs font-medium text-gray-400 mb-1">Design Risk Score</label>
@@ -517,16 +566,21 @@ const CostPredictionView = ({ project, onBack }) => {
                             </div>
                         )}
 
-                        <button
-                            type="submit"
-                            disabled={loading}
-                            className={`w-full px-6 py-3 rounded-xl font-semibold transition-all duration-200 ${loading
+                        <div className="border-t border-white/[0.06] pt-5">
+                            <button
+                                type="submit"
+                                disabled={loading}
+                                className={`w-full px-6 py-3.5 rounded-xl font-bold text-sm tracking-wide transition-all duration-300 ${loading
                                     ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
-                                    : 'bg-gradient-to-r from-yellow-500 to-orange-500 text-white hover:from-yellow-400 hover:to-orange-400'
-                                }`}
-                        >
-                            {loading ? 'Predicting...' : 'Predict Cost Overrun'}
-                        </button>
+                                    : 'bg-gradient-to-r from-amber-500 via-orange-500 to-amber-500 text-white hover:shadow-lg hover:shadow-amber-500/25 hover:scale-[1.01] active:scale-[0.99]'
+                                    }`}
+                                style={loading ? {} : { backgroundSize: '200% 100%', animation: 'gradientShift 3s ease infinite' }}
+                            >
+                                {loading ? (
+                                    <span className="flex items-center justify-center gap-2"><svg className="animate-spin h-4 w-4" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" /></svg> Predicting...</span>
+                                ) : '🚀 Predict Cost Overrun'}
+                            </button>
+                        </div>
                     </form>
                 </div>
 

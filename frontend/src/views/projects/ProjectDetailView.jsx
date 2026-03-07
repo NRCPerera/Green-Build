@@ -162,7 +162,7 @@ const ProjectDetailView = ({ project, onBack, onNavigate }) => {
             label: <span className="text-gray-300">📊 Overview</span>,
             children: (
                 <div className="space-y-6">
-                  
+
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                         <div style={{ gridColumn: 'span 2', background: 'rgba(30,41,59,0.5)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '0.75rem', padding: '1.25rem' }}>
                             <h3 style={{ color: '#e2e8f0', fontWeight: 600, marginBottom: '0.75rem' }}>Project Information</h3>
@@ -211,10 +211,10 @@ const ProjectDetailView = ({ project, onBack, onNavigate }) => {
                             <div style={{ fontSize: '2rem', marginBottom: '0.75rem' }}>💰</div>
                             <h4 style={{ color: '#e2e8f0', fontSize: '1rem', fontWeight: 600, marginBottom: '0.5rem' }}>Cost Overrun Prediction</h4>
                             <p style={{ color: '#64748b', fontSize: '0.8125rem', textAlign: 'center', marginBottom: '1rem' }}>Predict cost overruns and identify risk factors with ANN-based analysis</p>
-                            <Button 
-                                type="primary" 
+                            <Button
+                                type="primary"
                                 style={{ background: 'linear-gradient(to right, #fbbf24, #f97316)', border: 'none' }}
-                                onClick={() => onNavigate?.('cost')}
+                                onClick={() => onNavigate?.('cost', project)}
                             >
                                 Go to Cost Prediction
                             </Button>
@@ -224,10 +224,10 @@ const ProjectDetailView = ({ project, onBack, onNavigate }) => {
                             <div style={{ fontSize: '2rem', marginBottom: '0.75rem' }}>⏱️</div>
                             <h4 style={{ color: '#e2e8f0', fontSize: '1rem', fontWeight: 600, marginBottom: '0.5rem' }}>Delay Prediction</h4>
                             <p style={{ color: '#64748b', fontSize: '0.8125rem', textAlign: 'center', marginBottom: '1rem' }}>Forecast construction delays and risk categories using ML models</p>
-                            <Button 
+                            <Button
                                 type="primary"
                                 style={{ background: 'linear-gradient(to right, #f87171, #dc2626)', border: 'none' }}
-                                onClick={() => onNavigate?.('delay')}
+                                onClick={() => onNavigate?.('delay', project)}
                             >
                                 Go to Delay Prediction
                             </Button>

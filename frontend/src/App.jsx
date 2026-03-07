@@ -303,10 +303,10 @@ function App() {
 
       case 'project-detail':
         return isAuthenticated && selectedProject ? (
-          <ProjectDetailView 
-            project={selectedProject} 
+          <ProjectDetailView
+            project={selectedProject}
             onBack={() => setActiveModule('projects')}
-            onNavigate={(module) => handleModuleChange(module)}
+            onNavigate={(module, proj) => handleModuleChange(module, proj || selectedProject)}
           />
         ) : (
           <ProjectsListView onSelectProject={handleSelectProject} />

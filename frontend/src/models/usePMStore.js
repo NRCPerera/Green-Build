@@ -64,7 +64,7 @@ export const PROJECT_TEMPLATES = {
     'apartment-building': {
         name: 'Apartment Building',
         icon: '🏢',
-        projectType: 'commercial',
+        projectType: 'apartment',
         description: 'Multi-storey apartment building project',
         milestones: [
             { title: 'Design Approval', daysFromStart: 14 },

@@ -25,7 +25,7 @@ def get_config() -> AppConfig:
         base_dir=base_dir,
         models_dir=models_dir,
         pre_project_dir=pre_project_dir,
-        pre_project_regressor_model=pre_project_dir / "best_cost_overrun_regressor.joblib",
-        pre_project_classifier_model=pre_project_dir / "best_cost_overrun_classifier.joblib",
-        pre_project_feature_names=pre_project_dir / "model_feature_names.joblib",
+        pre_project_regressor_model=pre_project_dir / "best_cost_overrun_regressor1.joblib",
+        pre_project_classifier_model=pre_project_dir / "best_cost_overrun_classifier1.joblib",
+        pre_project_feature_names=pre_project_dir / "model_feature_names1.joblib",
     )
