@@ -354,6 +354,7 @@ const QuantityTakeoffView = () => {
                         loadingBOQ={loadingBOQ}
                         boqData={boqData}
                         previewImage={previewImage}
+                        onStartOver={handleStartOver}
                     />
                 );
 
@@ -380,50 +381,43 @@ const QuantityTakeoffView = () => {
             {/* Step Content */}
             {renderStepContent()}
 
-            {/* Navigation Footer */}
-            <Card className="glass-card" style={{ marginTop: 24 }}>
-                <Row justify="space-between" align="middle">
-                    <Col>
-                        {currentStep > 0 && currentStep < 3 && (
-                            <Button
-                                icon={<ArrowLeftOutlined />}
-                                onClick={handlePrev}
-                                size="large"
-                            >
-                                Previous
-                            </Button>
-                        )}
-                        {currentStep === 3 && (
-                            <Button
-                                icon={<ArrowLeftOutlined />}
-                                onClick={handleStartOver}
-                                size="large"
-                            >
-                                Start Over
-                            </Button>
-                        )}
-                    </Col>
-                    <Col>
-                        <Text type="secondary">
-                            Step {currentStep + 1} of {steps.length}
-                        </Text>
-                    </Col>
-                    <Col>
-                        {currentStep < 3 && (
-                            <Button
-                                type="primary"
-                                onClick={handleNext}
-                                disabled={!canGoNext()}
-                                size="large"
-                                className="submit-button"
-                            >
-                                {currentStep === 2 ? 'Generate BOQ & 3D' : 'Next'}
-                                <ArrowRightOutlined />
-                            </Button>
-                        )}
-                    </Col>
-                </Row>
-            </Card>
+            {/* Navigation Footer — hidden on step 3 (BOQ has its own toolbar) */}
+            {currentStep < 3 && (
+                <Card className="glass-card" style={{ marginTop: 24 }}>
+                    <Row justify="space-between" align="middle">
+                        <Col>
+                            {currentStep > 0 && (
+                                <Button
+                                    icon={<ArrowLeftOutlined />}
+                                    onClick={handlePrev}
+                                    size="large"
+                                >
+                                    Previous
+                                </Button>
+                            )}
+                        </Col>
+                        <Col>
+                            <Text type="secondary">
+                                Step {currentStep + 1} of {steps.length}
+                            </Text>
+                        </Col>
+                        <Col>
+                            {currentStep < 3 && (
+                                <Button
+                                    type="primary"
+                                    onClick={handleNext}
+                                    disabled={!canGoNext()}
+                                    size="large"
+                                    className="submit-button"
+                                >
+                                    {currentStep === 2 ? 'Generate BOQ & 3D' : 'Next'}
+                                    <ArrowRightOutlined />
+                                </Button>
+                            )}
+                        </Col>
+                    </Row>
+                </Card>
+            )}
         </div>
     );
 };

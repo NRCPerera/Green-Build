@@ -14,8 +14,7 @@ const { Text } = Typography;
 /**
  * 3D Floor Plan Viewer Component
  * Renders a 3D visualization of floor plan geometry data using Three.js
- * 
- * @param {Object} props
+ * * @param {Object} props
  * @param {Object} props.floorplanData - The geometry data from the ML pipeline
  * @param {boolean} props.loading - Whether data is still loading
  */
@@ -29,19 +28,23 @@ const FloorPlan3DViewer = ({ floorplanData, loading = false }) => {
     const modelGroupRef = useRef(null); // Track the current model group
     const [isFullscreen, setIsFullscreen] = useState(false);
     const [error, setError] = useState(null);
+    const [detectionInfo, setDetectionInfo] = useState(null);
 
     // Initialize Three.js scene
     useEffect(() => {
         if (!containerRef.current) return;
+
+        // Clean up any existing canvases (handles React StrictMode double-mount)
+        while (containerRef.current.querySelector('canvas')) {
+            containerRef.current.querySelector('canvas').remove();
+        }
 
         // Scene setup
         const scene = new THREE.Scene();
         scene.background = new THREE.Color(0x1a1a2e);
         sceneRef.current = scene;
 
-        // Grid helper
-        const gridHelper = new THREE.GridHelper(50, 50, 0x444466, 0x333344);
-        scene.add(gridHelper);
+        // Grid will be added/resized when model loads
 
         // Camera
         const aspect = containerRef.current.clientWidth / containerRef.current.clientHeight;
@@ -105,10 +108,11 @@ const FloorPlan3DViewer = ({ floorplanData, loading = false }) => {
             if (animationIdRef.current) {
                 cancelAnimationFrame(animationIdRef.current);
             }
-            if (containerRef.current && renderer.domElement) {
-                containerRef.current.removeChild(renderer.domElement);
-            }
+            controls.dispose();
             renderer.dispose();
+            if (renderer.domElement && renderer.domElement.parentNode) {
+                renderer.domElement.parentNode.removeChild(renderer.domElement);
+            }
         };
     }, []);
 
@@ -135,7 +139,6 @@ const FloorPlan3DViewer = ({ floorplanData, loading = false }) => {
 
         // Remove the old model group if it exists
         if (modelGroupRef.current) {
-            // Dispose all geometries and materials in the old group
             modelGroupRef.current.traverse((child) => {
                 if (child.isMesh) {
                     if (child.geometry) child.geometry.dispose();
@@ -152,44 +155,24 @@ const FloorPlan3DViewer = ({ floorplanData, loading = false }) => {
             modelGroupRef.current = null;
         }
 
-        // Materials for windows and doors
-        const windowMaterial = new THREE.MeshStandardMaterial({
-            color: 0x88ccff,
-            transparent: true,
-            opacity: 0.6,
-            side: THREE.DoubleSide
-        });
-        const doorMaterial = new THREE.MeshStandardMaterial({
-            color: 0x8b5a2b,
-            side: THREE.DoubleSide,
-            roughness: 0.6
-        });
-
         const wallHeight = data.metadata?.wall_height || 2.5;
-        const roomHeight = 0.15; // Thin room floor extrusion
+        const roomHeight = 0.05; // Thin room floor slab
         const group = new THREE.Group();
 
-        // Build rooms with unique colors
+        // ── 1. Render Room Floors ───────────────────────
         if (data.rooms && data.rooms.length > 0) {
-            console.log(`[3D Viewer] Rendering ${data.rooms.length} rooms`);
             data.rooms.forEach((room) => {
                 if (!room || !room.outline || room.outline.length < 3) return;
 
-                // Parse color from hex string
                 const colorHex = room.color || '#4A90D9';
-                const color = new THREE.Color(colorHex);
-
-                // Create room material with unique color
                 const roomMaterial = new THREE.MeshStandardMaterial({
-                    color: color,
+                    color: new THREE.Color(colorHex),
                     side: THREE.DoubleSide,
                     roughness: 0.4,
                     metalness: 0.1
                 });
 
                 const shape = createShape(room.outline, room.holes || []);
-
-                // Room floor (thin extrusion)
                 const floorGeometry = new THREE.ExtrudeGeometry(shape, {
                     depth: roomHeight,
                     bevelEnabled: false
@@ -201,130 +184,155 @@ const FloorPlan3DViewer = ({ floorplanData, loading = false }) => {
             });
         }
 
-        // Build windows (glass panes)
-        if (data.windows && data.windows.length > 0) {
-            data.windows.forEach((win) => {
-                if (!win || !win.outline || win.outline.length < 3) return;
-                const shape = createShape(win.outline, []);
-                const geometry = new THREE.ExtrudeGeometry(shape, {
-                    depth: 1.5, // Window height
-                    bevelEnabled: false
-                });
-                const mesh = new THREE.Mesh(geometry, windowMaterial);
-                mesh.rotation.x = -Math.PI / 2;
-                mesh.position.y = 1.0; // Sill height
-                group.add(mesh);
+        // ── 2. Render Walls Safely ─────────────────────────────
+        const wallMaterial = new THREE.MeshStandardMaterial({
+            color: 0xd4c5a9, // Beige walls
+            side: THREE.DoubleSide,
+            roughness: 0.8,
+            metalness: 0.0,
+            transparent: true,
+            opacity: 0.85
+        });
+
+        if (data.walls && data.walls.length > 0) {
+            data.walls.forEach((wall) => {
+                if (!wall || !wall.outline || wall.outline.length < 3) return;
+
+                const shape = createShape(wall.outline, wall.holes || []);
+                
+                try {
+                    const wallGeometry = new THREE.ExtrudeGeometry(shape, {
+                        depth: wallHeight,
+                        bevelEnabled: false
+                    });
+                    
+                    const wallMesh = new THREE.Mesh(wallGeometry, wallMaterial);
+                    wallMesh.rotation.x = -Math.PI / 2;
+                    wallMesh.position.y = roomHeight; 
+                    wallMesh.castShadow = true;
+                    wallMesh.receiveShadow = true;
+                    group.add(wallMesh);
+                } catch (e) {
+                    console.error("Failed to triangulate wall geometry:", e);
+                }
             });
         }
 
-        // Build doors
+        // ── 3. Render Doors and Windows ──────────────────────────
+        const doorCount = data.doors?.length || 0;
+        const windowCount = data.windows?.length || 0;
+        const roomCount = data.rooms?.length || 0;
+        setDetectionInfo({ rooms: roomCount, doors: doorCount, windows: windowCount });
+
+        const doorMaterial = new THREE.MeshStandardMaterial({
+            color: 0x8b5a2b, // Brown doors
+            side: THREE.DoubleSide,
+            roughness: 0.5,
+            metalness: 0.1
+        });
+
+        const windowMaterial = new THREE.MeshStandardMaterial({
+            color: 0x88ddff, // Cyan glass
+            transparent: true,
+            opacity: 0.45,
+            side: THREE.DoubleSide,
+            metalness: 0.3,
+            roughness: 0.05
+        });
+
         if (data.doors && data.doors.length > 0) {
+            const doorHeight = 2.1;
             data.doors.forEach((door) => {
                 if (!door || !door.outline || door.outline.length < 3) return;
-                const shape = createShape(door.outline, []);
+                const shape = createShape(door.outline, door.holes || []);
                 const geometry = new THREE.ExtrudeGeometry(shape, {
-                    depth: 2.2, // Door height
+                    depth: doorHeight,
                     bevelEnabled: false
                 });
                 const mesh = new THREE.Mesh(geometry, doorMaterial);
                 mesh.rotation.x = -Math.PI / 2;
+                mesh.position.y = roomHeight;
+                mesh.castShadow = true;
                 group.add(mesh);
             });
         }
 
-        // Calculate bounds BEFORE adding to scene for proper centering
+        if (data.windows && data.windows.length > 0) {
+            const windowSillHeight = 0.9;
+            const windowPaneHeight = 1.3;
+            data.windows.forEach((win) => {
+                if (!win || !win.outline || win.outline.length < 3) return;
+                const shape = createShape(win.outline, win.holes || []);
+                const geometry = new THREE.ExtrudeGeometry(shape, {
+                    depth: windowPaneHeight,
+                    bevelEnabled: false
+                });
+                const mesh = new THREE.Mesh(geometry, windowMaterial);
+                mesh.rotation.x = -Math.PI / 2;
+                mesh.position.y = roomHeight + windowSillHeight;
+                group.add(mesh);
+            });
+        }
+
+        // ── 4. Center model and adjust camera ────────────────────
         const box = new THREE.Box3().setFromObject(group);
         const center = box.getCenter(new THREE.Vector3());
         const size = box.getSize(new THREE.Vector3());
 
-        // Center the group at origin
         group.position.x = -center.x;
         group.position.z = -center.z;
-        group.position.y = 0; // Keep at ground level
+        group.position.y = 0;
 
         scene.add(group);
-        modelGroupRef.current = group; // Store reference for cleanup
+        modelGroupRef.current = group;
 
-        // Adjust camera to fit model with good viewing angle
+        const maxDim = Math.max(size.x, size.z, 1);
+        const gridSize = Math.ceil(maxDim * 2.5);
+        const gridDivisions = Math.max(10, Math.ceil(gridSize));
+
+        const oldGrid = scene.children.find(c => c.isGridHelper);
+        if (oldGrid) scene.remove(oldGrid);
+        const newGrid = new THREE.GridHelper(gridSize, gridDivisions, 0x444466, 0x333344);
+        scene.add(newGrid);
+
         if (cameraRef.current && controlsRef.current) {
-            const maxDim = Math.max(size.x, size.z);
-            const distance = maxDim * 1.2; // Distance based on model size
-
-            // Position camera for a nice isometric-like view
-            cameraRef.current.position.set(distance * 0.7, distance * 0.5, distance * 0.7);
-
-            // Target the center of the model (which is now at origin)
-            controlsRef.current.target.set(0, roomHeight / 2, 0);
+            const distance = Math.max(maxDim * 1.8, 5);
+            cameraRef.current.position.set(distance * 0.7, distance * 0.6, distance * 0.7);
+            controlsRef.current.target.set(0, wallHeight / 2, 0);
             controlsRef.current.update();
         }
     };
 
+    // ── NEW: Auto-Correcting Shape Builder ──────────────────────
     const createShape = (outline, holes) => {
-        const shape = new THREE.Shape();
+        if (!outline || outline.length === 0) return new THREE.Shape();
 
-        if (outline.length === 0) return shape;
-
-        shape.moveTo(outline[0][0], outline[0][1]);
-        for (let i = 1; i < outline.length; i++) {
-            shape.lineTo(outline[i][0], outline[i][1]);
+        // 1. Convert outline array to Three.js Vectors
+        let pts = outline.map(p => new THREE.Vector2(p[0], p[1]));
+        
+        // 2. Force Counter-Clockwise (CCW) for the main shape
+        if (THREE.ShapeUtils.isClockWise(pts)) {
+            pts = pts.reverse();
         }
-        shape.lineTo(outline[0][0], outline[0][1]);
+        
+        const shape = new THREE.Shape(pts);
 
+        // 3. Process holes and force Clockwise (CW) winding
         if (holes && holes.length > 0) {
             holes.forEach((holePoints) => {
                 if (!holePoints || holePoints.length < 3) return;
-                const holePath = new THREE.Path();
-                holePath.moveTo(holePoints[0][0], holePoints[0][1]);
-                for (let i = 1; i < holePoints.length; i++) {
-                    holePath.lineTo(holePoints[i][0], holePoints[i][1]);
+                
+                let hPts = holePoints.map(p => new THREE.Vector2(p[0], p[1]));
+                
+                // Holes must be opposite of the main outline
+                if (!THREE.ShapeUtils.isClockWise(hPts)) {
+                    hPts = hPts.reverse();
                 }
-                holePath.lineTo(holePoints[0][0], holePoints[0][1]);
-                shape.holes.push(holePath);
+                
+                shape.holes.push(new THREE.Path(hPts));
             });
         }
-
         return shape;
-    };
-
-    // Create wall edge geometries from room outline
-    const createWallEdges = (outline, thickness, height) => {
-        if (!outline || outline.length < 3) return null;
-
-        const geometries = [];
-
-        // Create walls along each edge of the room outline
-        for (let i = 0; i < outline.length - 1; i++) {
-            const p1 = outline[i];
-            const p2 = outline[(i + 1) % outline.length];
-
-            // Calculate wall direction and perpendicular
-            const dx = p2[0] - p1[0];
-            const dy = p2[1] - p1[1];
-            const len = Math.sqrt(dx * dx + dy * dy);
-
-            if (len < 0.01) continue; // Skip very short segments
-
-            // Normalized perpendicular vector
-            const nx = -dy / len * thickness / 2;
-            const ny = dx / len * thickness / 2;
-
-            // Create wall shape (rectangle along the edge)
-            const wallShape = new THREE.Shape();
-            wallShape.moveTo(p1[0] - nx, p1[1] - ny);
-            wallShape.lineTo(p2[0] - nx, p2[1] - ny);
-            wallShape.lineTo(p2[0] + nx, p2[1] + ny);
-            wallShape.lineTo(p1[0] + nx, p1[1] + ny);
-            wallShape.lineTo(p1[0] - nx, p1[1] - ny);
-
-            const geometry = new THREE.ExtrudeGeometry(wallShape, {
-                depth: height,
-                bevelEnabled: false
-            });
-
-            geometries.push(geometry);
-        }
-
-        return geometries.length > 0 ? geometries : null;
     };
 
     const resetCamera = () => {
@@ -337,7 +345,6 @@ const FloorPlan3DViewer = ({ floorplanData, loading = false }) => {
 
     const toggleFullscreen = () => {
         setIsFullscreen(!isFullscreen);
-        // Trigger resize after state change
         setTimeout(() => {
             if (containerRef.current && cameraRef.current && rendererRef.current) {
                 const width = containerRef.current.clientWidth;
@@ -349,8 +356,6 @@ const FloorPlan3DViewer = ({ floorplanData, loading = false }) => {
         }, 100);
     };
 
-    // Always render the card with the Three.js container
-    // Use overlays for loading/empty states to keep the container mounted
     return (
         <Card
             className="glass-card"
@@ -393,7 +398,6 @@ const FloorPlan3DViewer = ({ floorplanData, loading = false }) => {
                 />
             )}
             <div style={{ position: 'relative' }}>
-                {/* Three.js container - always mounted */}
                 <div
                     ref={containerRef}
                     style={{
@@ -405,7 +409,27 @@ const FloorPlan3DViewer = ({ floorplanData, loading = false }) => {
                     }}
                 />
 
-                {/* Loading overlay */}
+                {detectionInfo && (
+                    <div style={{
+                        position: 'absolute',
+                        top: 8,
+                        right: 8,
+                        background: 'rgba(0, 0, 0, 0.65)',
+                        borderRadius: 8,
+                        padding: '8px 12px',
+                        display: 'flex',
+                        gap: 12,
+                        fontSize: 12,
+                        color: '#fff',
+                        pointerEvents: 'none',
+                        zIndex: 10
+                    }}>
+                        <span>🏠 {detectionInfo.rooms} Rooms</span>
+                        <span>🚪 {detectionInfo.doors} Doors</span>
+                        <span>🪟 {detectionInfo.windows} Windows</span>
+                    </div>
+                )}
+
                 {loading && (
                     <div style={{
                         position: 'absolute',
@@ -427,7 +451,6 @@ const FloorPlan3DViewer = ({ floorplanData, loading = false }) => {
                     </div>
                 )}
 
-                {/* Empty state overlay */}
                 {!loading && !floorplanData && (
                     <div style={{
                         position: 'absolute',

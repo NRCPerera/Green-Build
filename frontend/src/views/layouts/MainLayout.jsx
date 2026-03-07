@@ -131,6 +131,35 @@ const MainLayout = ({ children, activeModule = 'dashboard', onModuleChange, onLo
                             </button>
                         );
                     })}
+
+                    {/* Admin Section */}
+                    <div style={{ padding: '0.5rem 0.25rem', marginTop: '0.25rem' }}>
+                        <span style={{ fontSize: '0.625rem', fontWeight: 700, color: '#475569', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                            Admin
+                        </span>
+                    </div>
+                    {[
+                        { key: 'admin-rates', label: 'Material Rates', icon: '💰' },
+                    ].map((module) => {
+                        const isActive = activeModule === module.key;
+                        return (
+                            <button
+                                key={module.key}
+                                onClick={() => onModuleChange?.(module.key)}
+                                className={`
+                                        w-full flex items-center gap-3 px-4 py-2 rounded-lg transition-all duration-200
+                                        ${isActive
+                                        ? 'bg-primary-500/10 text-white'
+                                        : 'hover:bg-white/5 text-gray-500 hover:text-gray-400'
+                                    }
+                                        cursor-pointer text-sm
+                                    `}
+                            >
+                                <span className="text-base">{module.icon}</span>
+                                <span className="font-medium">{module.label}</span>
+                            </button>
+                        );
+                    })}
                 </nav>
 
                 {/* Recent Projects */}
