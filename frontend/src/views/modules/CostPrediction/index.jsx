@@ -985,7 +985,7 @@ const CostPredictionView = ({ project, onBack }) => {
                                         <p className="text-sm text-gray-400 mb-1">Predicted Final Cost</p>
                                         <p className="text-2xl font-bold text-amber-400">
                                             {formValues.Initial_Value > 0 && overrunPct != null
-                                                ? `${((formValues.Initial_Value + (formValues.Initial_Value * overrunPct / 100)) / 1000000).toFixed(1)}M LKR`
+                                                ? `${((Number(formValues.Initial_Value) * (1 + Number(overrunPct) / 100)) / 1000000).toFixed(2)}M LKR`
                                                 : 'N/A'}
                                         </p>
                                     </div>
