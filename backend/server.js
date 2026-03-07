@@ -11,8 +11,7 @@ const {
     authRoutes,
     projectRoutes,
     floorPlanRoutes,
-    boqRoutes,
-    rateRoutes
+    boqRoutes
 } = require('./routes');
 const {
     multerErrorHandler,
@@ -66,7 +65,6 @@ app.use('/api/auth', authRoutes);
 app.use('/api/projects', projectRoutes);
 app.use('/api/projects/:projectId/floorplans', floorPlanRoutes);
 app.use('/api/projects/:projectId/boq-reports', boqRoutes);
-app.use('/', rateRoutes);
 
 // Error handling middleware should be registered last
 app.use(multerErrorHandler);
@@ -109,7 +107,6 @@ const startServer = async () => {
         console.log(`  Server:              http://localhost:${config.port}`);
         console.log(`  ML Service:          ${config.pythonServiceUrl}`);
         console.log(`  Cost ML Service:     ${config.costMlServiceUrl}`);
-        console.log(`  Delay ML Service:    ${config.delayMlServiceUrl}`);
         console.log(`  Sustainability ML:   http://localhost:8003`);
         console.log(`  Uploads:             ${config.uploadDir}`);
         console.log('----------------------------------------------------------------');
