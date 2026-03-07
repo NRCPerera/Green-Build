@@ -14,7 +14,7 @@ const config = {
 
     // External service URLs
     pythonServiceUrl: process.env.PYTHON_SERVICE_URL || 'http://localhost:8000',
-    costMlServiceUrl: process.env.COST_ML_SERVICE_URL || 'http://localhost:8001',
+    costMlServiceUrl: process.env.COST_ML_SERVICE_URL || 'http://localhost:8085',
     delayMlServiceUrl: process.env.DELAY_ML_SERVICE_URL || 'http://localhost:8081',
     frontendUrl: process.env.FRONTEND_URL || '*',
 

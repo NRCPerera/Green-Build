@@ -118,17 +118,34 @@ const processFloorPlan = async (req, res) => {
             throw pythonError;
         }
 
-        // Calculate costs based on the extracted quantities
-        console.log('[Upload] Calculating cost estimates...');
-        const costs = calculateCosts(quantities);
-
-        // Build the response payload
+        // Build the response payload — return detections for user review
+        // Cost calculation is now deferred to POST /api/boq/generate
         const processingTime = Date.now() - startTime;
+        console.log('[Upload] Returning detection results for user review...');
 
         const response = {
             success: true,
-            message: 'Quantity takeoff and cost estimation completed successfully',
+            message: 'Floor plan analyzed. Please review detections before generating BOQ.',
             data: {
+                // Raw ML detections (for user to review/edit)
+                detections: {
+                    walls: {
+                        totalLengthM: quantities.wall_total_length_m || 0,
+                        grossAreaM2: quantities.wall_gross_surface_area_m2 || 0,
+                        netAreaM2: quantities.wall_net_surface_area_m2 || 0,
+                        deductionsM2: quantities.deductions_area_m2 || 0
+                    },
+                    doors: quantities.item_counts?.doors || 0,
+                    windows: quantities.item_counts?.windows || 0,
+                    rooms: quantities.room_detection || null,
+                    warning: quantities.warning || null
+                },
+                // Visualizations for overlay editing
+                overlays: {
+                    detectionOverlay: quantities.detection_overlay_base64 || null,
+                    roomMap: quantities.room_detection?.room_map_base64 || null
+                },
+                // Backward compat: also include legacy shape
                 quantities: {
                     wall_total_length_m: quantities.wall_total_length_m,
                     wall_gross_surface_area_m2: quantities.wall_gross_surface_area_m2,
@@ -139,7 +156,6 @@ const processFloorPlan = async (req, res) => {
                 },
                 room_detection: quantities.room_detection || null,
                 detection_overlay_base64: quantities.detection_overlay_base64 || null,
-                costs: costs,
                 input_parameters: {
                     scale_ppm: scale,
                     wall_height_m: wallHeight,
@@ -178,6 +194,95 @@ const processFloorPlan = async (req, res) => {
     }
 };
 
+/**
+ * Generates 3D geometry data from a floor plan for visualization.
+ * Returns wall, door, and window polygons suitable for Three.js.
+ * 
+ * @param {Object} req - Express request object with uploaded file
+ * @param {Object} res - Express response object
+ */
+const generate3DGeometry = async (req, res) => {
+    let uploadedFilePath = null;
+
+    try {
+        if (!req.file) {
+            return res.status(400).json({
+                success: false,
+                error: 'No image file provided',
+                message: 'Please upload a construction plan image'
+            });
+        }
+
+        uploadedFilePath = req.file.path;
+        console.log(`[3D Geometry] Processing file: ${req.file.originalname}`);
+
+        const scale = parseFloat(req.body.scale);
+        if (isNaN(scale) || scale <= 0) {
+            await deleteFile(uploadedFilePath);
+            return res.status(400).json({
+                success: false,
+                error: 'Invalid scale value',
+                message: 'Scale must be a positive number representing pixels per meter'
+            });
+        }
+
+        const wallHeight = parseFloat(req.body.wallHeight) || 2.5;
+
+        console.log(`[3D Geometry] Parameters: Scale=${scale} ppm, Wall Height=${wallHeight}m`);
+
+        let geometry;
+        try {
+            geometry = await pythonService.generate3DGeometry(uploadedFilePath, scale, wallHeight);
+            console.log('[3D Geometry] Successfully received geometry from ML service');
+        } catch (pythonError) {
+            console.error('[3D Geometry] Python service error:', pythonError.message);
+
+            if (pythonError.code === 'ECONNREFUSED') {
+                await deleteFile(uploadedFilePath);
+                return res.status(503).json({
+                    success: false,
+                    error: 'ML service unavailable',
+                    message: 'The Python ML processing service is not running.'
+                });
+            }
+
+            if (pythonError.response) {
+                await deleteFile(uploadedFilePath);
+                return res.status(pythonError.response.status || 500).json({
+                    success: false,
+                    error: 'ML processing failed',
+                    message: pythonError.response.data?.detail || 'Error processing the image'
+                });
+            }
+
+            throw pythonError;
+        }
+
+        await deleteFile(uploadedFilePath);
+
+        res.json({
+            success: true,
+            message: '3D geometry generated successfully',
+            data: geometry
+        });
+
+    } catch (error) {
+        console.error('[3D Geometry] Unexpected error:', error.message);
+
+        if (uploadedFilePath) {
+            await deleteFile(uploadedFilePath);
+        }
+
+        res.status(500).json({
+            success: false,
+            error: 'Internal server error',
+            message: 'An unexpected error occurred while generating 3D geometry',
+            details: error.message
+        });
+    }
+};
+
 module.exports = {
-    processFloorPlan
+    processFloorPlan,
+    generate3DGeometry
 };

@@ -14,7 +14,12 @@ const FloorPlan = require('../models/FloorPlan');
  */
 const createProject = async (req, res) => {
     try {
-        const { name, description, projectType, client, location, startDate, expectedEndDate, budget, tags, notes } = req.body;
+        const {
+            name, projectCode, description, projectType,
+            client, location, startDate, expectedEndDate,
+            budget, tags, notes, status, priority,
+            contractorGrade, constructionPeriod, floors, areaSQFT
+        } = req.body;
 
         if (!name) {
             return res.status(400).json({
@@ -25,17 +30,23 @@ const createProject = async (req, res) => {
 
         const project = new Project({
             name,
+            projectCode: projectCode || '',
             description: description || '',
             owner: req.userId,
             projectType: projectType || 'residential',
+            status: status || 'draft',
+            priority: priority || 'medium',
+            contractorGrade: contractorGrade || '',
+            constructionPeriod: constructionPeriod ? Number(constructionPeriod) : null,
+            floors: floors ? Number(floors) : null,
+            areaSQFT: areaSQFT ? Number(areaSQFT) : null,
             client: client || {},
             location: location || {},
             startDate: startDate ? new Date(startDate) : null,
             expectedEndDate: expectedEndDate ? new Date(expectedEndDate) : null,
             budget: budget || { estimated: 0, actual: 0, currency: 'LKR' },
             tags: tags || [],
-            notes: notes || '',
-            status: 'draft'
+            notes: notes || ''
         });
 
         await project.save();

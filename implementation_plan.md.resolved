@@ -1,0 +1,1199 @@
+# 🏗️ Green Build — System Refactoring Implementation Plan
+
+> **Goal:** Extend the existing construction AI system to support user-confirmed detections, dynamic rate pricing, 6-section BOQ, and automated 3D model — **without rebuilding from scratch**.
+
+---
+
+## Table of Contents
+
+1. [Architectural Changes](#1-architectural-changes)
+2. [Database Modifications](#2-database-modifications)
+3. [New / Modified API Endpoints](#3-new--modified-api-endpoints)
+4. [Updated Data Flow](#4-updated-data-flow)
+5. [Rate Engine — Pseudocode](#5-rate-engine--pseudocode)
+6. [BOQ Generation — Pseudocode](#6-boq-generation--pseudocode)
+7. [3D Model Generation — Integration Plan](#7-3d-model-generation--integration-plan)
+8. [Implementation Roadmap](#8-implementation-roadmap)
+
+---
+
+## 1. Architectural Changes
+
+### Current Architecture
+
+```mermaid
+graph LR
+    A["Frontend<br>React + Ant Design"] -->|POST /api/upload-plan| B["Backend<br>Node.js + Express"]
+    B -->|POST /calculate-quantities| C["ML Service<br>FastAPI + PyTorch"]
+    C -->|quantities + overlays| B
+    B -->|hardcoded rates ⟶ costs| A
+    B -->|POST /generate-3d-geometry| C
+```
+
+**Current pain points identified in codebase:**
+- Rates hardcoded in [config/index.js:33-68](file:///c:/Users/Ridma%20Chalana/Desktop/green-build/backend/config/index.js#L33-L68) — no versioning, no DB
+- [costModel.js](file:///c:/Users/Ridma%20Chalana/Desktop/green-build/backend/models/costModel.js) uses static config rates — no material type support
+- [uploadController.js](file:///c:/Users/Ridma%20Chalana/Desktop/green-build/backend/controllers/uploadController.js) does detect + cost + respond in one shot — no user confirmation step
+- [floorPlanController.js:162-229](file:///c:/Users/Ridma%20Chalana/Desktop/green-build/backend/controllers/floorPlanController.js#L162-L229) generates BOQ in-line with upload — categories limited to walls/doors/windows/flooring
+- Frontend [boqModel.js](file:///c:/Users/Ridma%20Chalana/Desktop/green-build/frontend/src/models/boqModel.js) already has 6 sections (from last session) but backend doesn't support them
+
+### Target Architecture
+
+```mermaid
+graph TB
+    subgraph Frontend
+        FE1["Step 1: Upload Floor Plan"]
+        FE2["Step 2: Review & Edit Detections"]
+        FE3["Step 3: Material Selection + Manual Inputs"]
+        FE4["Step 4: Confirm → BOQ + 3D"]
+    end
+
+    subgraph Backend["Backend (Node.js)"]
+        API1["POST /api/upload-plan → ML detect only"]
+        API2["POST /api/detections/confirm"]
+        API3["GET /api/rates?section=&material="]
+        API4["POST /api/rates/upload (Admin CSV)"]
+        API5["POST /api/boq/generate"]
+        API6["POST /api/generate-3d-geometry"]
+        RE["Rate Engine Module"]
+        BG["BOQ Generator Module"]
+    end
+
+    subgraph Database["MongoDB"]
+        DB1["rates (NEW)"]
+        DB2["floorplans (MODIFIED)"]
+        DB3["boqreports (MODIFIED)"]
+    end
+
+    subgraph ML["ML Service (FastAPI)"]
+        ML1["/calculate-quantities"]
+        ML2["/generate-3d-geometry"]
+    end
+
+    FE1 -->|upload image + scale + height| API1
+    API1 -->|image| ML1
+    ML1 -->|detections JSON| API1
+    API1 -->|detections + overlays| FE2
+    FE2 -->|confirmed detections + edits| API2
+    API2 -->|save to DB| DB2
+    FE3 -->|material choices + quantities| API5
+    API5 --> RE
+    RE --> DB1
+    API5 --> BG
+    BG --> DB3
+    API5 -->|full BOQ JSON| FE4
+    FE4 -->|trigger 3D| API6
+    API6 --> ML2
+```
+
+### Key Architectural Decisions
+
+| Decision | Rationale |
+|---|---|
+| **New `Rate` model** (not embedded) | Rates are shared across all projects; need history + CSV import |
+| **Split upload from BOQ** | Introduces user confirmation step between ML detection and BOQ generation |
+| **Rate Engine as service module** | Single source of truth; called by BOQ generator; easily testable |
+| **Keep frontend boqModel.js** | Already has 6-section generator from last session; just needs dynamic rates |
+| **Backward-compatible API** | Old `/api/upload-plan` still works but response shape changes (returns detections, not costs) |
+
+### Files to Create/Modify
+
+| Layer | File | Action | What Changes |
+|---|---|---|---|
+| **Backend Model** | `models/Rate.js` | **CREATE** | New Mongoose model for dynamic rates |
+| **Backend Model** | [models/BOQReport.js](file:///c:/Users/Ridma%20Chalana/Desktop/green-build/backend/models/BOQReport.js) | **MODIFY** | Add `section` field, `materialType` field to items |
+| **Backend Model** | [models/FloorPlan.js](file:///c:/Users/Ridma%20Chalana/Desktop/green-build/backend/models/FloorPlan.js) | **MODIFY** | Add `confirmedDetections` sub-document |
+| **Backend Service** | `services/rateEngine.js` | **CREATE** | Dynamic rate lookup + CSV import logic |
+| **Backend Service** | `services/boqGenerator.js` | **CREATE** | 6-section BOQ builder using Rate Engine |
+| **Backend Controller** | [controllers/uploadController.js](file:///c:/Users/Ridma%20Chalana/Desktop/green-build/backend/controllers/uploadController.js) | **MODIFY** | Return detections only (no costs) |
+| **Backend Controller** | `controllers/rateController.js` | **CREATE** | CRUD + CSV upload for rates |
+| **Backend Controller** | [controllers/boqController.js](file:///c:/Users/Ridma%20Chalana/Desktop/green-build/backend/controllers/boqController.js) | **MODIFY** | Add [generateBOQ](file:///c:/Users/Ridma%20Chalana/Desktop/green-build/frontend/src/models/boqModel.js#400-423) endpoint |
+| **Backend Route** | `routes/rateRoutes.js` | **CREATE** | Rate management routes |
+| **Backend Route** | [routes/uploadRoutes.js](file:///c:/Users/Ridma%20Chalana/Desktop/green-build/backend/routes/uploadRoutes.js) | **MODIFY** | No change needed (same endpoint, new response) |
+| **Backend Route** | [routes/boqRoutes.js](file:///c:/Users/Ridma%20Chalana/Desktop/green-build/backend/routes/boqRoutes.js) | **MODIFY** | Add `POST /generate` route |
+| **Backend Route** | [routes/index.js](file:///c:/Users/Ridma%20Chalana/Desktop/green-build/backend/routes/index.js) | **MODIFY** | Register `rateRoutes` |
+| **Backend Config** | [config/index.js](file:///c:/Users/Ridma%20Chalana/Desktop/green-build/backend/config/index.js) | **MODIFY** | Keep as fallback defaults; add `rateEngine` settings |
+| **Backend** | [server.js](file:///c:/Users/Ridma%20Chalana/Desktop/green-build/backend/server.js) | **MODIFY** | Register `rateRoutes` |
+| **Frontend Model** | [models/boqModel.js](file:///c:/Users/Ridma%20Chalana/Desktop/green-build/frontend/src/models/boqModel.js) | **MODIFY** | Accept dynamic rate objects instead of hardcoded rates |
+| **Frontend Service** | [services/apiService.js](file:///c:/Users/Ridma%20Chalana/Desktop/green-build/frontend/src/services/apiService.js) | **MODIFY** | Add `fetchRates()`, `confirmDetections()`, [generateBOQ()](file:///c:/Users/Ridma%20Chalana/Desktop/green-build/frontend/src/models/boqModel.js#400-423) |
+| **Frontend Component** | [DetectionReviewPanel.jsx](file:///c:/Users/Ridma%20Chalana/Desktop/green-build/frontend/src/views/modules/QuantityTakeoff/DetectionReviewPanel.jsx) | **MODIFY** | Add edit/delete/approve per detection |
+| **Frontend Component** | [ManualInputStep.jsx](file:///c:/Users/Ridma%20Chalana/Desktop/green-build/frontend/src/views/modules/QuantityTakeoff/ManualInputStep.jsx) | **MODIFY** | Add material type selectors, rate preview |
+| **Frontend Component** | [BOQResultView.jsx](file:///c:/Users/Ridma%20Chalana/Desktop/green-build/frontend/src/views/modules/QuantityTakeoff/BOQResultView.jsx) | **MODIFY** | Receive BOQ from backend (not compute locally) |
+
+---
+
+## 2. Database Modifications
+
+### 2.1 NEW Collection: `rates`
+
+> [!IMPORTANT]
+> This is the ONLY new collection required. All other changes are schema modifications to existing collections.
+
+```javascript
+// backend/models/Rate.js — NEW FILE
+
+const rateSchema = new mongoose.Schema({
+    // ── Identity ──────────────────────────────────
+    section: {
+        type: String,
+        required: true,
+        enum: [
+            'earthworks',        // A
+            'concrete_works',    // B
+            'masonry_works',     // C
+            'finishes',          // D
+            'doors_windows',     // E
+            'mep_works'          // F
+        ]
+    },
+    itemCode: {
+        type: String,
+        required: true,
+        uppercase: true,
+        trim: true
+        // e.g. "A01", "B03", "D05", "F12"
+    },
+    itemName: {
+        type: String,
+        required: true,
+        trim: true
+        // e.g. "Site Clearance", "RCC Grade 25"
+    },
+    description: {
+        type: String,
+        trim: true
+    },
+
+    // ── Pricing ───────────────────────────────────
+    unit: {
+        type: String,
+        required: true
+        // m², m³, kg, No., m, set, lot
+    },
+    materialType: {
+        type: String,
+        default: 'standard'
+        // e.g. "standard", "premium", "economy",
+        // or material name like "ceramic", "porcelain", "granite"
+    },
+    rate: {
+        type: Number,
+        required: true,
+        min: 0
+    },
+    currency: {
+        type: String,
+        default: 'LKR'
+    },
+
+    // ── Versioning ────────────────────────────────
+    effectiveDate: {
+        type: Date,
+        required: true,
+        default: Date.now
+    },
+    expiryDate: {
+        type: Date  // null = currently active
+    },
+    version: {
+        type: Number,
+        default: 1
+    },
+
+    // ── Audit ─────────────────────────────────────
+    uploadedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User'
+    },
+    source: {
+        type: String,
+        enum: ['manual', 'csv_import', 'system_default'],
+        default: 'manual'
+    },
+    isActive: {
+        type: Boolean,
+        default: true
+    }
+}, {
+    timestamps: true
+});
+
+// Compound index for rate lookups
+rateSchema.index({ section: 1, itemCode: 1, materialType: 1, effectiveDate: -1 });
+rateSchema.index({ isActive: 1, effectiveDate: -1 });
+```
+
+### 2.2 MODIFY: [BOQReport](file:///c:/Users/Ridma%20Chalana/Desktop/green-build/backend/controllers/boqController.js#46-86) Schema
+
+Changes to [models/BOQReport.js](file:///c:/Users/Ridma%20Chalana/Desktop/green-build/backend/models/BOQReport.js):
+
+```diff
+ const boqItemSchema = new mongoose.Schema({
++    itemNo: {
++        type: String  // "A01", "B03", etc.
++    },
++    section: {
++        type: String,
++        required: true,
++        enum: ['earthworks', 'concrete_works', 'masonry_works',
++               'finishes', 'doors_windows', 'mep_works']
++    },
+     category: {
+         type: String,
+-        required: true,
+-        enum: ['walls', 'doors', 'windows', 'electrical', 'plumbing',
+-               'hvac', 'flooring', 'ceiling', 'structural', 'other']
++        enum: ['walls', 'doors', 'windows', 'electrical', 'plumbing',
++               'hvac', 'flooring', 'ceiling', 'structural', 'earthworks',
++               'concrete', 'masonry', 'finishes', 'mep', 'other']
+     },
+     itemName: { ... },
+     description: { ... },
+     unit: { ... },
+     quantity: { ... },
++    materialType: {
++        type: String,
++        default: 'standard'
++    },
+     unitRate: { ... },
++    rateRef: {
++        type: mongoose.Schema.Types.ObjectId,
++        ref: 'Rate'  // links to the rate record used
++    },
++    rateEffectiveDate: {
++        type: Date
++    },
+     totalCost: { ... },
+     source: { ... },
+     notes: { ... }
+ });
+```
+
+Also add section subtotals to the summary:
+
+```diff
+ summary: {
++    sectionSubtotals: {
++        earthworks: { type: Number, default: 0 },
++        concrete_works: { type: Number, default: 0 },
++        masonry_works: { type: Number, default: 0 },
++        finishes: { type: Number, default: 0 },
++        doors_windows: { type: Number, default: 0 },
++        mep_works: { type: Number, default: 0 }
++    },
+     totalMLDetectedCost: { ... },
+     ...
+ }
+```
+
+### 2.3 MODIFY: [FloorPlan](file:///c:/Users/Ridma%20Chalana/Desktop/green-build/backend/controllers/floorPlanController.js#375-425) Schema
+
+Add confirmed detections to [models/FloorPlan.js](file:///c:/Users/Ridma%20Chalana/Desktop/green-build/backend/models/FloorPlan.js):
+
+```diff
+ mlAnalysis: {
+     isProcessed: ...,
+     ...
+ },
++
++// User-confirmed detections (after review step)
++confirmedDetections: {
++    isConfirmed: { type: Boolean, default: false },
++    confirmedAt: { type: Date },
++    confirmedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
++    walls: {
++        totalLengthM: { type: Number },
++        grossArea: { type: Number },
++        netArea: { type: Number },
++        heightM: { type: Number }
++    },
++    doors: [{
++        id: String,
++        type: { type: String, default: 'wooden' },
++        width: Number,
++        height: Number,
++        materialType: { type: String, default: 'standard' },
++        status: { type: String, enum: ['approved', 'edited', 'deleted', 'added'], default: 'approved' }
++    }],
++    windows: [{
++        id: String,
++        type: { type: String, default: 'aluminium' },
++        width: Number,
++        height: Number,
++        materialType: { type: String, default: 'standard' },
++        status: { type: String, enum: ['approved', 'edited', 'deleted', 'added'], default: 'approved' }
++    }],
++    rooms: [{
++        id: String,
++        type: { type: String }, // bedroom, bathroom, kitchen, etc.
++        area: Number,
++        flooringMaterial: { type: String, default: 'ceramic_tile' },
++        ceilingType: { type: String, default: 'plain' }
++    }],
++    additionalInputs: {
++        type: mongoose.Schema.Types.Mixed  // Free-form for MEP, earthworks, etc.
++    }
++},
+
+ manualInputs: { ... },
+```
+
+Also add a new status value:
+
+```diff
+ status: {
+     type: String,
+-    enum: ['uploaded', 'processing', 'processed', 'failed', 'archived'],
++    enum: ['uploaded', 'processing', 'detected', 'confirmed', 'boq_generated', 'failed', 'archived'],
+     default: 'uploaded'
+ },
+```
+
+---
+
+## 3. New / Modified API Endpoints
+
+### 3.1 Overview
+
+| Method | Endpoint | Action | Status |
+|---|---|---|---|
+| `POST` | `/api/upload-plan` | Upload image → ML detect → return detections | **MODIFY** |
+| `POST` | `/api/detections/confirm` | User confirms/edits detections | **NEW** |
+| `GET` | `/api/rates` | List rates (with section/material filters) | **NEW** |
+| `GET` | `/api/rates/:id` | Get single rate | **NEW** |
+| `POST` | `/api/rates` | Create single rate (admin) | **NEW** |
+| `PUT` | `/api/rates/:id` | Update a rate (admin) | **NEW** |
+| `POST` | `/api/rates/upload-csv` | Bulk import rates from CSV | **NEW** |
+| `GET` | `/api/rates/sections` | List all sections with available materials | **NEW** |
+| `POST` | `/api/boq/generate` | Generate BOQ from confirmed detections + rates | **NEW** |
+| `POST` | `/api/generate-3d-geometry` | Generate 3D geometry (existing, no change) | KEEP |
+
+### 3.2 Modified: `POST /api/upload-plan`
+
+**Change in** [uploadController.js](file:///c:/Users/Ridma%20Chalana/Desktop/green-build/backend/controllers/uploadController.js):
+
+Currently (line 121-153): calculates costs and includes them in response.
+**New behaviour:** Return raw ML detections only; do NOT calculate costs.
+
+```javascript
+// BEFORE (line 121-153):
+const costs = calculateCosts(quantities);
+const response = { data: { quantities, costs, ... } };
+
+// AFTER:
+const response = {
+    success: true,
+    message: 'Floor plan analyzed. Please review detections.',
+    data: {
+        // Raw ML detections for user review
+        detections: {
+            walls: {
+                totalLengthM: quantities.wall_total_length_m,
+                grossAreaM2: quantities.wall_gross_surface_area_m2,
+                netAreaM2: quantities.wall_net_surface_area_m2,
+                deductionsM2: quantities.deductions_area_m2,
+            },
+            doors: quantities.item_counts?.doors || 0,
+            windows: quantities.item_counts?.windows || 0,
+            rooms: quantities.room_detection || null,
+            warning: quantities.warning || null
+        },
+        // Visualizations for overlay editing
+        overlays: {
+            detectionOverlay: quantities.detection_overlay_base64 || null,
+            roomMap: quantities.room_detection?.room_map_base64 || null
+        },
+        inputParameters: {
+            scalePpm: scale,
+            wallHeightM: wallHeight,
+            originalFilename: req.file.originalname,
+            fileSizeKb: parseFloat(fileSizeKb)
+        }
+    }
+};
+```
+
+> [!NOTE]
+> The old `costs` field is removed from the upload response. Costs are now computed in the `POST /api/boq/generate` endpoint after user confirmation.
+
+### 3.3 NEW: `POST /api/detections/confirm`
+
+```javascript
+// Request body:
+{
+    "detections": {
+        "walls": { "totalLengthM": 45.2, "netArea": 120.5, "heightM": 2.7 },
+        "doors": [
+            { "id": "d1", "type": "wooden", "width": 0.9, "height": 2.1, "materialType": "standard", "status": "approved" },
+            { "id": "d2", "type": "wooden", "width": 0.9, "height": 2.1, "materialType": "premium", "status": "edited" }
+        ],
+        "windows": [
+            { "id": "w1", "type": "aluminium", "width": 1.2, "height": 1.0, "materialType": "standard", "status": "approved" }
+        ],
+        "rooms": [
+            { "id": "r1", "type": "bedroom", "area": 12.5, "flooringMaterial": "ceramic_tile", "ceilingType": "plain" },
+            { "id": "r2", "type": "bathroom", "area": 4.2, "flooringMaterial": "porcelain_tile", "ceilingType": "false" }
+        ],
+        "additionalInputs": {
+            "excavationDepth": 1.2,
+            "outlets": 12,
+            "toilets": 2,
+            "lightFixtures": 8,
+            "acUnits": 2
+        }
+    }
+}
+
+// Response:
+{
+    "success": true,
+    "message": "Detections confirmed and saved.",
+    "data": {
+        "confirmedAt": "2026-03-04T...",
+        "summary": {
+            "wallArea": 120.5,
+            "doors": 2,
+            "windows": 1,
+            "rooms": 2,
+            "hasAdditionalInputs": true
+        }
+    }
+}
+```
+
+### 3.4 NEW: Rate Management Endpoints
+
+#### `GET /api/rates?section=finishes&materialType=ceramic`
+
+```javascript
+// Response:
+{
+    "success": true,
+    "data": {
+        "rates": [
+            {
+                "_id": "...",
+                "section": "finishes",
+                "itemCode": "D05",
+                "itemName": "Floor Tiling",
+                "unit": "m²",
+                "materialType": "ceramic",
+                "rate": 3500.00,
+                "effectiveDate": "2026-01-01",
+                "currency": "LKR"
+            }
+        ]
+    }
+}
+```
+
+#### `POST /api/rates/upload-csv` (Admin)
+
+```javascript
+// Request: multipart/form-data with CSV file
+// CSV format:
+// section,itemCode,itemName,unit,materialType,rate,effectiveDate
+// earthworks,A01,Site Clearance,m²,standard,250.00,2026-01-01
+// finishes,D05,Floor Tiling,m²,ceramic,3500.00,2026-01-01
+// finishes,D05,Floor Tiling,m²,porcelain,5500.00,2026-01-01
+
+// Response:
+{
+    "success": true,
+    "message": "Imported 48 rates from CSV.",
+    "data": {
+        "imported": 48,
+        "skipped": 2,
+        "errors": []
+    }
+}
+```
+
+### 3.5 NEW: `POST /api/boq/generate`
+
+```javascript
+// Request body:
+{
+    "confirmedDetections": { /* from step 2 */ },
+    "materialSelections": {
+        "wallFinish": "plastering",       // or "tiling", "painting"
+        "flooringDefault": "ceramic_tile",
+        "doorType": "standard",
+        "windowType": "aluminium"
+    },
+    "rateDate": "2026-03-01"  // optional — defaults to today
+}
+
+// Response:
+{
+    "success": true,
+    "data": {
+        "boqReport": {
+            "_id": "...",
+            "reportNumber": "BOQ-202603-00023",
+            "sections": [
+                {
+                    "code": "A",
+                    "title": "Earthworks",
+                    "items": [
+                        {
+                            "itemNo": "A01",
+                            "description": "Site Clearance",
+                            "unit": "m²",
+                            "quantity": 85.20,
+                            "materialType": "standard",
+                            "rate": 250.00,
+                            "amount": 21300.00
+                        }
+                    ],
+                    "subtotal": 450000.00
+                },
+                // ... sections B-F
+            ],
+            "summary": {
+                "subtotal": 2500000,
+                "contingency": 250000,
+                "overhead": 375000,
+                "profit": 250000,
+                "grandTotal": 3375000
+            }
+        }
+    }
+}
+```
+
+---
+
+## 4. Updated Data Flow
+
+### Current Flow (Single-pass)
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant F as Frontend
+    participant B as Backend
+    participant ML as ML Service
+
+    U->>F: Upload image + scale + height
+    F->>B: POST /api/upload-plan
+    B->>ML: POST /calculate-quantities
+    ML-->>B: quantities + overlays
+    B->>B: calculateCosts(quantities) ← hardcoded rates
+    B-->>F: { quantities, costs, overlays }
+    F->>F: Generate BOQ table locally
+    F-->>U: Display BOQ + images
+
+    Note right of F: 3D generated separately
+    F->>B: POST /generate-3d-geometry
+    B->>ML: POST /generate-3d-geometry
+    ML-->>B: geometry JSON
+    B-->>F: { walls, doors, windows }
+    F-->>U: Three.js 3D view
+```
+
+### New Flow (Multi-step with confirmation)
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant F as Frontend
+    participant B as Backend
+    participant ML as ML Service
+    participant DB as MongoDB
+
+    rect rgb(30, 60, 80)
+    Note over U,ML: STEP 1 — Upload & Detect
+    U->>F: Upload floor plan
+    F->>B: POST /api/upload-plan
+    B->>ML: POST /calculate-quantities
+    ML-->>B: detections + overlays
+    B-->>F: { detections, overlays } ← NO costs
+    end
+
+    rect rgb(60, 50, 80)
+    Note over U,F: STEP 2 — Review & Edit Detections
+    F-->>U: Show detection overlays (editable)
+    U->>F: Approve/edit/delete items
+    U->>F: Set material types per room
+    F->>B: POST /api/detections/confirm
+    B->>DB: Save confirmedDetections
+    B-->>F: Confirmation receipt
+    end
+
+    rect rgb(40, 70, 60)
+    Note over U,DB: STEP 3 — Material & Rate Selection
+    F->>B: GET /api/rates?section=...
+    B->>DB: Query rates (effectiveDate ≤ today)
+    B-->>F: Available rates per section
+    U->>F: Select materials + review rates
+    end
+
+    rect rgb(80, 50, 30)
+    Note over U,ML: STEP 4 — Generate BOQ + 3D
+    F->>B: POST /api/boq/generate
+    B->>DB: Read confirmedDetections
+    B->>DB: Lookup rates via Rate Engine
+    B->>B: BOQ Generator builds sections A–F
+    B->>DB: Save BOQReport
+    B-->>F: Full BOQ with sections & summary
+
+    F->>B: POST /api/generate-3d-geometry
+    B->>ML: POST /generate-3d-geometry
+    ML-->>B: 3D geometry
+    B-->>F: Three.js-ready JSON
+    F-->>U: BOQ tables + 3D model
+    end
+```
+
+---
+
+## 5. Rate Engine — Pseudocode
+
+### File: `backend/services/rateEngine.js` (NEW)
+
+```javascript
+/**
+ * Rate Engine Service
+ *
+ * Resolves the correct rate for a BOQ item based on:
+ *   1. Section (earthworks, finishes, etc.)
+ *   2. Item code (A01, D05, etc.)
+ *   3. Material type (standard, premium, ceramic, etc.)
+ *   4. Effective date (latest rate where effective_date <= target_date)
+ *
+ * Falls back to config.costRates if no DB rate exists (backward compat).
+ */
+
+const Rate = require('../models/Rate');
+const config = require('../config');
+
+// ── Cache (optional, in-memory TTL) ─────────────────────
+let rateCache = {};
+let cacheTimestamp = 0;
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+/**
+ * Get the effective rate for a specific item.
+ *
+ * @param {string} section     — e.g. 'finishes'
+ * @param {string} itemCode    — e.g. 'D05'
+ * @param {string} materialType — e.g. 'ceramic' (default: 'standard')
+ * @param {Date}   asOfDate    — rate effective on this date (default: now)
+ * @returns {Object} { rate, rateId, effectiveDate, unit, source }
+ */
+async function getRate(section, itemCode, materialType = 'standard', asOfDate = new Date()) {
+    // 1. Try DB lookup — latest rate where effectiveDate <= asOfDate
+    const dbRate = await Rate.findOne({
+        section,
+        itemCode,
+        materialType,
+        effectiveDate: { $lte: asOfDate },
+        isActive: true
+    })
+    .sort({ effectiveDate: -1 })   // newest first
+    .lean();
+
+    if (dbRate) {
+        return {
+            rate: dbRate.rate,
+            rateId: dbRate._id,
+            effectiveDate: dbRate.effectiveDate,
+            unit: dbRate.unit,
+            source: 'database',
+            itemName: dbRate.itemName
+        };
+    }
+
+    // 2. Fallback to config defaults (backward compatibility)
+    const fallbackRate = getFallbackRate(section, itemCode);
+    return {
+        rate: fallbackRate.rate,
+        rateId: null,
+        effectiveDate: null,
+        unit: fallbackRate.unit,
+        source: 'config_default',
+        itemName: fallbackRate.itemName
+    };
+}
+
+/**
+ * Get all rates for a section (for frontend material selection UI).
+ */
+async function getRatesForSection(section, asOfDate = new Date()) {
+    const rates = await Rate.aggregate([
+        {
+            $match: {
+                section,
+                effectiveDate: { $lte: asOfDate },
+                isActive: true
+            }
+        },
+        { $sort: { effectiveDate: -1 } },
+        {
+            $group: {
+                _id: { itemCode: '$itemCode', materialType: '$materialType' },
+                latestRate: { $first: '$$ROOT' }
+            }
+        },
+        { $replaceRoot: { newRoot: '$latestRate' } },
+        { $sort: { itemCode: 1, materialType: 1 } }
+    ]);
+
+    return rates;
+}
+
+/**
+ * Import rates from parsed CSV rows.
+ * Creates new rate entries (preserving old ones for history).
+ */
+async function importFromCSV(rows, uploadedBy) {
+    const results = { imported: 0, skipped: 0, errors: [] };
+
+    for (const row of rows) {
+        try {
+            // Validate required fields
+            if (!row.section || !row.itemCode || !row.rate) {
+                results.skipped++;
+                continue;
+            }
+
+            await Rate.create({
+                section: row.section,
+                itemCode: row.itemCode.toUpperCase(),
+                itemName: row.itemName || row.itemCode,
+                description: row.description || '',
+                unit: row.unit || 'No.',
+                materialType: row.materialType || 'standard',
+                rate: parseFloat(row.rate),
+                effectiveDate: row.effectiveDate
+                    ? new Date(row.effectiveDate)
+                    : new Date(),
+                source: 'csv_import',
+                uploadedBy
+            });
+
+            results.imported++;
+        } catch (err) {
+            results.errors.push({
+                row: row.itemCode,
+                error: err.message
+            });
+        }
+    }
+
+    return results;
+}
+
+// ── Fallback rates from config (backward compat) ────────
+function getFallbackRate(section, itemCode) {
+    const FALLBACK_MAP = {
+        'earthworks': {
+            'A01': { rate: 250, unit: 'm²', itemName: 'Site Clearance' },
+            'A02': { rate: 2800, unit: 'm³', itemName: 'Excavation' },
+            'A03': { rate: 1800, unit: 'm³', itemName: 'Backfilling' },
+            'A04': { rate: 600, unit: 'm²', itemName: 'Compaction' },
+            'A05': { rate: 3200, unit: 'm³', itemName: 'Surplus Disposal' },
+        },
+        'concrete_works': {
+            'B01': { rate: 12000, unit: 'm³', itemName: 'PCC' },
+            'B02': { rate: 22000, unit: 'm³', itemName: 'RCC' },
+            'B03': { rate: 1200, unit: 'm²', itemName: 'Formwork' },
+            'B04': { rate: 260, unit: 'kg', itemName: 'Reinforcement Steel' },
+        },
+        'masonry_works': {
+            'C01': { rate: 5500, unit: 'm²', itemName: 'Brickwork' },
+            'C02': { rate: 4800, unit: 'm²', itemName: 'Blockwork' },
+            'C03': { rate: 8500, unit: 'm³', itemName: 'Stone Masonry' },
+        },
+        'finishes': {
+            'D01': { rate: config.costRates.wallPlasterRatePerSqm, unit: 'm²', itemName: 'Plastering' },
+            'D02': { rate: config.costRates.wallPaintRatePerSqm, unit: 'm²', itemName: 'Wall Painting' },
+            'D03': { rate: config.costRates.wallTilingRatePerSqm, unit: 'm²', itemName: 'Wall Tiling' },
+            'D04': { rate: 3500, unit: 'm²', itemName: 'Floor Tiling' },
+            'D05': { rate: 8500, unit: 'm²', itemName: 'Wood Flooring' },
+            'D06': { rate: 2500, unit: 'm²', itemName: 'Carpet Flooring' },
+            'D07': { rate: 1200, unit: 'm²', itemName: 'Plain Ceiling' },
+            'D08': { rate: 3500, unit: 'm²', itemName: 'False Ceiling' },
+        },
+        'doors_windows': {
+            'E01': { rate: config.costRates.doorUnitCost, unit: 'No.', itemName: 'Wooden Doors' },
+            'E02': { rate: config.costRates.windowUnitCost, unit: 'No.', itemName: 'Aluminium Windows' },
+            'E03': { rate: 8500, unit: 'm²', itemName: 'Glass Installation' },
+            'E04': { rate: 5000, unit: 'set', itemName: 'Ironmongery' },
+        },
+        'mep_works': {
+            'F01': { rate: 1800, unit: 'm', itemName: 'Electrical Wiring' },
+            'F02': { rate: 3500, unit: 'No.', itemName: 'Lighting Fixtures' },
+            'F03': { rate: 8500, unit: 'No.', itemName: 'Switchboards' },
+            'F04': { rate: 1500, unit: 'No.', itemName: 'Electrical Outlets' },
+            'F05': { rate: 1200, unit: 'No.', itemName: 'Switches' },
+            'F06': { rate: 150000, unit: 'No.', itemName: 'AC Units' },
+            'F07': { rate: 950, unit: 'm', itemName: 'Plumbing Pipes' },
+            'F08': { rate: 2500, unit: 'No.', itemName: 'Plumbing Fittings' },
+            'F09': { rate: 15000, unit: 'No.', itemName: 'Sinks' },
+            'F10': { rate: 35000, unit: 'No.', itemName: 'Toilets' },
+            'F11': { rate: 25000, unit: 'No.', itemName: 'Showers' },
+            'F12': { rate: 85000, unit: 'No.', itemName: 'Bathtubs' },
+            'F13': { rate: 350000, unit: 'No.', itemName: 'Staircases' },
+        }
+    };
+
+    return FALLBACK_MAP[section]?.[itemCode]
+        || { rate: 0, unit: '?', itemName: itemCode };
+}
+
+module.exports = {
+    getRate,
+    getRatesForSection,
+    importFromCSV,
+    getFallbackRate
+};
+```
+
+---
+
+## 6. BOQ Generation — Pseudocode
+
+### File: `backend/services/boqGenerator.js` (NEW)
+
+```javascript
+/**
+ * BOQ Generator Service
+ *
+ * Takes confirmed detections + user inputs + dynamic rates
+ * and produces a complete BOQ with Sections A–F.
+ *
+ * Called by: POST /api/boq/generate
+ */
+
+const rateEngine = require('./rateEngine');
+
+/**
+ * Generate a complete BOQ.
+ *
+ * @param {Object} confirmed   — confirmedDetections from FloorPlan
+ * @param {Object} materials   — materialSelections from user
+ * @param {Date}   rateDate    — effective date for rate lookup
+ * @returns {Object} { sections[], summary }
+ */
+async function generateBOQ(confirmed, materials = {}, rateDate = new Date()) {
+    const sections = [];
+
+    // ── Section A: Earthworks ─────────────────────────────
+    const earthworks = await buildSection('A', 'Earthworks', 'earthworks', [
+        {
+            code: 'A01', qty: confirmed.rooms_total_area,
+            material: 'standard'
+        },
+        {
+            code: 'A02', qty: confirmed.rooms_total_area * (confirmed.additional?.excavationDepth || 1.2),
+            material: 'standard'
+        },
+        {
+            code: 'A03', qty: confirmed.rooms_total_area * (confirmed.additional?.excavationDepth || 1.2) * 0.7,
+            material: 'standard'
+        },
+        {
+            code: 'A04', qty: confirmed.rooms_total_area,
+            material: 'standard'
+        },
+        {
+            code: 'A05', qty: confirmed.rooms_total_area * (confirmed.additional?.excavationDepth || 1.2) * 0.3,
+            material: 'standard'
+        },
+    ], rateDate);
+    sections.push(earthworks);
+
+    // ── Section B: Concrete Works ─────────────────────────
+    const floorArea = confirmed.rooms_total_area || 0;
+    const concrete = await buildSection('B', 'Concrete Works', 'concrete_works', [
+        { code: 'B01', qty: floorArea * 0.075, material: 'standard' }, // PCC
+        { code: 'B02', qty: floorArea * 0.30, material: 'standard' },  // RCC
+        { code: 'B03', qty: floorArea * 0.80, material: 'standard' },  // Formwork
+        { code: 'B04', qty: floorArea * 0.30 * 78, material: 'standard' }, // Steel
+    ], rateDate);
+    sections.push(concrete);
+
+    // ── Section C: Masonry Works ──────────────────────────
+    const wallArea = confirmed.walls?.netArea || 0;
+    const masonry = await buildSection('C', 'Masonry Works', 'masonry_works', [
+        { code: 'C02', qty: wallArea, material: materials.masonryType || 'standard' },
+    ], rateDate);
+    sections.push(masonry);
+
+    // ── Section D: Finishes ──────────────────────────────
+    const finishItems = [];
+    finishItems.push({ code: 'D01', qty: wallArea * 2, material: 'standard' }); // Plaster
+    finishItems.push({ code: 'D02', qty: wallArea * 2, material: 'standard' }); // Painting
+
+    // Per-room flooring based on user material selection
+    for (const room of (confirmed.rooms || [])) {
+        const material = room.flooringMaterial || materials.flooringDefault || 'ceramic_tile';
+        const flooringCode = material.includes('wood') ? 'D05' :
+                             material.includes('carpet') ? 'D06' : 'D04';
+        finishItems.push({ code: flooringCode, qty: room.area, material });
+    }
+
+    // Ceiling per room
+    for (const room of (confirmed.rooms || [])) {
+        const ceilingCode = room.ceilingType === 'false' ? 'D08' : 'D07';
+        finishItems.push({ code: ceilingCode, qty: room.area, material: 'standard' });
+    }
+
+    sections.push(await buildSection('D', 'Finishes', 'finishes', finishItems, rateDate));
+
+    // ── Section E: Doors & Windows ───────────────────────
+    const dwItems = [];
+    const approvedDoors = (confirmed.doors || []).filter(d => d.status !== 'deleted');
+    const approvedWindows = (confirmed.windows || []).filter(w => w.status !== 'deleted');
+
+    if (approvedDoors.length > 0) {
+        dwItems.push({ code: 'E01', qty: approvedDoors.length, material: materials.doorType || 'standard' });
+        dwItems.push({ code: 'E04', qty: approvedDoors.length, material: 'standard' }); // Ironmongery
+    }
+    if (approvedWindows.length > 0) {
+        dwItems.push({ code: 'E02', qty: approvedWindows.length, material: materials.windowType || 'standard' });
+    }
+
+    sections.push(await buildSection('E', 'Doors & Windows', 'doors_windows', dwItems, rateDate));
+
+    // ── Section F: MEP Works ─────────────────────────────
+    const add = confirmed.additionalInputs || {};
+    const mepItems = [];
+    if (floorArea > 0) mepItems.push({ code: 'F01', qty: floorArea * 1.5, material: 'standard' }); // Wiring
+    if (add.lightFixtures) mepItems.push({ code: 'F02', qty: add.lightFixtures, material: 'standard' });
+    if (add.switchboards) mepItems.push({ code: 'F03', qty: add.switchboards, material: 'standard' });
+    if (add.outlets) mepItems.push({ code: 'F04', qty: add.outlets, material: 'standard' });
+    if (add.switches) mepItems.push({ code: 'F05', qty: add.switches, material: 'standard' });
+    if (add.acUnits) mepItems.push({ code: 'F06', qty: add.acUnits, material: 'standard' });
+    if (add.plumbingPipeLength) mepItems.push({ code: 'F07', qty: add.plumbingPipeLength, material: 'standard' });
+    if (add.sinks) mepItems.push({ code: 'F09', qty: add.sinks, material: 'standard' });
+    if (add.toilets) mepItems.push({ code: 'F10', qty: add.toilets, material: 'standard' });
+    if (add.showers) mepItems.push({ code: 'F11', qty: add.showers, material: 'standard' });
+    if (add.bathtubs) mepItems.push({ code: 'F12', qty: add.bathtubs, material: 'standard' });
+    if (add.staircases) mepItems.push({ code: 'F13', qty: add.staircases, material: 'standard' });
+
+    sections.push(await buildSection('F', 'MEP Works', 'mep_works', mepItems, rateDate));
+
+    // ── Summary ──────────────────────────────────────────
+    const subtotal = sections.reduce((sum, s) => sum + s.subtotal, 0);
+    const contingency = subtotal * 0.10;
+    const overhead = subtotal * 0.15;
+    const profit = subtotal * 0.10;
+
+    return {
+        sections,
+        summary: {
+            sectionSubtotals: Object.fromEntries(
+                sections.map(s => [s.sectionKey, s.subtotal])
+            ),
+            subtotal,
+            contingencyPercent: 10,
+            contingencyAmount: contingency,
+            overheadPercent: 15,
+            overheadAmount: overhead,
+            profitPercent: 10,
+            profitAmount: profit,
+            grandTotal: subtotal + contingency + overhead + profit,
+            currency: 'LKR',
+            rateDate
+        }
+    };
+}
+
+/**
+ * Build a single BOQ section by looking up rates for each item.
+ */
+async function buildSection(code, title, sectionKey, items, rateDate) {
+    const resolvedItems = [];
+
+    for (const item of items) {
+        if (!item.qty || item.qty <= 0) continue;
+
+        const rateInfo = await rateEngine.getRate(sectionKey, item.code, item.material, rateDate);
+        const amount = item.qty * rateInfo.rate;
+
+        resolvedItems.push({
+            itemNo: item.code,
+            section: sectionKey,
+            itemName: rateInfo.itemName,
+            description: rateInfo.itemName,
+            unit: rateInfo.unit,
+            quantity: parseFloat(item.qty.toFixed(2)),
+            materialType: item.material,
+            rate: rateInfo.rate,
+            rateRef: rateInfo.rateId,
+            rateEffectiveDate: rateInfo.effectiveDate,
+            amount: parseFloat(amount.toFixed(2)),
+            source: rateInfo.source === 'database' ? 'calculated' : 'ml-detected'
+        });
+    }
+
+    const subtotal = resolvedItems.reduce((sum, i) => sum + i.amount, 0);
+
+    return {
+        code,
+        title,
+        sectionKey,
+        items: resolvedItems,
+        subtotal: parseFloat(subtotal.toFixed(2))
+    };
+}
+
+module.exports = { generateBOQ };
+```
+
+---
+
+## 7. 3D Model Generation — Integration Plan
+
+### Current State
+
+The 3D pipeline is already functional:
+
+| Component | File | Status |
+|---|---|---|
+| ML endpoint | `/generate-3d-geometry` on ML service | ✅ Working |
+| Backend proxy | [uploadController.js:188-267](file:///c:/Users/Ridma%20Chalana/Desktop/green-build/backend/controllers/uploadController.js#L188-L267) | ✅ Working |
+| Frontend viewer | [FloorPlan3DViewer.jsx](file:///c:/Users/Ridma%20Chalana/Desktop/green-build/frontend/src/views/components/FloorPlan3DViewer.jsx) | ✅ Working (Three.js) |
+| Frontend service | [apiService.js:74-90](file:///c:/Users/Ridma%20Chalana/Desktop/green-build/frontend/src/services/apiService.js#L74-L90) | ✅ Working |
+
+### Required Changes
+
+> [!TIP]
+> The 3D system is already modular. The only change needed is **when** it's triggered (after BOQ confirmation instead of during upload).
+
+#### Change 1: Trigger 3D Generation After BOQ Confirmation
+
+Current (in [QuantityTakeoff/index.jsx](file:///c:/Users/Ridma%20Chalana/Desktop/green-build/frontend/src/views/modules/QuantityTakeoff/index.jsx)):
+- ✅ Already moved to Step 4 in the wizard (from our last session)
+- 3D is generated after user clicks "Generate BOQ & 3D"
+
+**No backend change needed** — the `/api/generate-3d-geometry` endpoint already works independently.
+
+#### Change 2: Pass Confirmed Detections to 3D Generator (Enhancement)
+
+Currently the ML service re-processes the image for 3D. Optionally, we can pass confirmed detections to avoid double processing:
+
+```javascript
+// NEW optional endpoint (ML Service):
+// POST /generate-3d-geometry-from-detections
+// Body: { confirmed_walls, confirmed_doors, confirmed_windows, wall_height }
+// Returns: geometry JSON without re-running ML detection
+```
+
+This is an **optional optimization** — not required for MVP.
+
+#### Change 3: Enhanced 3D Features from Confirmed Data
+
+The existing [FloorPlan3DViewer.jsx](file:///c:/Users/Ridma%20Chalana/Desktop/green-build/frontend/src/views/components/FloorPlan3DViewer.jsx) already renders:
+- ✅ Room floors (colored polygons)
+- ✅ Window panes (translucent blue)
+- ✅ Door panels (brown)
+- ✅ Grid helper
+- ✅ Orbit controls
+
+**Enhancement plan** (post-MVP):
+
+| Feature | How | Priority |
+|---|---|---|
+| Floor slab | Add a thin gray slab at y=0 under all rooms | High |
+| Wall extrusion | Already in [createWallEdges()](file:///c:/Users/Ridma%20Chalana/Desktop/green-build/frontend/src/views/components/FloorPlan3DViewer.jsx#289-329) (line 290) — enable it | High |
+| Material colors | Color rooms by flooring material (tile=beige, wood=brown) | Medium |
+| Labels | Add 3D text labels for room types | Low |
+
+### 3D Integration Flow (Post-Refactoring)
+
+```mermaid
+sequenceDiagram
+    participant U as User
+    participant F as Frontend (Step 4)
+    participant B as Backend
+    participant ML as ML Service
+
+    U->>F: Click "Generate BOQ & 3D"
+    
+    par BOQ Generation
+        F->>B: POST /api/boq/generate
+        B-->>F: BOQ sections + summary
+    and 3D Generation
+        F->>B: POST /api/generate-3d-geometry
+        B->>ML: Forward image + params
+        ML-->>B: geometry JSON
+        B-->>F: walls/doors/windows polygons
+    end
+    
+    F->>F: Render Three.js scene
+    F->>F: Display BOQ tables
+    F-->>U: Complete view
+```
+
+---
+
+## 8. Implementation Roadmap
+
+### Phase Sequencing
+
+```mermaid
+gantt
+    title Implementation Phases
+    dateFormat  YYYY-MM-DD
+    axisFormat  %d %b
+
+    section Phase 1 - DB
+    Rate model + seed data       :p1a, 2026-03-04, 1d
+    BOQReport schema update      :p1b, after p1a, 1d
+    FloorPlan schema update      :p1c, after p1a, 1d
+
+    section Phase 2 - Rate Engine
+    rateEngine service           :p2a, after p1c, 1d
+    Rate CRUD controller/routes  :p2b, after p2a, 1d
+    CSV import endpoint          :p2c, after p2b, 1d
+    Seed default rates           :p2d, after p2c, 1d
+
+    section Phase 3 - Backend APIs
+    Modify upload response       :p3a, after p2d, 1d
+    Detection confirm endpoint   :p3b, after p3a, 1d
+    BOQ generate endpoint        :p3c, after p3b, 2d
+
+    section Phase 4 - Frontend
+    Update apiService            :p4a, after p3c, 1d
+    Detection edit UI            :p4b, after p4a, 2d
+    Material selection UI        :p4c, after p4b, 1d
+    BOQ from backend             :p4d, after p4c, 1d
+
+    section Phase 5 - Polish
+    3D enhancements              :p5a, after p4d, 1d
+    Testing + fixes              :p5b, after p5a, 2d
+```
+
+### Priority Order
+
+| # | Phase | What | Effort | Risk |
+|---|---|---|---|---|
+| 1 | **Rate model + seeding** | Create `models/Rate.js`, seed script, modify BOQReport/FloorPlan schemas | 1 day | Low |
+| 2 | **Rate Engine service** | Create `services/rateEngine.js` with DB lookup + fallback logic | 1 day | Low |
+| 3 | **Rate API + admin CSV** | `rateController.js`, `rateRoutes.js`, CSV parser | 1 day | Low |
+| 4 | **Modify upload response** | Strip costs from [processFloorPlan()](file:///c:/Users/Ridma%20Chalana/Desktop/green-build/backend/controllers/uploadController.js#6-180), return detections only | 0.5 day | Medium — breaking change |
+| 5 | **Detection confirmation API** | New endpoint to save confirmed detections | 0.5 day | Low |
+| 6 | **BOQ Generator service** | `services/boqGenerator.js` — 6-section builder using Rate Engine | 2 days | Medium |
+| 7 | **BOQ generate endpoint** | Wire up controller + route for `/api/boq/generate` | 0.5 day | Low |
+| 8 | **Frontend: apiService** | Add `confirmDetections()`, `fetchRates()`, [generateBOQ()](file:///c:/Users/Ridma%20Chalana/Desktop/green-build/frontend/src/models/boqModel.js#400-423) | 0.5 day | Low |
+| 9 | **Frontend: Detection edit** | Editable overlays in [DetectionReviewPanel.jsx](file:///c:/Users/Ridma%20Chalana/Desktop/green-build/frontend/src/views/modules/QuantityTakeoff/DetectionReviewPanel.jsx) | 2 days | Medium |
+| 10 | **Frontend: Material + rate UI** | Material selectors + rate preview in [ManualInputStep.jsx](file:///c:/Users/Ridma%20Chalana/Desktop/green-build/frontend/src/views/modules/QuantityTakeoff/ManualInputStep.jsx) | 1 day | Low |
+| 11 | **Frontend: BOQ from backend** | [BOQResultView.jsx](file:///c:/Users/Ridma%20Chalana/Desktop/green-build/frontend/src/views/modules/QuantityTakeoff/BOQResultView.jsx) consumes backend BOQ instead of local computation | 1 day | Low |
+| 12 | **3D polish + testing** | Floor slab, wall extrusions, E2E testing | 2 days | Low |
+
+> [!WARNING]
+> **Phase 4 (modify upload response)** is a breaking change for the existing quick-analysis flow. Ensure the frontend wizard is updated simultaneously, or use feature flags to support both responses during transition.
+
+### Backward Compatibility Strategy
+
+| Component | Strategy |
+|---|---|
+| `POST /api/upload-plan` | Returns detections (new shape). Old clients that expect `costs` will break — but the only client is our own frontend |
+| [costModel.js](file:///c:/Users/Ridma%20Chalana/Desktop/green-build/backend/models/costModel.js) | Keep file — it's used by [floorPlanController.js](file:///c:/Users/Ridma%20Chalana/Desktop/green-build/backend/controllers/floorPlanController.js) for project-scoped uploads. Deprecate but don't delete |
+| `config.costRates` | Keep as Rate Engine fallback. No DB rates → falls back to config |
+| [manualInputModel.js](file:///c:/Users/Ridma%20Chalana/Desktop/green-build/frontend/src/models/manualInputModel.js) (frontend) | Deprecate — replaced by [ManualInputStep](file:///c:/Users/Ridma%20Chalana/Desktop/green-build/frontend/src/views/modules/QuantityTakeoff/ManualInputStep.jsx#52-376) which feeds into backend BOQ generator |
+| Old [generateBOQData()](file:///c:/Users/Ridma%20Chalana/Desktop/green-build/frontend/src/models/boqModel.js#400-423) in boqModel.js | Keep as legacy export — [BOQResultView.jsx](file:///c:/Users/Ridma%20Chalana/Desktop/green-build/frontend/src/views/modules/QuantityTakeoff/BOQResultView.jsx) will switch to backend-generated BOQ |

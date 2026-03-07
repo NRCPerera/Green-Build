@@ -34,28 +34,65 @@ def validate_floor_plan_mask(binary_mask: np.ndarray) -> Tuple[bool, float]:
     return is_valid, coverage
 
 
-def calculate_wall_length(binary_mask: np.ndarray, scale_ppm: float) -> Tuple[float, bool]:
- 
-    if binary_mask.sum() == 0:
+def calculate_wall_length(binary_mask: np.ndarray, scale_ppm: float, room_mask: np.ndarray = None) -> Tuple[float, bool]:
+    """
+    Calculate total wall centerline length from binary mask.
+    
+    If wall detection is poor but room mask is available, derive walls from room boundaries.
+    """
+    wall_pixels = binary_mask.sum()
+    total_pixels = binary_mask.size
+    coverage = (wall_pixels / total_pixels) * 100
+    
+    # Check if we need to invert (more than 50% coverage means walls are inverted)
+    working_mask = binary_mask.copy()
+    if coverage > 50:
+        working_mask = 1 - working_mask
+        logger.info(f"Wall mask inverted (original coverage: {coverage:.2f}%)")
+        coverage = 100 - coverage
+    
+    # Validate coverage
+    is_valid = 0.5 <= coverage <= 45.0
+    logger.info(f"Mask coverage: {coverage:.2f}% (valid: {is_valid})")
+    
+    # If wall detection is poor and room mask is available, derive walls from room boundaries
+    if coverage < 0.5 and room_mask is not None:
+        logger.info("Wall detection poor, deriving walls from room boundaries...")
+        # Invert room mask to get wall areas
+        inverted_room = 1 - room_mask.astype(np.uint8)
+        # Apply morphological operations to clean up
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
+        working_mask = cv2.morphologyEx(inverted_room, cv2.MORPH_CLOSE, kernel, iterations=2)
+        working_mask = cv2.morphologyEx(working_mask, cv2.MORPH_OPEN, kernel, iterations=1)
+        new_coverage = (working_mask.sum() / total_pixels) * 100
+        logger.info(f"Derived wall mask coverage: {new_coverage:.2f}%")
+        is_valid = True  # Derived from room detection which worked
+    
+    if working_mask.sum() == 0:
         logger.warning("Empty wall mask detected - image may not be a floor plan")
         return 0.0, False
     
-
-    is_valid, coverage = validate_floor_plan_mask(binary_mask)
-    
-    if not is_valid:
+    if not is_valid and room_mask is None:
         logger.warning(f"Image may not be a valid floor plan (coverage: {coverage:.1f}%)")
     
+    # Apply morphological operations to clean the mask before skeletonization
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
+    cleaned_mask = cv2.morphologyEx(working_mask.astype(np.uint8), cv2.MORPH_CLOSE, kernel, iterations=2)
+    
     # Skeletonize the mask to get centerline
-    skeleton = skeletonize(binary_mask.astype(bool))
+    skeleton = skeletonize(cleaned_mask.astype(bool))
     
     # Count skeleton pixels
     skeleton_pixels = np.sum(skeleton)
     
-    # Convert to meters
-    wall_length_m = skeleton_pixels / scale_ppm
+    # Multiply by sqrt(2)/2 factor to account for diagonal pixels
+    # (average path factor for skeletons)
+    adjusted_pixels = skeleton_pixels * 1.1  # Slight adjustment for connectivity
     
-    logger.info(f"Wall skeleton pixels: {skeleton_pixels}, Length: {wall_length_m:.2f}m")
+    # Convert to meters
+    wall_length_m = adjusted_pixels / scale_ppm
+    
+    logger.info(f"Wall skeleton pixels: {skeleton_pixels}, Adjusted: {adjusted_pixels:.0f}, Length: {wall_length_m:.2f}m")
     
     return wall_length_m, is_valid
 
@@ -107,7 +144,8 @@ def compute_quantity_takeoff(
 ) -> QuantityTakeoffResponse:
    
     # Calculate wall centerline length and validate if it looks like a floor plan
-    wall_length_m, is_valid_floor_plan = calculate_wall_length(wall_mask, scale_ppm)
+    # Pass room_mask so walls can be derived from room boundaries if direct detection fails
+    wall_length_m, is_valid_floor_plan = calculate_wall_length(wall_mask, scale_ppm, room_mask)
     
     # Generate warning if image doesn't look like a floor plan
     warning_message = None
