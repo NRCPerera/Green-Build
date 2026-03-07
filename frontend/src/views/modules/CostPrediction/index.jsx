@@ -1,5 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import useCostController from '../../../controllers/useCostController';
+
+const INDICATOR_KEYS = ['Inflation_Rate', 'Exchange_Rate_LKR', 'Material_Index'];
 
 const provinceDistrictMap = {
     'Western': ['Colombo', 'Gampaha', 'Kalutara'],
@@ -45,8 +47,27 @@ const CostPredictionView = ({ project, onBack }) => {
 
     const [availableDistricts, setAvailableDistricts] = useState([]);
     const [isFormExpanded, setIsFormExpanded] = useState(false);
+    const [indicatorTouched, setIndicatorTouched] = useState({
+        Inflation_Rate: false,
+        Exchange_Rate_LKR: false,
+        Material_Index: false,
+    });
 
-    const { loading, error, prediction, hasPrediction, predictCost, clearPrediction } = useCostController();
+    const fetchDebounceRef = useRef(null);
+
+    const {
+        loading,
+        error,
+        indicatorsLoading,
+        indicatorsError,
+        indicatorMetadata,
+        prediction,
+        hasPrediction,
+        predictCost,
+        fetchEconomicIndicators,
+        clearPrediction,
+        clearIndicatorsError,
+    } = useCostController();
 
     const riskFlag = prediction?.predicted_high_risk_class;
     const isHighRisk = riskFlag === true || riskFlag === 1;
@@ -147,6 +168,14 @@ const CostPredictionView = ({ project, onBack }) => {
         }
     }, [formValues.Province]);
 
+    useEffect(() => {
+        return () => {
+            if (fetchDebounceRef.current) {
+                clearTimeout(fetchDebounceRef.current);
+            }
+        };
+    }, []);
+
     const handleSubmit = async (e) => {
         e.preventDefault();
         await predictCost(formValues);
@@ -162,10 +191,74 @@ const CostPredictionView = ({ project, onBack }) => {
         return Number.isNaN(n) ? '' : n;
     };
 
+    const applyFetchedIndicators = (fetchedValues, forceUpdate = false) => {
+        setFormValues((prev) => ({
+            ...prev,
+            Inflation_Rate: forceUpdate || !indicatorTouched.Inflation_Rate
+                ? (fetchedValues.Inflation_Rate ?? prev.Inflation_Rate)
+                : prev.Inflation_Rate,
+            Exchange_Rate_LKR: forceUpdate || !indicatorTouched.Exchange_Rate_LKR
+                ? (fetchedValues.Exchange_Rate_LKR ?? prev.Exchange_Rate_LKR)
+                : prev.Exchange_Rate_LKR,
+            Material_Index: forceUpdate || !indicatorTouched.Material_Index
+                ? (fetchedValues.Material_Index ?? prev.Material_Index)
+                : prev.Material_Index,
+        }));
+    };
+
+    const runEconomicIndicatorsFetch = async (forceUpdate = false) => {
+        const year = Number(formValues.Year_of_Tender);
+        const province = formValues.Province;
+        const district = formValues.District;
+
+        if (!Number.isInteger(year) || year < 1950 || !province) {
+            return;
+        }
+
+        const result = await fetchEconomicIndicators({ year, province, district });
+        if (result.success && result.data) {
+            applyFetchedIndicators(result.data, forceUpdate);
+        }
+    };
+
+    useEffect(() => {
+        const year = Number(formValues.Year_of_Tender);
+        if (!Number.isInteger(year) || year < 1950 || !formValues.Province) {
+            return;
+        }
+
+        if (fetchDebounceRef.current) {
+            clearTimeout(fetchDebounceRef.current);
+        }
+
+        fetchDebounceRef.current = setTimeout(() => {
+            runEconomicIndicatorsFetch(false);
+        }, 550);
+
+        return () => {
+            if (fetchDebounceRef.current) {
+                clearTimeout(fetchDebounceRef.current);
+            }
+        };
+    }, [formValues.Year_of_Tender, formValues.Province, formValues.District]);
+
     const handleChange = (key, parser = (val) => val) => (e) => {
         const { value } = e.target;
         const parsed = value === '' ? '' : parser(value);
-        setFormValues({ ...formValues, [key]: parsed });
+        if (INDICATOR_KEYS.includes(key)) {
+            setIndicatorTouched((prev) => ({ ...prev, [key]: true }));
+            clearIndicatorsError();
+        }
+        setFormValues((prev) => ({ ...prev, [key]: parsed }));
+    };
+
+    const handleRefreshIndicators = async () => {
+        setIndicatorTouched({
+            Inflation_Rate: false,
+            Exchange_Rate_LKR: false,
+            Material_Index: false,
+        });
+        await runEconomicIndicatorsFetch(true);
     };
 
     return (
@@ -462,6 +555,34 @@ const CostPredictionView = ({ project, onBack }) => {
                                     className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
                                 />
                             </div>
+                        </div>
+                        <div className="mt-3 p-3 border border-teal-500/20 bg-teal-500/5 rounded-lg">
+                            <div className="flex items-center justify-between gap-3 flex-wrap">
+                                <div className="text-xs text-teal-200/90">
+                                    {indicatorsLoading && 'Fetching economic indicators from FRED...'}
+                                    {!indicatorsLoading && indicatorMetadata && (
+                                        <span>
+                                            Source: {indicatorMetadata.source} | Year: {indicatorMetadata.year}
+                                            {indicatorMetadata.fetchedAt ? ` | Updated: ${new Date(indicatorMetadata.fetchedAt).toLocaleTimeString()}` : ''}
+                                        </span>
+                                    )}
+                                    {!indicatorsLoading && !indicatorMetadata && 'Select year and province to auto-fetch indicators.'}
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={handleRefreshIndicators}
+                                    disabled={indicatorsLoading}
+                                    className={`px-3 py-1.5 rounded-md text-xs font-semibold border transition-colors ${indicatorsLoading
+                                        ? 'border-gray-500/40 text-gray-500 cursor-not-allowed'
+                                        : 'border-teal-400/40 text-teal-300 hover:bg-teal-400/10'
+                                        }`}
+                                >
+                                    {indicatorsLoading ? 'Refreshing...' : 'Refresh Indicators'}
+                                </button>
+                            </div>
+                            {indicatorsError && (
+                                <p className="text-xs text-red-400 mt-2">{indicatorsError}</p>
+                            )}
                         </div>
 
                         {/* ── Section: Risk & Experience ── */}

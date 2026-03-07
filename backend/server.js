@@ -11,7 +11,8 @@ const {
     authRoutes,
     projectRoutes,
     floorPlanRoutes,
-    boqRoutes
+    boqRoutes,
+    economicIndicatorsRoutes
 } = require('./routes');
 const {
     multerErrorHandler,
@@ -65,6 +66,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/projects', projectRoutes);
 app.use('/api/projects/:projectId/floorplans', floorPlanRoutes);
 app.use('/api/projects/:projectId/boq-reports', boqRoutes);
+app.use('/api/economic-indicators', economicIndicatorsRoutes);
 
 // Error handling middleware should be registered last
 app.use(multerErrorHandler);

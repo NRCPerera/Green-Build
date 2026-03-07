@@ -108,11 +108,21 @@ export const quantityApi = {
 
 export const costApi = {
     predictCost: async (input) => {
-        return api.post('/api/cost-prediction/predict', input);
+        return api.post('/api/cost-prediction/pre-project', input);
     },
 
     getMarketIndices: (region) => {
         return api.get(`/api/cost-prediction/market-indices/${region}`);
+    },
+
+    getEconomicIndicators: ({ year, province, district }) => {
+        return api.get('/api/economic-indicators', {
+            params: {
+                year,
+                province,
+                district,
+            },
+        });
     },
 };
 

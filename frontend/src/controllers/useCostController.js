@@ -1,11 +1,13 @@
 import { useState, useCallback } from 'react';
 import useProjectStore from '../models/useProjectStore';
 import { costApi, parseApiError } from '../models/api';
-import axios from 'axios';
 
 const useCostController = () => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState(null);
+    const [indicatorsLoading, setIndicatorsLoading] = useState(false);
+    const [indicatorsError, setIndicatorsError] = useState(null);
+    const [indicatorMetadata, setIndicatorMetadata] = useState(null);
 
     const costPrediction = useProjectStore((state) => state.costPrediction);
     const setCostPrediction = useProjectStore((state) => state.setCostPrediction);
@@ -18,24 +20,7 @@ const useCostController = () => {
             console.log('📤 Request Data:', formValues);
             console.log('📋 Form Values:', formValues);
 
-            // Get auth token from localStorage
-            const token = localStorage.getItem('authToken');
-            if (!token) {
-                throw new Error('Authentication required. Please login first.');
-            }
-
-            // Call the new pre-project prediction endpoint
-            const response = await axios.post(
-                'http://localhost:5000/api/cost-prediction/pre-project',
-                formValues, // Send features directly (no data wrapper)
-                {
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
-                    },
-                    timeout: 30000
-                }
-            );
+            const response = await costApi.predictCost(formValues);
 
             console.log('📥 Response Data:', response.data);
 
@@ -97,18 +82,76 @@ const useCostController = () => {
         setError(null);
     }, []);
 
+    const fetchEconomicIndicators = useCallback(async ({ year, province, district }) => {
+        if (!year || !province) {
+            return { success: false, error: 'Year and province are required.' };
+        }
+
+        setIndicatorsLoading(true);
+        setIndicatorsError(null);
+
+        try {
+            const response = await costApi.getEconomicIndicators({
+                year,
+                province,
+                district,
+            });
+
+            const raw = response?.data?.data ?? {};
+            const normalized = {
+                Inflation_Rate: raw.Inflation_Rate ?? null,
+                Exchange_Rate_LKR: raw.Exchange_Rate_LKR ?? null,
+                Material_Index: raw.Material_Index ?? null,
+            };
+
+            const metadata = {
+                fetchedAt: response?.data?.timestamp || new Date().toISOString(),
+                source: raw?.meta?.source || 'FRED',
+                year: raw?.meta?.year ?? year,
+                appliedMultiplier: raw?.meta?.appliedMultiplier || null,
+                series: raw?.meta?.series || null,
+            };
+
+            setIndicatorMetadata(metadata);
+
+            return {
+                success: true,
+                data: normalized,
+                metadata,
+            };
+        } catch (err) {
+            const message = parseApiError(err);
+            setIndicatorsError(message);
+            return {
+                success: false,
+                error: message,
+            };
+        } finally {
+            setIndicatorsLoading(false);
+        }
+    }, []);
+
     const clearError = useCallback(() => {
         setError(null);
+    }, []);
+
+    const clearIndicatorsError = useCallback(() => {
+        setIndicatorsError(null);
     }, []);
 
     return {
         loading,
         error,
+        indicatorsLoading,
+        indicatorsError,
+        indicatorMetadata,
         prediction: costPrediction,
         hasPrediction: costPrediction !== null,
         predictCost,
+        fetchEconomicIndicators,
         clearPrediction,
         clearError,
+        clearIndicatorsError,
     };
 };
 
