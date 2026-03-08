@@ -62,11 +62,11 @@ router.post('/api/predict-delay/regression', handleDelayRegressionPrediction);
  * 
  * Predict delay category only (classification)
  * 
- * Categories:
- * - On-Time: 0 days delay
- * - Minor Delay: 1-60 days
- * - Major Delay: 61-180 days
- * - Critical Delay: >180 days
+ * Categories (from Stacking Ensemble training):
+ * - No Delay: 0 days
+ * - Minor Delay: 1-30 days
+ * - Major Delay: 31-90 days
+ * - Critical Delay: >90 days
  */
 router.post('/api/predict-delay/classification', handleDelayClassificationPrediction);
 
@@ -97,7 +97,7 @@ router.get('/api/delay-ml-health', async (req, res, next) => {
             success: false,
             error: 'ML service unavailable',
             message: error.message,
-            mlServiceUrl: process.env.DELAY_ML_SERVICE_URL || 'http://localhost:8081'
+            mlServiceUrl: process.env.DELAY_ML_SERVICE_URL || 'http://localhost:8002'
         });
     }
 });

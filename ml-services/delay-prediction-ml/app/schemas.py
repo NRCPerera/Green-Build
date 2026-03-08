@@ -10,21 +10,26 @@ class DelayPredictionRequest(BaseModel):
     data: Dict[str, Any] = Field(
         ...,
         description="Project features for prediction",
-        example={
+        examples=[{
+            "Project_Type": "House",
+            "Province": "Western",
             "District": "Colombo",
-            "Project_Type": "Commercial Building",
-            "Contractor_ICTAD_Grade": "CIDA 1",
-            "Contract_Value_LKR": 500000000,
-            "Land_Area_Sqft": 15000,
-            "Planned_Duration_Days": 365,
-            "Weather_Impact_Score": 2.5,
+            "Location": "Colombo 03",
+            "Contractor_ICTAD_Grade": "M1",
+            "Start_Season": "SW Monsoon",
+            "Payment_Delay_History": "Yes",
+            "Floors": 3,
             "Contractor_Experience_Years": 10,
-            "Labor_Availability_Score": 3.0,
-            "Material_Cost_Index": 105,
-            "Inflation_Rate": 0.08,
-            "Rainfall_mm": 150,
-            "Equipment_Availability_Score": 3.5
-        }
+            "Contractor_Previous_Projects": 15,
+            "Contractor_Past_Delay_Rate": 0.15,
+            "Labour_Pool_Size": 50,
+            "Labour_Assigned_To_Project": 25,
+            "Planned_Duration_Days": 360,
+            "Weather_Impact_Days": 25,
+            "Design_Change_Orders": 2,
+            "Material_Delivery_Delay_Days": 5,
+            "Payment_Delay_Days": 10
+        }]
     )
 
 
@@ -39,6 +44,18 @@ class RegressionPredictionResult(BaseModel):
         ...,
         description="Human-readable severity label based on predicted days"
     )
+    p10_delay_days: Optional[float] = Field(
+        default=None,
+        description="P10 quantile prediction (Best Case)"
+    )
+    p90_delay_days: Optional[float] = Field(
+        default=None,
+        description="P90 quantile prediction (Worst Case)"
+    )
+    shap_values: Optional[Dict[str, float]] = Field(
+        default=None,
+        description="SHAP feature importances for predictions"
+    )
 
 
 class ClassificationPredictionResult(BaseModel):
@@ -46,7 +63,7 @@ class ClassificationPredictionResult(BaseModel):
     
     predicted_category: str = Field(
         ...,
-        description="Predicted delay category (On-Time, Minor Delay, Major Delay, Critical Delay)"
+        description="Predicted delay category (No Delay, Minor Delay, Major Delay, Critical Delay)"
     )
     will_delay: Optional[bool] = Field(
         default=None,
@@ -63,6 +80,10 @@ class ClassificationPredictionResult(BaseModel):
     class_probabilities: Dict[str, float] = Field(
         ...,
         description="Probability for each delay category"
+    )
+    shap_values: Optional[Dict[str, float]] = Field(
+        default=None,
+        description="SHAP feature importances for predictions"
     )
 
 
