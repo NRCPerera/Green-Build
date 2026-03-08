@@ -1,161 +1,65 @@
-"""Main FastAPI application - API Only (UI served by React)"""
-
 import logging
+import joblib
 from contextlib import asynccontextmanager
-
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from tensorflow.keras.models import load_model # type: ignore
 
-from app.config import (
-    API_TITLE,
-    API_DESCRIPTION,
-    API_VERSION,
-    SUSTAINABILITY_MODEL_PATH,
-    LIFECYCLE_COST_MODEL_PATH,
-    RISK_PREDICTION_MODEL_PATH,
-    FEATURE_SCALER_PATH,
-    FEATURE_NAMES_PATH,
-    CATEGORICAL_MAPPINGS_PATH,
-    NUMERIC_MEDIANS_PATH,
-    CATEGORICAL_MODES_PATH
+from .config import (
+    SCALER_PATH, LCC_TARGET_SCALER_PATH, SUSTAIN_TARGET_SCALER_PATH,
+    LIFECYCLE_MODEL_PATH, SUSTAINABILITY_MODEL_PATH, RISK_MODEL_PATH
 )
-from app.dev_config import DEV_MODE
-from app.services import ModelLoader, Preprocessor, InferenceService
-from app.services import MockInferenceService
-from app.services.shap_explainer import SHAPExplainer
+from .api.endpoints import router, set_models
+from .models.schemas import ErrorResponse
 
-# Configure logging
 logging.basicConfig(
     level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
-# Global variables for models and services
-model_loader = None
-inference_service = None
-
+sustainability_artefacts: dict = {}
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """
-    Application lifespan handler
-    Loads models on startup and cleans up on shutdown
-    """
-    global model_loader, inference_service
-    
-    logger.info("=" * 60)
-    logger.info("Starting Sustainability Prediction API")
-    logger.info("(API Only - UI served by React frontend)")
-    logger.info("=" * 60)
-    
+    logger.info("Loading Sustainability ML models …")
     try:
-        if DEV_MODE:
-            # Development mode - use mock predictions
-            logger.warning("⚠️  RUNNING IN DEVELOPMENT MODE - MOCK PREDICTIONS ONLY")
-            logger.warning("⚠️  To use real models, set DEV_MODE=False in app/dev_config.py")
-            logger.warning("⚠️  and ensure all model files are in the models/ folder")
-            logger.info("=" * 60)
-            
-            # Use mock inference service
-            inference_service = MockInferenceService()
-            
-        else:
-            # Production mode - load real models
-            logger.info("PRODUCTION MODE - Loading trained models")
-            
-            # Initialize model loader
-            model_loader = ModelLoader()
-            
-            # Load all models and artifacts
-            model_loader.load_all(
-                sustainability_path=SUSTAINABILITY_MODEL_PATH,
-                lifecycle_cost_path=LIFECYCLE_COST_MODEL_PATH,
-                risk_prediction_path=RISK_PREDICTION_MODEL_PATH,
-                scaler_path=FEATURE_SCALER_PATH,
-                feature_names_path=FEATURE_NAMES_PATH,
-                categorical_mappings_path=CATEGORICAL_MAPPINGS_PATH,
-                numeric_medians_path=NUMERIC_MEDIANS_PATH,
-                categorical_modes_path=CATEGORICAL_MODES_PATH
-            )
-            
-            # Initialize preprocessor
-            preprocessor = Preprocessor(
-                categorical_mappings=model_loader.categorical_mappings,
-                numeric_medians=model_loader.numeric_medians,
-                categorical_modes=model_loader.categorical_modes,
-                feature_names=model_loader.feature_names,
-                feature_scaler=model_loader.feature_scaler
-            )
-            
-            # Initialize SHAP explainer with loaded models
-            logger.info("Initializing SHAP explainer...")
-            shap_explainer = SHAPExplainer(
-                sustainability_model=model_loader.sustainability_model,
-                lifecycle_model=model_loader.lifecycle_cost_model,
-                risk_model=model_loader.risk_prediction_model
-            )
-            
-            # Initialize inference service with SHAP explainer
-            inference_service = InferenceService(
-                sustainability_model=model_loader.sustainability_model,
-                lifecycle_cost_model=model_loader.lifecycle_cost_model,
-                risk_prediction_model=model_loader.risk_prediction_model,
-                preprocessor=preprocessor,
-                shap_explainer=shap_explainer
-            )
-        
-        # Set the inference service in endpoints module
-        from app.api import endpoints
-        endpoints.set_inference_service(inference_service)
-        
-        logger.info("=" * 60)
-        logger.info("API startup complete - Ready to serve requests")
-        logger.info("API Docs:  http://localhost:8003/docs")
-        logger.info("Health:    http://localhost:8003/health")
-        logger.info("Predict:   POST http://localhost:8003/predict")
-        logger.info("=" * 60)
-        
-        yield
-        
+        sustainability_artefacts["scaler"] = joblib.load(SCALER_PATH)
+        sustainability_artefacts["scaler_y_lcc"] = joblib.load(LCC_TARGET_SCALER_PATH)
+        sustainability_artefacts["scaler_y_sustain"] = joblib.load(SUSTAIN_TARGET_SCALER_PATH)
+        sustainability_artefacts["lifecycle"] = load_model(str(LIFECYCLE_MODEL_PATH))
+        sustainability_artefacts["sustainability"] = load_model(str(SUSTAINABILITY_MODEL_PATH))
+        sustainability_artefacts["risk"] = load_model(str(RISK_MODEL_PATH))
+        set_models(sustainability_artefacts)
+        logger.info("Sustainability models loaded ✓")
     except Exception as e:
-        logger.error(f"Failed to initialize application: {str(e)}", exc_info=True)
-        raise
-    
-    finally:
-        # Cleanup on shutdown
-        logger.info("Shutting down application...")
+        logger.warning(f"Sustainability models not loaded (non-fatal): {e}")
 
+    logger.info("All model loading complete – server is ready.")
+    yield
+    logger.info("Shutting down Sustainability ML Engine …")
+    sustainability_artefacts.clear()
+    logger.info("Cleanup complete.")
 
-# Create FastAPI application
-app = FastAPI(
-    title=API_TITLE,
-    description=API_DESCRIPTION,
-    version=API_VERSION,
-    lifespan=lifespan
-)
+def create_app() -> FastAPI:
+    app = FastAPI(
+        title="Green-Build Sustainability ML Engine",
+        description="Unified ML service for Sustainability Analysis.",
+        version="2.0.0",
+        lifespan=lifespan,
+        responses={500: {"model": ErrorResponse, "description": "Internal Server Error"}},
+    )
 
-# Add CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # Configure appropriately for production
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
-# Include API routers
-from app.api import endpoints
-app.include_router(endpoints.router)
+    app.include_router(router)
 
+    return app
 
-# Health check endpoint
-@app.get("/health")
-async def health_check():
-    """Health check endpoint"""
-    return {
-        "status": "healthy",
-        "mode": "development (mock predictions)" if DEV_MODE else "production (real models)",
-        "models_loaded": model_loader.is_loaded() if (not DEV_MODE and model_loader) else False,
-        "version": "3.0-api-only"
-    }
+app = create_app()

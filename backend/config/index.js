@@ -16,6 +16,7 @@ const config = {
     pythonServiceUrl: process.env.PYTHON_SERVICE_URL || 'http://localhost:8000',
     costMlServiceUrl: process.env.COST_ML_SERVICE_URL || 'http://localhost:8085',
     delayMlServiceUrl: process.env.DELAY_ML_SERVICE_URL || 'http://localhost:8081',
+    sustainabilityMlUrl: process.env.SUSTAINABILITY_ML_URL || 'http://localhost:8003',
     fredBaseUrl: process.env.FRED_BASE_URL || 'https://api.stlouisfed.org/fred',
     fredApiKey: process.env.FRED_API_KEY || '',
     frontendUrl: process.env.FRONTEND_URL || '*',
