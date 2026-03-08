@@ -90,6 +90,67 @@ const CostPredictionView = ({ project, onBack }) => {
         return 'text-green-300 border-green-500/40 bg-green-500/15';
     };
 
+    // Helper function to get optimal parameter values for risk reduction
+    const getOptimalValue = (featureName, currentValue) => {
+        const optimals = {
+            'Design_Completeness': {
+                target: '85-95%',
+                description: 'Higher design completion reduces change orders and rework',
+                direction: currentValue < 85 ? 'increase' : 'optimal',
+                riskReduction: 10
+            },
+            'Contractor_Experience_Years': {
+                target: '10+ years',
+                description: 'More experienced contractors handle challenges better',
+                direction: currentValue < 10 ? 'increase' : 'optimal',
+                riskReduction: 12
+            },
+            'Change_Order_Freq': {
+                target: '0-3',
+                description: 'Minimize scope changes to prevent cost escalation',
+                direction: currentValue > 3 ? 'decrease' : 'optimal',
+                riskReduction: 15
+            },
+            'Complexity_Score': {
+                target: '1-5',
+                description: 'Simpler designs are easier to estimate and execute',
+                direction: currentValue > 5 ? 'decrease' : 'optimal',
+                riskReduction: 8
+            },
+            'Economic_Risk_Index': {
+                target: '0-3',
+                description: 'Use fixed-price contracts and early material procurement',
+                direction: currentValue > 3 ? 'decrease' : 'optimal',
+                riskReduction: 7
+            },
+            'Material_Index': {
+                target: '< 150',
+                description: 'Lock in material prices early to avoid escalation',
+                direction: currentValue > 150 ? 'decrease' : 'optimal',
+                riskReduction: 6
+            },
+            'Initial_Period_Months': {
+                target: '12-18 months',
+                description: 'Realistic timelines prevent rushed work and errors',
+                direction: currentValue < 12 || currentValue > 18 ? 'adjust' : 'optimal',
+                riskReduction: 9
+            },
+            'Weather_Risk_Score': {
+                target: '0-3',
+                description: 'Plan construction around favorable weather seasons',
+                direction: currentValue > 3 ? 'decrease' : 'optimal',
+                riskReduction: 5
+            },
+            'Project_Size_Index': {
+                target: '0-5',
+                description: 'Break large projects into manageable phases',
+                direction: currentValue > 5 ? 'decrease' : 'optimal',
+                riskReduction: 7
+            }
+        };
+        return optimals[featureName] || null;
+    };
+
     useEffect(() => {
         if (project) {
             const getProjectType = (type) => {
@@ -976,8 +1037,8 @@ const CostPredictionView = ({ project, onBack }) => {
                                     <div className="p-4 bg-dark-700/50 rounded-lg border border-blue-500/20">
                                         <p className="text-sm text-gray-400 mb-1">Initial Budget</p>
                                         <p className="text-2xl font-bold text-blue-400">
-                                            {formValues.Initial_Value > 0 
-                                                ? `${(formValues.Initial_Value / 1000000).toFixed(1)}M LKR` 
+                                            {formValues.Initial_Value && Number(formValues.Initial_Value) > 0
+                                                ? `${(Number(formValues.Initial_Value) / 1000000).toFixed(2)}M LKR` 
                                                 : 'N/A'}
                                         </p>
                                     </div>
@@ -1023,26 +1084,184 @@ const CostPredictionView = ({ project, onBack }) => {
                             {topRiskFactors.length > 0 && (
                                 <div className="bg-dark-800/70 border border-white/5 rounded-2xl p-6">
                                     <h3 className="text-lg font-semibold text-white mb-4">Top Risk Factors Diagram</h3>
+                                    <div className="w-full h-64 relative">
+                                        <svg width="100%" height="100%" viewBox="0 0 1000 250" preserveAspectRatio="xMidYMid meet" className="bg-dark-700/30 rounded-lg">
+                                            {/* Grid lines */}
+                                            {[0, 1, 2, 3, 4, 5].map((i) => (
+                                                <line
+                                                    key={`grid-${i}`}
+                                                    x1="50"
+                                                    y1={220 - (i * 40)}
+                                                    x2="950"
+                                                    y2={220 - (i * 40)}
+                                                    stroke="#ffffff10"
+                                                    strokeWidth="1"
+                                                    strokeDasharray="4"
+                                                />
+                                            ))}
+
+                                            {/* Y-axis labels */}
+                                            {[0, 1, 2, 3, 4, 5].map((i) => {
+                                                const yVal = (i * maxImpact) / 5;
+                                                return (
+                                                    <text key={`y-label-${i}`} x="35" y={225 - (i * 40)} textAnchor="end" fontSize="11" fill="#9ca3af">
+                                                        {yVal.toFixed(2)}
+                                                    </text>
+                                                );
+                                            })}
+
+                                            {/* X and Y axes */}
+                                            <line x1="50" y1="220" x2="950" y2="220" stroke="#ffffff30" strokeWidth="2" />
+                                            <line x1="50" y1="20" x2="50" y2="220" stroke="#ffffff30" strokeWidth="2" />
+
+                                            {/* Line path */}
+                                            {topRiskFactors.slice(0, 10).length > 1 && (
+                                                <polyline
+                                                    points={topRiskFactors.slice(0, 10)
+                                                        .map((item, idx) => {
+                                                            const impact = Number(item.impact) || 0;
+                                                            const x = 50 + (idx * 900) / (topRiskFactors.slice(0, 10).length - 1);
+                                                            const y = 220 - ((impact / maxImpact) * 200);
+                                                            return `${x},${y}`;
+                                                        })
+                                                        .join(' ')}
+                                                    fill="none"
+                                                    stroke="url(#lineGradient)"
+                                                    strokeWidth="3"
+                                                    strokeLinecap="round"
+                                                    strokeLinejoin="round"
+                                                />
+                                            )}
+
+                                            {/* Gradient definition */}
+                                            <defs>
+                                                <linearGradient id="lineGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+                                                    <stop offset="0%" style={{ stopColor: '#f59e0b', stopOpacity: 1 }} />
+                                                    <stop offset="50%" style={{ stopColor: '#fbbf24', stopOpacity: 1 }} />
+                                                    <stop offset="100%" style={{ stopColor: '#fcd34d', stopOpacity: 1 }} />
+                                                </linearGradient>
+                                            </defs>
+
+                                            {/* Data points and labels */}
+                                            {topRiskFactors.slice(0, 10).map((item, idx) => {
+                                                const impact = Number(item.impact) || 0;
+                                                const x = 50 + (idx * 900) / (topRiskFactors.slice(0, 10).length - 1);
+                                                const y = 220 - ((impact / maxImpact) * 200);
+
+                                                return (
+                                                    <g key={`point-${idx}`}>
+                                                        {/* Circle point */}
+                                                        <circle cx={x} cy={y} r="5" fill="#f59e0b" stroke="#fff" strokeWidth="2" />
+                                                        {/* Hover background (invisible) */}
+                                                        <circle cx={x} cy={y} r="10" fill="transparent" className="hover:opacity-20" />
+                                                        {/* X-axis labels */}
+                                                        <text
+                                                            x={x}
+                                                            y="240"
+                                                            textAnchor="middle"
+                                                            fontSize="10"
+                                                            fill="#9ca3af"
+                                                            className="truncate"
+                                                        >
+                                                            {item.feature.substring(0, 12)}
+                                                        </text>
+                                                    </g>
+                                                );
+                                            })}
+                                        </svg>
+                                    </div>
+
+                                    {/* Legend */}
+                                    <div className="mt-4 grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs">
+                                        {topRiskFactors.slice(0, 5).map((item, idx) => (
+                                            <div key={`legend-${idx}`} className="p-2 bg-dark-700/50 rounded border border-white/10">
+                                                <p className="text-gray-300 font-medium truncate">{item.feature}</p>
+                                                <p className="text-amber-400 font-semibold">{(Number(item.impact) || 0).toFixed(4)}</p>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Low Risk Parameter Recommendations */}
+                            {topRiskFactors.length > 0 && (
+                                <div className="bg-dark-800/70 border border-green-500/20 rounded-2xl p-6">
+                                    <h3 className="text-lg font-semibold text-white mb-2 flex items-center gap-2">
+                                        <span className="text-green-400">🎯</span> 
+                                        Low Risk Target Parameters
+                                    </h3>
+                                    <p className="text-sm text-gray-400 mb-4">
+                                        Adjust these high-impact parameters to reduce your cost overrun risk
+                                    </p>
+
                                     <div className="space-y-3">
-                                        {topRiskFactors.slice(0, 10).map((item, idx) => {
-                                            const impact = Number(item.impact) || 0;
-                                            const widthPct = Math.max(4, (impact / maxImpact) * 100);
+                                        {topRiskFactors.slice(0, 5).map((factor, idx) => {
+                                            const featureName = factor.feature;
+                                            const currentValue = formValues[featureName];
+                                            const optimal = getOptimalValue(featureName, currentValue);
+                                            
+                                            if (!optimal) return null;
+
+                                            const isNumeric = typeof currentValue === 'number';
+                                            const needsImprovement = optimal.direction !== 'optimal';
 
                                             return (
-                                                <div key={`${item.feature}-${idx}`} className="space-y-1">
-                                                    <div className="flex items-center justify-between text-sm">
-                                                        <p className="text-gray-200 font-medium truncate pr-2">{item.feature}</p>
-                                                        <p className="text-gray-400 tabular-nums">{impact.toFixed(4)}</p>
+                                                <div key={`optimal-${idx}`} className="p-4 bg-dark-700/50 rounded-lg border border-green-500/10">
+                                                    <div className="flex items-start justify-between gap-3 mb-2">
+                                                        <div className="flex-1">
+                                                            <h4 className="font-semibold text-green-300 mb-1">
+                                                                {featureName.replace(/_/g, ' ')}
+                                                            </h4>
+                                                            <p className="text-xs text-gray-400">{optimal.description}</p>
+                                                        </div>
+                                                        <span className={`text-xs px-2 py-1 rounded ${
+                                                            needsImprovement 
+                                                                ? 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/40' 
+                                                                : 'bg-green-500/20 text-green-300 border border-green-500/40'
+                                                        }`}>
+                                                            {(Number(factor.impact) || 0).toFixed(4)} impact
+                                                        </span>
                                                     </div>
-                                                    <div className="w-full h-2.5 bg-dark-700 rounded-full overflow-hidden border border-white/5">
-                                                        <div
-                                                            className="h-full bg-gradient-to-r from-orange-500 via-amber-400 to-yellow-300"
-                                                            style={{ width: `${widthPct}%` }}
-                                                        />
+
+                                                    <div className="grid grid-cols-2 gap-3 mt-3">
+                                                        <div className="p-2 bg-dark-800/50 rounded border border-red-500/20">
+                                                            <p className="text-xs text-gray-400 mb-1">Current Value</p>
+                                                            <p className="text-sm font-bold text-red-300">
+                                                                {isNumeric ? Number(currentValue).toFixed(1) : currentValue || 'N/A'}
+                                                            </p>
+                                                        </div>
+                                                        <div className="p-2 bg-dark-800/50 rounded border border-green-500/20">
+                                                            <p className="text-xs text-gray-400 mb-1">Target (Low Risk)</p>
+                                                            <p className="text-sm font-bold text-green-300">
+                                                                {optimal.target}
+                                                            </p>
+                                                        </div>
                                                     </div>
+
+                                                    {needsImprovement && (
+                                                        <div className="mt-2 flex items-center gap-2 text-xs">
+                                                            <span className={`px-2 py-1 rounded ${
+                                                                optimal.direction === 'increase' 
+                                                                    ? 'bg-blue-500/20 text-blue-300' 
+                                                                    : 'bg-purple-500/20 text-purple-300'
+                                                            }`}>
+                                                                {optimal.direction === 'increase' ? '↑ Increase' : '↓ Decrease'}
+                                                            </span>
+                                                            <span className="text-gray-400">
+                                                                Est. risk reduction: <span className="text-green-400 font-semibold">-{optimal.riskReduction}%</span>
+                                                            </span>
+                                                        </div>
+                                                    )}
                                                 </div>
                                             );
                                         })}
+                                    </div>
+
+                                    <div className="mt-4 p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
+                                        <p className="text-xs text-green-300">
+                                            💡 <span className="font-semibold">Pro Tip:</span> Implementing these optimizations could potentially reduce your cost overrun risk by 
+                                            <span className="font-bold"> 15-30%</span>, depending on how many factors you improve.
+                                        </p>
                                     </div>
                                 </div>
                             )}
@@ -1079,21 +1298,6 @@ const CostPredictionView = ({ project, onBack }) => {
                                     </div>
                                 </div>
                             )}
-
-                            <div className="bg-dark-800/70 border border-white/5 rounded-2xl p-6">
-                                <h3 className="text-lg font-semibold text-white mb-4">Model Information</h3>
-                                <div className="space-y-2 text-sm text-gray-400">
-                                    <p><span className="text-gray-300 font-medium">Model Type:</span> GradientBoosting + RandomForest + SHAP</p>
-                                    {prediction?.model_version && (
-                                        <p><span className="text-gray-300 font-medium">Model Version:</span> {prediction.model_version}</p>
-                                    )}
-                                    <p><span className="text-gray-300 font-medium">Input Features:</span> 28 parameters</p>
-                                    {prediction.timestamp && (
-                                        <p><span className="text-gray-300 font-medium">Prediction Timestamp:</span> {new Date(prediction.timestamp).toLocaleString()}</p>
-                                    )}
-                                    <p><span className="text-gray-300 font-medium">Status:</span> <span className="text-green-400">Successful</span></p>
-                                </div>
-                            </div>
 
                             <div className="flex gap-4">
                                 <button
