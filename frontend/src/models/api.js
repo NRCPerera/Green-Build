@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5001';
 const API_TIMEOUT = parseInt(import.meta.env.VITE_API_TIMEOUT || '120000', 10);
 
 const api = axios.create({
@@ -113,6 +113,10 @@ export const quantityApi = {
 export const costApi = {
     predictCost: async (input) => {
         return api.post('/api/cost-prediction/pre-project', input);
+    },
+
+    predictMonteCarlo: async (input) => {
+        return api.post('/api/cost-prediction/monte-carlo', input);
     },
 
     getMarketIndices: (region) => {
