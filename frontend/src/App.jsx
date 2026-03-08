@@ -307,7 +307,7 @@ function App() {
           <ProjectDetailView
             project={selectedProject}
             onBack={() => setActiveModule('projects')}
-            onNavigate={(module) => handleModuleChange(module)}
+            onNavigate={(module, proj) => handleModuleChange(module, proj || selectedProject)}
           />
         ) : (
           <ProjectsListView onSelectProject={handleSelectProject} />

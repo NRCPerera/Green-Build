@@ -2,12 +2,54 @@
  * Cost Prediction Controller
  * 
  * Handles business logic for cost overrun predictions
- * Connects to FastAPI ML service with two endpoints:
+ * C * Connects to FastAPI ML service with two endpoints:
  * - /predict/pre-project: For initial project cost predictions
  * - /predict/in-progress: For ongoing project cost forecasts
  */
 
 const axios = require('axios');
+
+const buildPreProjectResponse = (raw = {}) => {
+    const predictedCostOverrunPct =
+        raw.predicted_cost_overrun_pct ?? raw.predicted_cost_overrun_percentage ?? null;
+    const predictedHighRiskClass =
+        raw.predicted_high_risk_class ?? raw.predicted_high_risk_project ?? null;
+    const predictedHighRiskProbability =
+        raw.predicted_high_risk_probability ?? raw.overrun_probability ?? null;
+
+    const topRiskFactors = Array.isArray(raw.top_risk_factors)
+        ? raw.top_risk_factors
+            .map((item) => ({
+                feature: item?.feature,
+                impact: item?.impact,
+            }))
+            .filter((item) => typeof item.feature === 'string' && Number.isFinite(Number(item.impact)))
+        : [];
+
+    const riskScorecard = Array.isArray(raw.risk_scorecard)
+        ? raw.risk_scorecard
+            .map((item) => ({
+                feature: item?.feature,
+                feature_value: item?.feature_value,
+                impact: item?.impact,
+                status: item?.status,
+            }))
+            .filter((item) => typeof item.feature === 'string')
+        : [];
+
+    const sanitized = {
+        predicted_cost_overrun_pct: predictedCostOverrunPct,
+        predicted_high_risk_class: predictedHighRiskClass,
+        predicted_high_risk_probability: predictedHighRiskProbability,
+        top_risk_factors: topRiskFactors,
+        risk_scorecard: riskScorecard,
+        model_version: raw.model_version ?? null,
+    };
+
+    return Object.fromEntries(
+        Object.entries(sanitized).filter(([, value]) => value !== null && value !== undefined)
+    );
+};
 
 /**
  * Handle pre-project cost overrun prediction
@@ -47,11 +89,12 @@ const handlePreProjectPrediction = async (req, res) => {
             }
         );
 
-        console.log(`[Pre-Project Prediction] ML service response:`, response.data);
+        const sanitizedData = buildPreProjectResponse(response.data);
+        console.log(`[Pre-Project Prediction] ML service response (sanitized):`, sanitizedData);
 
         res.json({
             success: true,
-            data: response.data,
+            data: sanitizedData,
             timestamp: new Date().toISOString()
         });
 

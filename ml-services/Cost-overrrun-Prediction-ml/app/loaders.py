@@ -6,8 +6,8 @@ from pathlib import Path
 from typing import Any
 
 import joblib
-import keras
-from keras.layers import Dense as _OriginalDense
+import shap
+from tensorflow.keras.models import load_model
 
 from app.config import AppConfig
 
@@ -37,25 +37,15 @@ class ArtifactLoadError(RuntimeError):
 
 @dataclass(frozen=True)
 class PreProjectArtifacts:
-    ann_reg_model: Any
-    ann_clf_model: Any
-    preprocess: Any
-    scaler: Any
-    metadata: dict[str, Any]
-
-
-@dataclass(frozen=True)
-class InProgressArtifacts:
-    ann_reg_model: Any
-    preprocess: Any
-    scaler: Any
-    metadata: dict[str, Any]
+    regressor_model: Any
+    classifier_model: Any
+    feature_names: list[str]
+    shap_explainer: Any
 
 
 @dataclass(frozen=True)
 class ModelRegistry:
     pre_project: PreProjectArtifacts
-    in_progress: InProgressArtifacts
 
 
 def _ensure_exists(path: Path) -> None:
@@ -63,68 +53,52 @@ def _ensure_exists(path: Path) -> None:
         raise ArtifactLoadError(f"Missing required artifact: {path}")
 
 
-def _validate_feature_cols(metadata: dict[str, Any], scope_name: str) -> None:
-    feature_cols = metadata.get("feature_cols")
-    if not isinstance(feature_cols, (list, tuple)) or not feature_cols:
+def _validate_feature_cols(feature_names: list[str], scope_name: str) -> None:
+    if not isinstance(feature_names, (list, tuple)) or not feature_names:
         raise ArtifactLoadError(
-            f"Invalid metadata for {scope_name}: expected non-empty 'feature_cols' list"
+            f"Invalid model_feature_names for {scope_name}: expected non-empty list"
         )
 
 
 def load_pre_project_artifacts(config: AppConfig) -> PreProjectArtifacts:
     required_paths = [
-        config.pre_project_ann_reg_model,
-        config.pre_project_ann_clf_model,
-        config.pre_project_preprocess,
-        config.pre_project_scaler,
-        config.pre_project_metadata,
+        config.pre_project_regressor_model,
+        config.pre_project_classifier_model,
+        config.pre_project_feature_names,
     ]
     for path in required_paths:
         _ensure_exists(path)
 
     logger.info("Loading pre-project artifacts from %s", config.pre_project_dir)
-    metadata = joblib.load(config.pre_project_metadata)
-    _validate_feature_cols(metadata, "pre_project")
+    
+    regressor_model = joblib.load(config.pre_project_regressor_model)
+    classifier_model = joblib.load(config.pre_project_classifier_model)
+    feature_names = joblib.load(config.pre_project_feature_names)
+    
+    if not isinstance(feature_names, list):
+        feature_names = list(feature_names)
+    
+    _validate_feature_cols(feature_names, "pre_project")
+
+    # Create SHAP explainer for the classifier
+    logger.info("Creating SHAP TreeExplainer for classifier model")
+    shap_explainer = shap.TreeExplainer(classifier_model)
 
     return PreProjectArtifacts(
-        ann_reg_model=_load_model(config.pre_project_ann_reg_model),
-        ann_clf_model=_load_model(config.pre_project_ann_clf_model),
-        preprocess=joblib.load(config.pre_project_preprocess),
-        scaler=joblib.load(config.pre_project_scaler),
-        metadata=metadata,
-    )
-
-
-def load_in_progress_artifacts(config: AppConfig) -> InProgressArtifacts:
-    required_paths = [
-        config.in_progress_ann_reg_model,
-        config.in_progress_preprocess,
-        config.in_progress_scaler,
-        config.in_progress_metadata,
-    ]
-    for path in required_paths:
-        _ensure_exists(path)
-
-    logger.info("Loading in-progress artifacts from %s", config.in_progress_dir)
-    metadata = joblib.load(config.in_progress_metadata)
-    _validate_feature_cols(metadata, "in_progress")
-
-    return InProgressArtifacts(
-        ann_reg_model=_load_model(config.in_progress_ann_reg_model),
-        preprocess=joblib.load(config.in_progress_preprocess),
-        scaler=joblib.load(config.in_progress_scaler),
-        metadata=metadata,
+        regressor_model=regressor_model,
+        classifier_model=classifier_model,
+        feature_names=feature_names,
+        shap_explainer=shap_explainer,
     )
 
 
 def load_model_registry(config: AppConfig) -> ModelRegistry:
     try:
         pre_project = load_pre_project_artifacts(config)
-        in_progress = load_in_progress_artifacts(config)
     except ArtifactLoadError:
         raise
     except Exception as exc:
-        raise ArtifactLoadError(f"Failed to load model artifacts: {exc}") from exc
+        raise ArtifactLoadError(f"Failed to load pre_project artifacts: {exc}") from exc
 
-    logger.info("All model artifacts loaded successfully")
-    return ModelRegistry(pre_project=pre_project, in_progress=in_progress)
+    logger.info("Model registry initialized successfully")
+    return ModelRegistry(pre_project=pre_project)

@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo } from 'react';
+﻿import { useEffect, useState, useMemo } from 'react';
 import { Card, Button, Empty, Spin, Modal, Form, Input, Select, message, Dropdown } from 'antd';
 import {
     PlusOutlined, FolderOutlined, MoreOutlined,
@@ -9,6 +9,18 @@ import usePMStore, { PROJECT_STATUSES, PROJECT_TEMPLATES, PRIORITIES } from '../
 
 const { TextArea } = Input;
 const { Option } = Select;
+
+const provinceDistrictMap = {
+    'Western': ['Colombo', 'Gampaha', 'Kalutara'],
+    'Central': ['Kandy', 'Matale', 'Nuwara Eliya'],
+    'Southern': ['Galle', 'Matara', 'Hambantota'],
+    'Eastern': ['Trincomalee', 'Batticaloa', 'Ampara'],
+    'Northern': ['Jaffna', 'Kilinochchi', 'Mannar', 'Vavuniya', 'Mullaitivu'],
+    'North Western': ['Kurunegala', 'Puttalam'],
+    'North Central': ['Anuradhapura', 'Polonnaruwa'],
+    'Uva': ['Badulla', 'Monaragala'],
+    'Sabaragamuwa': ['Ratnapura', 'Kegalle']
+};
 
 const getClientName = (project) => {
     return project.clientName || project.client?.name || '';
@@ -39,12 +51,20 @@ const ProjectsListView = ({ onSelectProject }) => {
     const [searchQuery, setSearchQuery] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
     const [priorityFilter, setPriorityFilter] = useState('all');
+    const [availableDistricts, setAvailableDistricts] = useState([]);
     const [form] = Form.useForm();
 
     const { projects, loading, error, fetchProjects, createProject, deleteProject } = useProjectsController();
     const { applyTemplate, computeProgress, tasksByProject, logProjectEvent } = usePMStore();
 
     useEffect(() => { fetchProjects(); }, [fetchProjects]);
+
+    // Watch province changes to update district dropdown
+    const handleProvinceChange = (province) => {
+        const districts = province ? provinceDistrictMap[province] || [] : [];
+        setAvailableDistricts(districts);
+        form.setFieldsValue({ district: undefined });
+    };
 
     // Filtered projects
     const filteredProjects = useMemo(() => {
@@ -88,6 +108,8 @@ const ProjectsListView = ({ onSelectProject }) => {
             expectedEndDate: values.plannedEndDate,
             constructionPeriod: values.initialConstructionPeriod,
             contractorGrade: values.contractorGrade,
+            floors: values.floors,
+            areaSQFT: values.areaSQFT,
             priority: values.priority,
         };
 
@@ -101,6 +123,7 @@ const ProjectsListView = ({ onSelectProject }) => {
             message.success('Project created successfully!');
             setCreateModalVisible(false);
             form.resetFields();
+            setAvailableDistricts([]);
             onSelectProject?.(result.project);
         } else {
             message.error(result.error || 'Failed to create project');
@@ -136,8 +159,8 @@ const ProjectsListView = ({ onSelectProject }) => {
     };
 
     const getProjectTypeIcon = (type) => {
-        const icons = { residential: '🏠', commercial: '🏢', industrial: '🏭', institutional: '🏛️', 'mixed-use': '🏙️', other: '📐' };
-        return icons[type] || '📐';
+        const icons = { residential: 'ðŸ ', commercial: 'ðŸ¢', industrial: 'ðŸ­', institutional: 'ðŸ›ï¸', 'mixed-use': 'ðŸ™ï¸', apartment: 'ðŸ¢', other: 'ðŸ“' };
+        return icons[type] || 'ðŸ“';
     };
 
     const getProjectDropdownItems = (project) => ({
@@ -167,7 +190,7 @@ const ProjectsListView = ({ onSelectProject }) => {
                     </Button>
                     <Button
                         type="primary" icon={<PlusOutlined />}
-                        onClick={() => { form.resetFields(); setCreateModalVisible(true); }}
+                        onClick={() => { form.resetFields(); setAvailableDistricts([]); setCreateModalVisible(true); }}
                         className="!bg-gradient-to-r !from-primary-500 !to-primary-600 !border-0"
                     >
                         New Project
@@ -251,14 +274,14 @@ const ProjectsListView = ({ onSelectProject }) => {
                                 {/* Extra info row */}
                                 <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
                                     {getClientName(project) && (
-                                        <span style={{ fontSize: '0.6875rem', color: '#64748b' }}>👤 {getClientName(project)}</span>
+                                        <span style={{ fontSize: '0.6875rem', color: '#64748b' }}>ðŸ‘¤ {getClientName(project)}</span>
                                     )}
                                     {getLocationText(project) && (
-                                        <span style={{ fontSize: '0.6875rem', color: '#64748b' }}>📍 {getLocationText(project)}</span>
+                                        <span style={{ fontSize: '0.6875rem', color: '#64748b' }}>ðŸ“ {getLocationText(project)}</span>
                                     )}
                                     {getBudgetValue(project) > 0 && (
                                         <span style={{ fontSize: '0.6875rem', color: '#64748b' }}>
-                                            💰 {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'LKR', maximumFractionDigits: 0 }).format(getBudgetValue(project))}
+                                            ðŸ’° {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'LKR', maximumFractionDigits: 0 }).format(getBudgetValue(project))}
                                         </span>
                                     )}
                                 </div>
@@ -314,7 +337,7 @@ const ProjectsListView = ({ onSelectProject }) => {
                             <div style={{ fontSize: '2.5rem', marginBottom: '0.5rem' }}>{tpl.icon}</div>
                             <div style={{ color: '#e2e8f0', fontWeight: 600, fontSize: '0.875rem' }}>{tpl.name}</div>
                             <div style={{ color: '#64748b', fontSize: '0.6875rem', marginTop: '0.25rem' }}>
-                                {tpl.tasks.length} tasks • {tpl.milestones.length} milestones
+                                {tpl.tasks.length} tasks â€¢ {tpl.milestones.length} milestones
                             </div>
                         </div>
                     ))}
@@ -325,7 +348,7 @@ const ProjectsListView = ({ onSelectProject }) => {
             <Modal
                 title={<span style={{ color: 'white', fontSize: '1.125rem', fontWeight: 600 }}>Create New Project</span>}
                 open={createModalVisible}
-                onCancel={() => { setCreateModalVisible(false); form.resetFields(); }}
+                onCancel={() => { setCreateModalVisible(false); form.resetFields(); setAvailableDistricts([]); }}
                 footer={null}
                 width={720}
                 bodyStyle={{ background: 'rgba(15,23,42,0.8)', padding: '1.5rem' }}
@@ -348,6 +371,7 @@ const ProjectsListView = ({ onSelectProject }) => {
                             <Form.Item name="typeOfProject" label={<span className="text-gray-300 font-medium">Project Type</span>} initialValue="residential">
                                 <Select className="!text-white" style={{ borderColor: 'rgba(255,255,255,0.15)' }}>
                                     <Option value="residential">🏠 Residential</Option>
+                                    <Option value="apartment">🏢 Apartment</Option>
                                     <Option value="commercial">🏢 Commercial</Option>
                                     <Option value="industrial">🏭 Industrial</Option>
                                     <Option value="institutional">🏛️ Institutional</Option>
@@ -370,14 +394,34 @@ const ProjectsListView = ({ onSelectProject }) => {
                         </h3>
 
                         <div className="grid grid-cols-3 gap-4">
-                            <Form.Item name="location" label={<span className="text-gray-300 font-medium">City / Area</span>}>
-                                <Input placeholder="City name" className="!bg-dark-700/70 !border-white/15 !text-white hover:!border-primary-400/50 focus:!border-primary-400 focus:!ring-1 focus:!ring-primary-400/30" />
-                            </Form.Item>
                             <Form.Item name="province" label={<span className="text-gray-300 font-medium">Province</span>}>
-                                <Input placeholder="Province" className="!bg-dark-700/70 !border-white/15 !text-white hover:!border-primary-400/50 focus:!border-primary-400 focus:!ring-1 focus:!ring-primary-400/30" />
+                                <Select
+                                    placeholder="Select Province"
+                                    className="!text-white"
+                                    style={{ borderColor: 'rgba(255,255,255,0.15)' }}
+                                    onChange={handleProvinceChange}
+                                    allowClear
+                                >
+                                    {Object.keys(provinceDistrictMap).map(province => (
+                                        <Option key={province} value={province}>{province}</Option>
+                                    ))}
+                                </Select>
                             </Form.Item>
                             <Form.Item name="district" label={<span className="text-gray-300 font-medium">District</span>}>
-                                <Input placeholder="District" className="!bg-dark-700/70 !border-white/15 !text-white hover:!border-primary-400/50 focus:!border-primary-400 focus:!ring-1 focus:!ring-primary-400/30" />
+                                <Select
+                                    placeholder="Select District"
+                                    className="!text-white"
+                                    style={{ borderColor: 'rgba(255,255,255,0.15)' }}
+                                    disabled={availableDistricts.length === 0}
+                                    allowClear
+                                >
+                                    {availableDistricts.map(district => (
+                                        <Option key={district} value={district}>{district}</Option>
+                                    ))}
+                                </Select>
+                            </Form.Item>
+                            <Form.Item name="location" label={<span className="text-gray-300 font-medium">City / Area</span>}>
+                                <Input placeholder="City name" className="!bg-dark-700/70 !border-white/15 !text-white hover:!border-primary-400/50 focus:!border-primary-400 focus:!ring-1 focus:!ring-primary-400/30" />
                             </Form.Item>
                         </div>
 
@@ -413,7 +457,7 @@ const ProjectsListView = ({ onSelectProject }) => {
                         </h3>
 
                         <div className="grid grid-cols-3 gap-4">
-                            <Form.Item name="initialContractValue" label={<span className="text-gray-300 font-medium">Contract Value</span>}>
+                            <Form.Item name="initialContractValue" label={<span className="text-gray-300 font-medium">Contract Value (LKR)</span>}>
                                 <Input type="number" placeholder="0" className="!bg-dark-700/70 !border-white/15 !text-white hover:!border-primary-400/50 focus:!border-primary-400 focus:!ring-1 focus:!ring-primary-400/30" />
                             </Form.Item>
                             <Form.Item name="plannedStartDate" label={<span className="text-gray-300 font-medium">Start Date</span>}>
@@ -435,39 +479,47 @@ const ProjectsListView = ({ onSelectProject }) => {
                             <span>Project Settings</span>
                         </h3>
 
-                        <div className="grid grid-cols-2 gap-4">
-                            <Form.Item name="contractorGrade" label={<span className="text-gray-300 font-medium">Contractor Grade</span>}>
-                                <Select className="!text-white" style={{ borderColor: 'rgba(255,255,255,0.15)' }}>
+                        <div className="grid grid-cols-3 gap-4">
+                            <Form.Item name="contractorGrade" label={<span className="text-gray-300 font-medium">CIDA Contractor Grade</span>}>
+                                <Select placeholder="Select Grade" className="!text-white" style={{ borderColor: 'rgba(255,255,255,0.15)' }} allowClear>
                                     <Option value="C1">C1</Option>
                                     <Option value="C2">C2</Option>
                                     <Option value="C3">C3</Option>
                                     <Option value="C4">C4</Option>
                                 </Select>
                             </Form.Item>
-                            <Form.Item name="priority" label={<span className="text-gray-300 font-medium">Priority Level</span>} initialValue="medium">
-                                <Select className="!text-white" style={{ borderColor: 'rgba(255,255,255,0.15)' }}>
-                                    <Option value="high">🔴 High Priority</Option>
-                                    <Option value="medium">🟡 Medium Priority</Option>
-                                    <Option value="low">⚪ Low Priority</Option>
-                                </Select>
+                            <Form.Item name="floors" label={<span className="text-gray-300 font-medium">Number of Floors</span>}>
+                                <Input type="number" min={1} placeholder="e.g., 2" className="!bg-dark-700/70 !border-white/15 !text-white hover:!border-primary-400/50 focus:!border-primary-400 focus:!ring-1 focus:!ring-primary-400/30" />
+                            </Form.Item>
+                            <Form.Item name="areaSQFT" label={<span className="text-gray-300 font-medium">Area (SQFT)</span>}>
+                                <Input type="number" min={1} placeholder="e.g., 2500" className="!bg-dark-700/70 !border-white/15 !text-white hover:!border-primary-400/50 focus:!border-primary-400 focus:!ring-1 focus:!ring-primary-400/30" />
                             </Form.Item>
                         </div>
 
-                        <Form.Item name="template" label={<span className="text-gray-300 font-medium">Use Template <span style={{ color: '#64748b', fontWeight: 'normal' }}>(optional)</span></span>} initialValue="none">
-                            <Select className="!text-white" style={{ borderColor: 'rgba(255,255,255,0.15)' }}>
-                                <Option value="none">— No Template —</Option>
-                                {Object.entries(PROJECT_TEMPLATES).map(([key, tpl]) => (
-                                    <Option key={key} value={key}>{tpl.name} ({tpl.tasks.length} tasks)</Option>
-                                ))}
-                            </Select>
-                        </Form.Item>
+                        <div className="grid grid-cols-2 gap-4">
+                            <Form.Item name="priority" label={<span className="text-gray-300 font-medium">Priority Level</span>} initialValue="medium">
+                                <Select className="!text-white" style={{ borderColor: 'rgba(255,255,255,0.15)' }}>
+                                    <Option value="high">ðŸ”´ High Priority</Option>
+                                    <Option value="medium">ðŸŸ¡ Medium Priority</Option>
+                                    <Option value="low">âšª Low Priority</Option>
+                                </Select>
+                            </Form.Item>
+                            <Form.Item name="template" label={<span className="text-gray-300 font-medium">Use Template <span style={{ color: '#64748b', fontWeight: 'normal' }}>(optional)</span></span>} initialValue="none">
+                                <Select className="!text-white" style={{ borderColor: 'rgba(255,255,255,0.15)' }}>
+                                    <Option value="none">â€” No Template â€”</Option>
+                                    {Object.entries(PROJECT_TEMPLATES).map(([key, tpl]) => (
+                                        <Option key={key} value={key}>{tpl.name} ({tpl.tasks.length} tasks)</Option>
+                                    ))}
+                                </Select>
+                            </Form.Item>
+                        </div>
                     </div>
 
                     {/* Action Buttons */}
                     <Form.Item className="mb-0 mt-6">
                         <div className="flex gap-3 justify-end">
                             <Button
-                                onClick={() => { setCreateModalVisible(false); form.resetFields(); }}
+                                onClick={() => { setCreateModalVisible(false); form.resetFields(); setAvailableDistricts([]); }}
                                 style={{
                                     borderColor: 'rgba(255,255,255,0.15)',
                                     color: '#94a3b8',

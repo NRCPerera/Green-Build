@@ -18,7 +18,7 @@ const createProject = async (req, res) => {
             name, projectCode, description, projectType,
             client, location, startDate, expectedEndDate,
             budget, tags, notes, status, priority,
-            contractorGrade, constructionPeriod
+            contractorGrade, constructionPeriod, floors, areaSQFT
         } = req.body;
 
         if (!name) {
@@ -38,6 +38,8 @@ const createProject = async (req, res) => {
             priority: priority || 'medium',
             contractorGrade: contractorGrade || '',
             constructionPeriod: constructionPeriod ? Number(constructionPeriod) : null,
+            floors: floors ? Number(floors) : null,
+            areaSQFT: areaSQFT ? Number(areaSQFT) : null,
             client: client || {},
             location: location || {},
             startDate: startDate ? new Date(startDate) : null,

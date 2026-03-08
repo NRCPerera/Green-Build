@@ -69,6 +69,10 @@ api.interceptors.response.use(
 
 export const parseApiError = (error) => {
     if (axios.isAxiosError(error)) {
+        if (error.response?.data?.userMessage) {
+            return error.response.data.userMessage;
+        }
+
         if (error.response?.data?.message) {
             return error.response.data.message;
         }
@@ -108,11 +112,21 @@ export const quantityApi = {
 
 export const costApi = {
     predictCost: async (input) => {
-        return api.post('/api/cost-prediction/predict', input);
+        return api.post('/api/cost-prediction/pre-project', input);
     },
 
     getMarketIndices: (region) => {
         return api.get(`/api/cost-prediction/market-indices/${region}`);
+    },
+
+    getEconomicIndicators: ({ year, province, district }) => {
+        return api.get('/api/economic-indicators', {
+            params: {
+                year,
+                province,
+                district,
+            },
+        });
     },
 };
 

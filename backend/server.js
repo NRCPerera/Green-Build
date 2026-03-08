@@ -12,7 +12,8 @@ const {
     projectRoutes,
     floorPlanRoutes,
     boqRoutes,
-    rateRoutes
+    rateRoutes,
+    economicIndicatorsRoutes
 } = require('./routes');
 const {
     multerErrorHandler,
@@ -30,6 +31,7 @@ const allowedOrigins = [
     'http://localhost:5173',
     'http://127.0.0.1:3000',
     'http://127.0.0.1:5173',
+    'http://localhost:5174',
     config.frontendUrl
 ].filter(Boolean);
 
@@ -67,6 +69,7 @@ app.use('/api/projects', projectRoutes);
 app.use('/api/projects/:projectId/floorplans', floorPlanRoutes);
 app.use('/api/projects/:projectId/boq-reports', boqRoutes);
 app.use('/', rateRoutes);
+app.use('/api/economic-indicators', economicIndicatorsRoutes);
 
 // Error handling middleware should be registered last
 app.use(multerErrorHandler);
