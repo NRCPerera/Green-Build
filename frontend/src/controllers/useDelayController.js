@@ -7,6 +7,15 @@ import { delayApi, parseApiError } from '../models/api';
  * 
  * Manages delay prediction functionality using the ML service.
  * Supports both regression (delay days) and classification (delay category).
+ * 
+ * Features match the training script columns exactly:
+ * Numeric:  Floors, Contractor_Experience_Years, Contractor_Previous_Projects,
+ *           Contractor_Past_Delay_Rate, Labour_Pool_Size, Labour_Assigned_To_Project,
+ *           Planned_Duration_Days, Weather_Impact_Days, Design_Change_Orders,
+ *           Material_Delivery_Delay_Days, Payment_Delay_Days
+ * 
+ * Categorical: Project_Type, Province, District, Location,
+ *              Contractor_ICTAD_Grade, Start_Season, Payment_Delay_History
  */
 const useDelayController = () => {
     const [loading, setLoading] = useState(false);
@@ -27,25 +36,27 @@ const useDelayController = () => {
         try {
             // Build input matching the ML model's ACTUAL feature names from training
             const input = {
-                // Categorical features (will be one-hot encoded by predictor)
-                District: formValues.district || 'Colombo',
+                // ---- Categorical features (must match training script) ----
                 Project_Type: formValues.projectType || 'House',
-                Contractor_ICTAD_Grade: formValues.contractorGrade || 'M1',
+                Province: formValues.province || 'Western',
+                District: formValues.district || 'Colombo',
+                Location: formValues.location || 'Dehiwala',
+                Contractor_ICTAD_Grade: formValues.contractorGrade || 'C4',
+                Start_Season: formValues.startSeason || 'Dry Season',
+                Payment_Delay_History: formValues.paymentDelayHistory || 'Minor',
 
-                // Numeric features - MUST match training data column names
-                Project_Area_SqM: formValues.projectArea || formValues.landArea || 10000,
-                Floors: formValues.numberOfFloors || formValues.floors || 5,
-                Contractor_Experience_Years: formValues.contractorExperience || 10,
-                Contractor_Past_Delay_Rate: formValues.contractorPastDelayRate || 0.15,
-                Contractor_Previous_Projects: formValues.contractorPreviousProjects || 15,
-                Labor_Availability: formValues.laborAvailability || 3.0,
-                Material_Delivery_Delay_Days: formValues.materialDeliveryDelay || 5,
-                Payment_Delay_History: formValues.paymentDelayHistory || 10,
-                Financial_Issues: formValues.financialIssues || 0,
-                Weather_Impact_Days: formValues.weatherImpactDays || formValues.weatherImpactScore * 10 || 25,
-
-                // NEW: Planned duration feature (requires model retraining)
-                Planned_Duration_Days: (formValues.plannedDurationMonths || 12) * 30,
+                // ---- Numeric features (must match training script) ----
+                Floors: formValues.floors || 6,
+                Contractor_Experience_Years: formValues.contractorExperience || 12,
+                Contractor_Previous_Projects: formValues.contractorPreviousProjects || 23,
+                Contractor_Past_Delay_Rate: formValues.contractorPastDelayRate || 0.19,
+                Labour_Pool_Size: formValues.labourPoolSize || 108,
+                Labour_Assigned_To_Project: formValues.labourAssigned || 47,
+                Planned_Duration_Days: formValues.plannedDurationDays || 545,
+                Weather_Impact_Days: formValues.weatherImpactDays || 63,
+                Design_Change_Orders: formValues.designChangeOrders || 14,
+                Material_Delivery_Delay_Days: formValues.materialDeliveryDelay || 31,
+                Payment_Delay_Days: formValues.paymentDelayDays || 29,
             };
 
             console.log('📤 Delay Prediction Request:', input);
@@ -115,7 +126,7 @@ const useDelayController = () => {
                 return 'text-orange-400';
             case 'Minor Delay':
                 return 'text-yellow-400';
-            case 'On-Time':
+            case 'No Delay':
                 return 'text-green-400';
             default:
                 return 'text-gray-400';
@@ -130,7 +141,7 @@ const useDelayController = () => {
                 return 'bg-orange-500/20 border-orange-500/30';
             case 'Minor Delay':
                 return 'bg-yellow-500/20 border-yellow-500/30';
-            case 'On-Time':
+            case 'No Delay':
                 return 'bg-green-500/20 border-green-500/30';
             default:
                 return 'bg-gray-500/20 border-gray-500/30';
@@ -146,9 +157,9 @@ const useDelayController = () => {
     };
 
     const getSeverityLevel = (days) => {
-        if (days <= 0) return 'On-Time';
-        if (days <= 60) return 'Minor';
-        if (days <= 180) return 'Major';
+        if (days <= 0) return 'No Delay';
+        if (days <= 30) return 'Minor';
+        if (days <= 90) return 'Major';
         return 'Critical';
     };
 
@@ -176,6 +187,10 @@ function transformApiResponse(apiResponse, formValues) {
     const { regression_result, classification_result, timestamp } = apiResponse;
 
     const predictedDelayDays = regression_result?.predicted_delay_days || 0;
+    const p10DelayDays = regression_result?.p10_delay_days;
+    const p90DelayDays = regression_result?.p90_delay_days;
+    const shapValues = classification_result?.shap_values || regression_result?.shap_values;
+
     const predictedCategory = classification_result?.predicted_category || 'Unknown';
     const confidence = classification_result?.confidence || 0;
     const classProbabilities = classification_result?.class_probabilities || {};
@@ -184,14 +199,22 @@ function transformApiResponse(apiResponse, formValues) {
     const startDate = formValues.projectStartDate
         ? new Date(formValues.projectStartDate)
         : new Date();
-    const plannedDurationMonths = formValues.plannedDurationMonths || 12;
-    const plannedDays = plannedDurationMonths * 30; // Convert months to days
+    const plannedDays = formValues.plannedDurationDays || 545;
+    const plannedDurationMonths = Math.round(plannedDays / 30);
 
     const plannedEnd = new Date(startDate);
     plannedEnd.setDate(plannedEnd.getDate() + plannedDays);
 
     const predictedEnd = new Date(plannedEnd);
     predictedEnd.setDate(predictedEnd.getDate() + predictedDelayDays);
+
+    const confEarliest = p10DelayDays !== undefined
+        ? new Date(plannedEnd.getTime() + p10DelayDays * 24 * 60 * 60 * 1000)
+        : new Date(predictedEnd.getTime() - 14 * 24 * 60 * 60 * 1000);
+
+    const confLatest = p90DelayDays !== undefined
+        ? new Date(plannedEnd.getTime() + p90DelayDays * 24 * 60 * 60 * 1000)
+        : new Date(predictedEnd.getTime() + 21 * 24 * 60 * 60 * 1000);
 
     return {
         // ML Model Results
@@ -200,6 +223,7 @@ function transformApiResponse(apiResponse, formValues) {
         predictedCategory,
         categoryConfidence: confidence,
         classProbabilities,
+        shapValues,
 
         // User-provided timeline values
         projectStartDate: startDate.toISOString(),
@@ -216,24 +240,24 @@ function transformApiResponse(apiResponse, formValues) {
             predictedCategory.includes('Major') ? 'High' :
                 predictedCategory.includes('Minor') ? 'Medium' : 'Low',
 
-        // Confidence Interval (estimated based on predicted days)
+        // Confidence Interval (Data-driven using Quantile Regressor P10/P90 if available)
         confidenceInterval: {
-            earliest: new Date(predictedEnd.getTime() - 14 * 24 * 60 * 60 * 1000).toISOString(),
-            latest: new Date(predictedEnd.getTime() + 21 * 24 * 60 * 60 * 1000).toISOString(),
+            earliest: confEarliest.toISOString(),
+            latest: confLatest.toISOString(),
         },
 
-        // Scenarios (estimated based on predicted days)
+        // Scenarios (Data-driven)
         scenarios: {
             bestCase: {
-                delayDays: Math.max(0, predictedDelayDays * 0.6),
-                probability: classProbabilities['On-Time'] || 0.2
+                delayDays: p10DelayDays !== undefined ? p10DelayDays : Math.max(0, predictedDelayDays * 0.6),
+                probability: classProbabilities['No Delay'] || 0.2
             },
             mostLikely: {
                 delayDays: predictedDelayDays,
                 probability: confidence
             },
             worstCase: {
-                delayDays: predictedDelayDays * 1.5,
+                delayDays: p90DelayDays !== undefined ? p90DelayDays : predictedDelayDays * 1.5,
                 probability: classProbabilities['Critical Delay'] || classProbabilities['Major Delay'] || 0.15
             },
         },
@@ -255,7 +279,7 @@ function getRecommendations(category, delayDays) {
         'Maintain regular communication with contractors',
     ];
 
-    if (category === 'Critical Delay' || delayDays > 180) {
+    if (category === 'Critical Delay' || delayDays > 90) {
         return [
             '🚨 Immediate intervention required',
             'Consider adding more resources or parallel work streams',
@@ -265,7 +289,7 @@ function getRecommendations(category, delayDays) {
         ];
     }
 
-    if (category === 'Major Delay' || delayDays > 60) {
+    if (category === 'Major Delay' || delayDays > 30) {
         return [
             '⚠️ Develop mitigation strategies',
             'Increase resource allocation for critical path activities',
@@ -296,8 +320,8 @@ function getRecommendations(category, delayDays) {
  * Generate mock forecast data when API is unavailable
  */
 function generateMockDelayForecast(formValues) {
-    const plannedDurationMonths = formValues.plannedDurationMonths || 12;
-    const plannedDays = plannedDurationMonths * 30;
+    const plannedDays = formValues.plannedDurationDays || 545;
+    const plannedDurationMonths = Math.round(plannedDays / 30);
 
     // Simple mock calculation
     const baseDelayDays = Math.random() * 60 + 20; // 20-80 days
@@ -312,9 +336,9 @@ function generateMockDelayForecast(formValues) {
     const predictedEnd = new Date(plannedEnd);
     predictedEnd.setDate(predictedEnd.getDate() + predictedDelayDays);
 
-    const category = predictedDelayDays <= 0 ? 'On-Time' :
-        predictedDelayDays <= 60 ? 'Minor Delay' :
-            predictedDelayDays <= 180 ? 'Major Delay' : 'Critical Delay';
+    const category = predictedDelayDays <= 0 ? 'No Delay' :
+        predictedDelayDays <= 30 ? 'Minor Delay' :
+            predictedDelayDays <= 90 ? 'Major Delay' : 'Critical Delay';
 
     return {
         predictedDelayDays,
@@ -322,7 +346,7 @@ function generateMockDelayForecast(formValues) {
         predictedCategory: category,
         categoryConfidence: 0.65,
         classProbabilities: {
-            'On-Time': 0.2,
+            'No Delay': 0.2,
             'Minor Delay': 0.4,
             'Major Delay': 0.3,
             'Critical Delay': 0.1,

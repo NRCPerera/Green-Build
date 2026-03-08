@@ -121,11 +121,11 @@ async def predict_delay_category(request: DelayPredictionRequest) -> DelayPredic
     """
     Predict delay category for a construction project (Classification)
     
-    Categories:
-    - On-Time: 0 days delay
-    - Minor Delay: 1-60 days
-    - Major Delay: 61-180 days
-    - Critical Delay: >180 days
+    Categories (from Stacking Ensemble training):
+    - No Delay: 0 days
+    - Minor Delay: 1-30 days
+    - Major Delay: 31-90 days
+    - Critical Delay: >90 days
     
     Args:
         request: Project features for prediction
