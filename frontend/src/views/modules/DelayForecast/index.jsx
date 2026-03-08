@@ -30,7 +30,7 @@ const DelayForecastView = ({ project, onBack }) => {
         province: 'Western',
         district: 'Colombo',
         projectType: 'House',  // Options: House, Single-family homes
-        contractorGrade: 'M1', // Options: M1, M2, M3, M4, M5
+        contractorGrade: 'C1', // Options: C1, C2, C3, C4, C5
 
         // Project Metrics (numeric)
         projectArea: 500,           // Project_Area_SqM
@@ -178,7 +178,7 @@ const DelayForecastView = ({ project, onBack }) => {
     ];
 
     const contractorGrades = [
-        'M1', 'M2', 'M3', 'M4', 'M5'
+        'C1', 'C2', 'C3', 'C4', 'C5'
     ];
 
     return (
