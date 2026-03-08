@@ -5,9 +5,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import keras
 import joblib
 import shap
 from tensorflow.keras.models import load_model
+from tensorflow.keras.layers import Dense as _OriginalDense
 
 from app.config import AppConfig
 
