@@ -10,7 +10,14 @@ const axios = require('axios');
 const config = require('../config');
 const { 
     handlePreProjectPrediction, 
-    handleInProgressPrediction 
+    handleInProgressPrediction,
+    savePrediction,
+    getLatestPrediction,
+    getPredictionHistory,
+    getPredictionById,
+    updatePrediction,
+    deletePrediction,
+    recordActualOutcome
 } = require('../controllers/costPredictionController');
 const { authenticate } = require('../middleware/authMiddleware');
 
@@ -70,6 +77,80 @@ router.post('/pre-project', handlePreProjectPrediction);
  * }
  */
 router.post('/in-progress', handleInProgressPrediction);
+
+/**
+ * POST /api/cost-prediction/save
+ * 
+ * Save a cost prediction to database
+ * 
+ * Request body:
+ * {
+ *   "projectId": "65abc123...",
+ *   "input": { ...26 fields },
+ *   "prediction": { predicted_cost_overrun_pct, predicted_high_risk_class, ... },
+ *   "topRiskFactors": [...],
+ *   "riskScorecard": [...],
+ *   "scenarioName": "Baseline",
+ *   "notes": "Initial estimate",
+ *   "tags": ["budget", "q1-2026"]
+ * }
+ */
+router.post('/save', authenticate, savePrediction);
+
+/**
+ * GET /api/cost-prediction/latest/:projectId
+ * 
+ * Get the most recent/latest prediction for a project
+ */
+router.get('/latest/:projectId', authenticate, getLatestPrediction);
+
+/**
+ * GET /api/cost-prediction/history/:projectId
+ * 
+ * Get all saved predictions for a project
+ * 
+ * Query params:
+ *   - limit: max results (default 50)
+ *   - skip: pagination offset
+ *   - tags: filter by tags (comma-separated)
+ *   - riskLevel: filter by risk level (low, medium, high, critical)
+ */
+router.get('/history/:projectId', authenticate, getPredictionHistory);
+
+/**
+ * GET /api/cost-prediction/:predictionId
+ * 
+ * Get a single prediction by ID
+ */
+router.get('/:predictionId', authenticate, getPredictionById);
+
+/**
+ * PUT /api/cost-prediction/:predictionId
+ * 
+ * Update prediction metadata (scenario name, notes, tags)
+ */
+router.put('/:predictionId', authenticate, updatePrediction);
+
+/**
+ * DELETE /api/cost-prediction/:predictionId
+ * 
+ * Delete a prediction
+ */
+router.delete('/:predictionId', authenticate, deletePrediction);
+
+/**
+ * POST /api/cost-prediction/:predictionId/actual
+ * 
+ * Record actual outcome for accuracy tracking
+ * 
+ * Request body:
+ * {
+ *   "actualCostOverrunPct": 12.5,
+ *   "actualFinalCost": 50000000,
+ *   "notes": "Project completed"
+ * }
+ */
+router.post('/:predictionId/actual', authenticate, recordActualOutcome);
 
 /**
  * GET /api/cost-prediction/health

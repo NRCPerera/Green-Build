@@ -5,12 +5,16 @@ import {
 } from 'antd';
 import {
     ArrowLeftOutlined, FileImageOutlined, DeleteOutlined,
-    EyeOutlined, FileTextOutlined, EditOutlined
+    EyeOutlined, FileTextOutlined, EditOutlined,
+    DashboardOutlined, UnorderedListOutlined, FlagOutlined,
+    FileDoneOutlined, HistoryOutlined, InfoCircleOutlined,
+    AlertOutlined, ClockCircleOutlined, HomeOutlined
 } from '@ant-design/icons';
 import useProjectsController from '../../controllers/useProjectsController';
 import useTaskController from '../../controllers/useTaskController';
-import usePMStore, { PROJECT_STATUSES, ROLES } from '../../models/usePMStore';
+import usePMStore, { PROJECT_STATUSES } from '../../models/usePMStore';
 import { projectApi } from '../../services/projectService';
+import { costApi } from '../../models/api';
 
 // PM Components
 import TaskBoard from './TaskBoard';
@@ -54,10 +58,7 @@ const ProgressRing = ({ percentage }) => {
 const ProjectDetailView = ({ project, onBack, onNavigate }) => {
     const projectId = project?._id || project?.id;
 
-    const userRole = usePMStore((s) => s.userRole);
-    const defaultTab = ROLES.find((r) => r.key === userRole)?.defaultTab || 'overview';
-
-    const [activeTab, setActiveTab] = useState(defaultTab);
+    const [activeTab, setActiveTab] = useState('overview');
     const [uploading, setUploading] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
     const [selectedFloorPlan, setSelectedFloorPlan] = useState(null);
@@ -67,6 +68,8 @@ const ProjectDetailView = ({ project, onBack, onNavigate }) => {
     const [boqModalVisible, setBOQModalVisible] = useState(false);
     const [boqLoading, setBOQLoading] = useState(false);
     const [projectStatus, setProjectStatus] = useState(project?.status || 'draft');
+    const [latestCostPrediction, setLatestCostPrediction] = useState(null);
+    const [loadingCostPrediction, setLoadingCostPrediction] = useState(false);
 
     const { floorPlans, loading, fetchFloorPlans, uploadFloorPlan, deleteFloorPlan, fetchFloorPlan } = useProjectsController();
     const taskController = useTaskController(projectId);
@@ -78,10 +81,30 @@ const ProjectDetailView = ({ project, onBack, onNavigate }) => {
         if (projectId) {
             fetchFloorPlans(projectId);
             fetchBOQReports();
+            fetchLatestCostPrediction();
             trackRecentProject(projectId);
         }
     }, [projectId]);
 
+    useEffect(() => {
+        setActiveTab('overview');
+    }, [projectId]);
+
+    const fetchLatestCostPrediction = async () => {
+        if (!projectId) return;
+        setLoadingCostPrediction(true);
+        try {
+            const response = await costApi.getLatestPrediction(projectId);
+            if (response.data?.success && response.data?.data?.prediction) {
+                setLatestCostPrediction(response.data.data.prediction);
+            }
+        } catch (error) {
+            // Silently fail if no predictions exist yet
+            console.log('No cost predictions found for this project');
+        } finally {
+            setLoadingCostPrediction(false);
+        }
+    };
 
     const fetchBOQReports = async () => {
         if (!projectId) return;
@@ -159,51 +182,135 @@ const ProjectDetailView = ({ project, onBack, onNavigate }) => {
     const tabItems = [
         {
             key: 'overview',
-            label: <span className="text-gray-300">📊 Overview</span>,
+            label: <span className="text-gray-300 inline-flex items-center gap-2"><DashboardOutlined /> Overview</span>,
             children: (
                 <div className="space-y-6">
+                    <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+                        <div className="xl:col-span-2 rounded-xl border border-white/10 p-5" style={{ background: 'linear-gradient(135deg, rgba(14,116,144,0.24), rgba(15,23,42,0.8) 45%, rgba(21,128,61,0.18))' }}>
+                            <div className="flex items-start justify-between gap-4 mb-5">
+                                <div>
+                                    <p className="text-cyan-200/90 text-xs uppercase tracking-wide font-semibold">Project Snapshot</p>
+                                    <h3 className="text-white text-xl font-semibold mt-1">{project.name}</h3>
+                                    <p className="text-slate-300/90 text-sm mt-1">{project.projectType?.replace('-', ' ') || 'General project'}</p>
+                                </div>
+                                <div className="h-10 w-10 rounded-lg bg-white/10 border border-white/15 flex items-center justify-center text-cyan-200">
+                                    <HomeOutlined />
+                                </div>
+                            </div>
 
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        <div style={{ gridColumn: 'span 2', background: 'rgba(30,41,59,0.5)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '0.75rem', padding: '1.25rem' }}>
-                            <h3 style={{ color: '#e2e8f0', fontWeight: 600, marginBottom: '0.75rem' }}>Project Information</h3>
-                            <div className="grid grid-cols-2 gap-4">
-                                {[
-                                    { label: 'Type', value: project.projectType?.replace('-', ' ') },
-                                    { label: 'Client', value: getClientName(project) || '—' },
-                                    { label: 'Location', value: getLocationText(project) || '—' },
-                                    { label: 'Budget', value: getBudgetValue(project) ? `Rs. ${getBudgetValue(project).toLocaleString()}` : '—' },
-                                    { label: 'Start Date', value: project.startDate ? new Date(project.startDate).toLocaleDateString() : '—' },
-                                    { label: 'End Date', value: project.expectedEndDate ? new Date(project.expectedEndDate).toLocaleDateString() : '—' },
-                                    { label: 'Created', value: new Date(project.createdAt).toLocaleDateString() },
-                                    { label: 'Updated', value: new Date(project.updatedAt).toLocaleDateString() },
-                                ].map((item, i) => (
-                                    <div key={i}>
-                                        <span style={{ fontSize: '0.6875rem', color: '#64748b', display: 'block' }}>{item.label}</span>
-                                        <span style={{ fontSize: '0.8125rem', color: '#e2e8f0' }}>{item.value}</span>
-                                    </div>
-                                ))}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <div className="rounded-lg bg-black/20 border border-white/10 px-3 py-2.5">
+                                    <p className="text-[11px] text-slate-400 uppercase tracking-wide">Client</p>
+                                    <p className="text-sm text-slate-100 mt-0.5 truncate">{getClientName(project) || 'Not specified'}</p>
+                                </div>
+                                <div className="rounded-lg bg-black/20 border border-white/10 px-3 py-2.5">
+                                    <p className="text-[11px] text-slate-400 uppercase tracking-wide">Budget</p>
+                                    <p className="text-sm text-slate-100 mt-0.5">{getBudgetValue(project) ? `Rs. ${getBudgetValue(project).toLocaleString()}` : 'Not specified'}</p>
+                                </div>
+                                <div className="rounded-lg bg-black/20 border border-white/10 px-3 py-2.5 md:col-span-2">
+                                    <p className="text-[11px] text-slate-400 uppercase tracking-wide">Location</p>
+                                    <p className="text-sm text-slate-100 mt-0.5 truncate">{getLocationText(project) || 'Not specified'}</p>
+                                </div>
+                                <div className="rounded-lg bg-black/20 border border-white/10 px-3 py-2.5">
+                                    <p className="text-[11px] text-slate-400 uppercase tracking-wide">Timeline</p>
+                                    <p className="text-sm text-slate-100 mt-0.5">
+                                        {project.startDate ? new Date(project.startDate).toLocaleDateString() : 'N/A'} - {project.expectedEndDate ? new Date(project.expectedEndDate).toLocaleDateString() : 'N/A'}
+                                    </p>
+                                </div>
+                                <div className="rounded-lg bg-black/20 border border-white/10 px-3 py-2.5">
+                                    <p className="text-[11px] text-slate-400 uppercase tracking-wide">Updated</p>
+                                    <p className="text-sm text-slate-100 mt-0.5">{new Date(project.updatedAt).toLocaleDateString()}</p>
+                                </div>
                             </div>
                         </div>
 
-                        {/* Progress Widget */}
-                        <div style={{ background: 'rgba(30,41,59,0.5)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '0.75rem', padding: '1.25rem', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                        <div className="rounded-xl border border-emerald-300/20 bg-emerald-500/5 p-5 flex flex-col items-center justify-center">
+                            <div className="text-emerald-300 text-xs uppercase tracking-wide font-semibold mb-3 inline-flex items-center gap-2"><InfoCircleOutlined /> Delivery Progress</div>
                             <ProgressRing percentage={progress.percentage} />
                             <div style={{ textAlign: 'center', marginTop: '0.75rem' }}>
-                                <div style={{ color: '#e2e8f0', fontWeight: 600 }}>{progress.done}/{progress.total} Tasks</div>
-                                <div style={{ fontSize: '0.6875rem', color: '#64748b', marginTop: '0.125rem' }}>
-                                    Weighted: {progress.weighted}%
+                                <div style={{ color: '#e2e8f0', fontWeight: 600 }}>{progress.done}/{progress.total} Tasks Completed</div>
+                                <div style={{ fontSize: '0.6875rem', color: '#94a3b8', marginTop: '0.125rem' }}>
+                                    Weighted completion: {progress.weighted}%
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    {/* Summary stats row */}
-                    <Row gutter={16}>
-                        <Col span={6}><Card className="!bg-dark-800/50 !border-white/10"><Statistic title={<span className="text-gray-400">Floor Plans</span>} value={floorPlans.length} prefix={<FileImageOutlined className="text-primary-400" />} valueStyle={{ color: '#fff' }} /></Card></Col>
-                        <Col span={6}><Card className="!bg-dark-800/50 !border-white/10"><Statistic title={<span className="text-gray-400">Wall Area</span>} value={totals.totalWallArea.toFixed(1)} suffix="m²" valueStyle={{ color: '#fff' }} /></Card></Col>
-                        <Col span={6}><Card className="!bg-dark-800/50 !border-white/10"><Statistic title={<span className="text-gray-400">Doors</span>} value={totals.totalDoors} valueStyle={{ color: '#fff' }} /></Card></Col>
-                        <Col span={6}><Card className="!bg-dark-800/50 !border-white/10"><Statistic title={<span className="text-gray-400">Windows</span>} value={totals.totalWindows} valueStyle={{ color: '#fff' }} /></Card></Col>
-                    </Row>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+                        <Card className="!bg-dark-800/60 !border-white/10">
+                            <Statistic title={<span className="text-gray-400">Floor Plans</span>} value={floorPlans.length} prefix={<FileImageOutlined className="text-sky-400" />} valueStyle={{ color: '#fff' }} />
+                        </Card>
+                        <Card className="!bg-dark-800/60 !border-white/10">
+                            <Statistic title={<span className="text-gray-400">Wall Area</span>} value={totals.totalWallArea.toFixed(1)} suffix="m2" valueStyle={{ color: '#fff' }} />
+                        </Card>
+                        <Card className="!bg-dark-800/60 !border-white/10">
+                            <Statistic title={<span className="text-gray-400">Doors</span>} value={totals.totalDoors} valueStyle={{ color: '#fff' }} />
+                        </Card>
+                        <Card className="!bg-dark-800/60 !border-white/10">
+                            <Statistic title={<span className="text-gray-400">Windows</span>} value={totals.totalWindows} valueStyle={{ color: '#fff' }} />
+                        </Card>
+                    </div>
+
+                    {/* Cost Overrun Risk Display */}
+                    {latestCostPrediction && (
+                        <div style={{ background: 'linear-gradient(135deg, rgba(251, 191, 36, 0.1) 0%, rgba(249, 115, 22, 0.1) 100%)', border: '1px solid rgba(251, 191, 36, 0.3)', borderRadius: '0.75rem', padding: '1.5rem' }}>
+                            <div className="flex items-center justify-between mb-4">
+                                <div className="flex items-center gap-3">
+                                    <div style={{ fontSize: '2rem' }}>⚠️</div>
+                                    <div>
+                                        <h3 style={{ color: '#fbbf24', fontSize: '1.125rem', fontWeight: 700, marginBottom: '0.25rem' }}>Cost Overrun Risk Assessment</h3>
+                                        <p style={{ color: '#94a3b8', fontSize: '0.8125rem' }}>Latest prediction from {new Date(latestCostPrediction.createdAt).toLocaleDateString()}</p>
+                                    </div>
+                                </div>
+                                <Tag color={
+                                    latestCostPrediction.riskLevel === 'critical' ? 'red' :
+                                    latestCostPrediction.riskLevel === 'high' ? 'orange' :
+                                    latestCostPrediction.riskLevel === 'medium' ? 'gold' : 'green'
+                                } style={{ fontSize: '0.875rem', padding: '0.375rem 0.875rem', borderRadius: '0.5rem', fontWeight: 600 }}>
+                                    {latestCostPrediction.riskLevel?.toUpperCase() || 'UNKNOWN'} RISK
+                                </Tag>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div style={{ background: 'rgba(30,41,59,0.5)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '0.5rem', padding: '1rem' }}>
+                                    <p style={{ fontSize: '0.6875rem', color: '#64748b', marginBottom: '0.375rem' }}>Predicted Overrun</p>
+                                    <p style={{ fontSize: '1.5rem', fontWeight: 700, color: latestCostPrediction.prediction?.predicted_cost_overrun_pct > 15 ? '#f87171' : latestCostPrediction.prediction?.predicted_cost_overrun_pct > 5 ? '#fbbf24' : '#4ade80' }}>
+                                        {latestCostPrediction.prediction?.predicted_cost_overrun_pct?.toFixed(1) || 'N/A'}%
+                                    </p>
+                                </div>
+                                <div style={{ background: 'rgba(30,41,59,0.5)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '0.5rem', padding: '1rem' }}>
+                                    <p style={{ fontSize: '0.6875rem', color: '#64748b', marginBottom: '0.375rem' }}>High Risk Probability</p>
+                                    <p style={{ fontSize: '1.5rem', fontWeight: 700, color: '#e2e8f0' }}>
+                                        {latestCostPrediction.prediction?.predicted_high_risk_probability 
+                                            ? `${(latestCostPrediction.prediction.predicted_high_risk_probability * 100).toFixed(1)}%` 
+                                            : 'N/A'}
+                                    </p>
+                                </div>
+                                <div style={{ background: 'rgba(30,41,59,0.5)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '0.5rem', padding: '1rem' }}>
+                                    <p style={{ fontSize: '0.6875rem', color: '#64748b', marginBottom: '0.375rem' }}>Scenario</p>
+                                    <p style={{ fontSize: '0.875rem', fontWeight: 600, color: '#e2e8f0', marginTop: '0.25rem' }}>
+                                        {latestCostPrediction.scenarioName || 'Baseline'}
+                                    </p>
+                                    {latestCostPrediction.tags && latestCostPrediction.tags.length > 0 && (
+                                        <div className="flex gap-1 mt-1 flex-wrap">
+                                            {latestCostPrediction.tags.slice(0, 2).map((tag, idx) => (
+                                                <Tag key={idx} style={{ fontSize: '0.625rem', margin: 0 }}>{tag}</Tag>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                            <div className="mt-3">
+                                <Button 
+                                    size="small" 
+                                    type="link" 
+                                    onClick={() => onNavigate?.('cost', project)}
+                                    style={{ color: '#fbbf24', padding: 0 }}
+                                >
+                                    View Full Analysis →
+                                </Button>
+                            </div>
+                        </div>
+                    )}
 
                     {/* Prediction Tools Navigation */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -274,17 +381,17 @@ const ProjectDetailView = ({ project, onBack, onNavigate }) => {
         },
         {
             key: 'tasks',
-            label: <span className="text-gray-300">📋 Tasks {tasks.length > 0 ? `(${tasks.length})` : ''}</span>,
+            label: <span className="text-gray-300 inline-flex items-center gap-2"><UnorderedListOutlined /> Tasks {tasks.length > 0 ? `(${tasks.length})` : ''}</span>,
             children: <TaskBoard projectId={projectId} taskController={taskController} />,
         },
         {
             key: 'milestones',
-            label: <span className="text-gray-300">🎯 Milestones {milestones.length > 0 ? `(${milestones.length})` : ''}</span>,
+            label: <span className="text-gray-300 inline-flex items-center gap-2"><FlagOutlined /> Milestones {milestones.length > 0 ? `(${milestones.length})` : ''}</span>,
             children: <MilestoneTimeline projectId={projectId} taskController={taskController} />,
         },
         {
             key: 'floorplans',
-            label: <span className="text-gray-300">📐 Floor Plans ({floorPlans.length})</span>,
+            label: <span className="text-gray-300 inline-flex items-center gap-2"><FileImageOutlined /> Floor Plans ({floorPlans.length})</span>,
             children: (
                 <div className="space-y-6">
                     <Dragger
@@ -345,7 +452,7 @@ const ProjectDetailView = ({ project, onBack, onNavigate }) => {
         },
         {
             key: 'analysis',
-            label: <span className="text-gray-300">📋 BOQ Reports</span>,
+            label: <span className="text-gray-300 inline-flex items-center gap-2"><FileDoneOutlined /> BOQ Reports</span>,
             children: (
                 <div className="space-y-4">
                     {boqLoading ? (
@@ -380,7 +487,7 @@ const ProjectDetailView = ({ project, onBack, onNavigate }) => {
         },
         {
             key: 'activity',
-            label: <span className="text-gray-300">📝 Activity ({activity.length})</span>,
+            label: <span className="text-gray-300 inline-flex items-center gap-2"><HistoryOutlined /> Activity ({activity.length})</span>,
             children: <ActivityFeed activity={activity} />,
         },
     ];

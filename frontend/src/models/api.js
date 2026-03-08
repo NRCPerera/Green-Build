@@ -128,6 +128,47 @@ export const costApi = {
             },
         });
     },
+
+    // Persistence methods
+    savePrediction: async (projectId, input, prediction, topRiskFactors, riskScorecard, metadata = {}) => {
+        return api.post('/api/cost-prediction/save', {
+            projectId,
+            input,
+            prediction,
+            topRiskFactors,
+            riskScorecard,
+            scenarioName: metadata.scenarioName || 'Baseline Prediction',
+            notes: metadata.notes || '',
+            tags: metadata.tags || [],
+            isBaseline: metadata.isBaseline || false
+        });
+    },
+
+    getLatestPrediction: async (projectId) => {
+        return api.get(`/api/cost-prediction/latest/${projectId}`);
+    },
+
+    getPredictionHistory: async (projectId, filters = {}) => {
+        return api.get(`/api/cost-prediction/history/${projectId}`, {
+            params: filters
+        });
+    },
+
+    getPrediction: async (predictionId) => {
+        return api.get(`/api/cost-prediction/${predictionId}`);
+    },
+
+    updatePrediction: async (predictionId, updates) => {
+        return api.put(`/api/cost-prediction/${predictionId}`, updates);
+    },
+
+    deletePrediction: async (predictionId) => {
+        return api.delete(`/api/cost-prediction/${predictionId}`);
+    },
+
+    recordActualOutcome: async (predictionId, actualData) => {
+        return api.post(`/api/cost-prediction/${predictionId}/actual`, actualData);
+    }
 };
 
 export const sustainabilityApi = {
