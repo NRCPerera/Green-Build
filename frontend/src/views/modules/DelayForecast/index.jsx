@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import useDelayController from '../../../controllers/useDelayController';
+import useProjectStore from '../../../models/useProjectStore';
 
 /**
  * Delay Forecast View
@@ -32,9 +33,11 @@ const DelayForecastView = ({ project, onBack }) => {
         district: 'Colombo',                        // District: Colombo (Western), Galle (Southern)
         location: 'Dehiwala',                       // Location: 20 specific locations from dataset
         projectType: 'House',                       // Project_Type: Residential, Apartment, House
-        contractorGrade: 'C4',                      // Contractor_ICTAD_Grade: C3, C4, C5
+        contractorGrade: 'C1',                      // Contractor_ICTAD_Grade: C1, C2, C3, C4, C5
         startSeason: 'Dry Season',                  // Start_Season: Dry Season, Inter-Monsoon (Mar-Apr), Inter-Monsoon (Oct-Nov), Southwest Monsoon
         paymentDelayHistory: 'Minor',               // Payment_Delay_History: Minor, Moderate, Severe
+
+        projectArea: 500,
 
         // Numeric features (11)
         floors: 6,                                  // Floors: 1-25
@@ -68,6 +71,11 @@ const DelayForecastView = ({ project, onBack }) => {
     useEffect(() => {
         checkMlHealth();
     }, [checkMlHealth]);
+
+    // ── Floor Plan Pipeline: fetch extracted quantities from global store ──
+    const quantityResult = useProjectStore((state) => state.quantityResult);
+    const quantityData = useProjectStore((state) => state.quantityData);
+    const [floorPlanAutoFilled, setFloorPlanAutoFilled] = useState({ projectArea: false, floors: false });
 
     // Pre-fill form with project data
     useEffect(() => {
@@ -106,6 +114,33 @@ const DelayForecastView = ({ project, onBack }) => {
             }));
         }
     }, [project]);
+
+    // ── Auto-fill from Quantity Takeoff floor plan results ──
+    useEffect(() => {
+        if (!quantityResult) return;
+
+        const floorAreaM2 = quantityResult?.room_detection?.total_floor_area_m2 || 0;
+
+        const updates = {};
+        const autoFlags = { projectArea: false, floors: false };
+
+        if (floorAreaM2 > 0) {
+            updates.projectArea = Math.round(floorAreaM2);
+            autoFlags.projectArea = true;
+        }
+
+        // Floor plans are single-floor; default to 1 if not already set from project
+        const detectedRooms = quantityData?.detectedRooms || [];
+        if (detectedRooms.length > 0 && (!formValues.floors || formValues.floors <= 1)) {
+            updates.floors = 1;
+            autoFlags.floors = true;
+        }
+
+        if (Object.keys(updates).length > 0) {
+            setFormValues(prev => ({ ...prev, ...updates }));
+            setFloorPlanAutoFilled(prev => ({ ...prev, ...autoFlags }));
+        }
+    }, [quantityResult, quantityData]);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -162,7 +197,7 @@ const DelayForecastView = ({ project, onBack }) => {
     // Dropdown options matching DataSet.xlsx exactly
     const projectTypes = ['Residential', 'Apartment', 'House'];
 
-    const contractorGrades = ['C3', 'C4', 'C5'];
+    const contractorGrades = ['C1', 'C2', 'C3', 'C4', 'C5'];
 
     const seasons = [
         'Dry Season',
@@ -323,19 +358,53 @@ const DelayForecastView = ({ project, onBack }) => {
                             </select>
                         </div>
 
+                        {/* Project Area */}
+                        <div>
+                            <label className="block text-sm font-medium text-gray-300 mb-2">
+                                Project Area (sq.m)
+                                {floorPlanAutoFilled.projectArea && (
+                                    <span className="ml-1.5 inline-flex items-center gap-1 px-1.5 py-0.5 bg-cyan-500/15 text-cyan-300 text-[9px] font-medium rounded-full border border-cyan-500/30 animate-[fadeIn_0.5s_ease-in]">
+                                        ✨ Auto-filled from Floor Plan
+                                    </span>
+                                )}
+                            </label>
+                            <input
+                                type="number"
+                                value={formValues.projectArea}
+                                onChange={(e) => {
+                                    setFormValues({ ...formValues, projectArea: parseInt(e.target.value) || 0 });
+                                    setFloorPlanAutoFilled(prev => ({ ...prev, projectArea: false }));
+                                }}
+                                min="50"
+                                step="50"
+                                className={`w-full px-4 py-3 bg-dark-700 border rounded-xl text-white 
+                                         focus:outline-none focus:ring-2 focus:ring-blue-500 ${floorPlanAutoFilled.projectArea ? 'border-cyan-500/40' : 'border-white/10'
+                                    }`}
+                            />
+                        </div>
+
                         {/* Floors */}
                         <div>
                             <label className="block text-sm font-medium text-gray-300 mb-2">
                                 Number of Floors
+                                {floorPlanAutoFilled.floors && (
+                                    <span className="ml-1.5 inline-flex items-center gap-1 px-1.5 py-0.5 bg-cyan-500/15 text-cyan-300 text-[9px] font-medium rounded-full border border-cyan-500/30 animate-[fadeIn_0.5s_ease-in]">
+                                        ✨ Auto-filled from Floor Plan
+                                    </span>
+                                )}
                             </label>
                             <input
                                 type="number"
                                 value={formValues.floors}
-                                onChange={(e) => setFormValues({ ...formValues, floors: parseInt(e.target.value) || 1 })}
+                                onChange={(e) => {
+                                    setFormValues({ ...formValues, floors: parseInt(e.target.value) || 1 });
+                                    setFloorPlanAutoFilled(prev => ({ ...prev, floors: false }));
+                                }}
                                 min="1"
                                 max="25"
-                                className="w-full px-4 py-3 bg-dark-700 border border-white/10 rounded-xl text-white 
-                                         focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className={`w-full px-4 py-3 bg-dark-700 border rounded-xl text-white 
+                                         focus:outline-none focus:ring-2 focus:ring-blue-500 ${floorPlanAutoFilled.floors ? 'border-cyan-500/40' : 'border-white/10'
+                                    }`}
                             />
                             <p className="text-xs text-gray-500 mt-1">
                                 Dataset range: 1–25 floors

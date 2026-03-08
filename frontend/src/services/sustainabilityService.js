@@ -22,6 +22,26 @@ export const calculateSustainability = async (data) => {
 };
 
 /**
+ * Calls the backend proxy to run the MILP material optimizer.
+ * 
+ * @param {Object} data 
+ * @param {number} data.wall_area
+ * @param {number} data.floor_area
+ * @param {number} data.door_count
+ * @param {number} data.window_count
+ * @param {number} data.max_budget
+ * @returns {Promise<Object>} Optimization results
+ */
+export const optimizeMaterials = async (data) => {
+    try {
+        const response = await axios.post(`${config.apiBaseUrl}/api/sustainability/optimize-materials`, data);
+        return response.data;
+    } catch (error) {
+        throw error;
+    }
+};
+
+/**
  * Formats carbon values into tons or kg.
  * 
  * @param {number} kg - Carbon in kg

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import useCostController from '../../../controllers/useCostController';
+import useProjectStore from '../../../models/useProjectStore';
 
 const INDICATOR_KEYS = ['Inflation_Rate', 'Exchange_Rate_LKR', 'Material_Index'];
 
@@ -68,13 +69,13 @@ const CostPredictionView = ({ project, onBack }) => {
         };
 
         // Get province
-        const province = typeof project.location === 'object' && project.location.province 
-            ? project.location.province 
+        const province = typeof project.location === 'object' && project.location.province
+            ? project.location.province
             : '';
 
         // Get district
-        const district = typeof project.location === 'object' && project.location.district 
-            ? project.location.district 
+        const district = typeof project.location === 'object' && project.location.district
+            ? project.location.district
             : '';
 
         const budget = typeof project.budget === 'number' ? project.budget : (project.budget?.estimated || 0);
@@ -93,6 +94,11 @@ const CostPredictionView = ({ project, onBack }) => {
     };
 
     const [formValues, setFormValues] = useState(getInitialFormValues());
+
+    // ── Floor Plan Pipeline: fetch extracted quantities from global store ──
+    const quantityResult = useProjectStore((state) => state.quantityResult);
+    const quantityData = useProjectStore((state) => state.quantityData);
+    const [floorPlanAutoFilled, setFloorPlanAutoFilled] = useState({ Area_SQFT: false, Floors: false });
 
     const [initialValueMode, setInitialValueMode] = useState('auto'); // 'auto' or 'manual'
     const [startDate, setStartDate] = useState(''); // Store the selected start date
@@ -314,6 +320,35 @@ const CostPredictionView = ({ project, onBack }) => {
         }
     }, [project]);
 
+    // ── Auto-fill from Quantity Takeoff floor plan results ──
+    useEffect(() => {
+        if (!quantityResult) return;
+
+        const floorAreaM2 = quantityResult?.room_detection?.total_floor_area_m2 || 0;
+        const floorAreaSqft = floorAreaM2 > 0 ? Math.round(floorAreaM2 * 10.764 * 100) / 100 : 0;
+
+        const updates = {};
+        const autoFlags = { Area_SQFT: false, Floors: false };
+
+        if (floorAreaSqft > 0) {
+            updates.Area_SQFT = floorAreaSqft;
+            autoFlags.Area_SQFT = true;
+        }
+
+        // Floor plans are single-floor; use detected rooms count as a heuristic
+        // or default to 1 if not already set from project
+        const detectedRooms = quantityData?.detectedRooms || [];
+        if (detectedRooms.length > 0 && (!formValues.Floors || formValues.Floors === 0)) {
+            updates.Floors = 1;
+            autoFlags.Floors = true;
+        }
+
+        if (Object.keys(updates).length > 0) {
+            setFormValues(prev => ({ ...prev, ...updates }));
+            setFloorPlanAutoFilled(prev => ({ ...prev, ...autoFlags }));
+        }
+    }, [quantityResult, quantityData]);
+
     useEffect(() => {
         const districts = formValues.Province ? provinceDistrictMap[formValues.Province] || [] : [];
         setAvailableDistricts(districts);
@@ -386,14 +421,14 @@ const CostPredictionView = ({ project, onBack }) => {
         addRangeError(val.Start_Month, 'Start Month', 1, 12, { integer: true });
         addRangeError(val.Start_Quarter, 'Start Quarter', 1, 4, { integer: true });
         addRangeError(val.Start_Weekday, 'Start Weekday', 0, 6, { integer: true });
-        
+
         // Economic indicators
         addRangeError(val.Inflation_Rate, 'Inflation Rate (%)', -10, 50);
         addRangeError(val.Material_Index, 'Material Price Index', 50, 500);
         addRangeError(val.Exchange_Rate_LKR, 'Exchange Rate (LKR/USD)', 100, 500);
         addRangeError(val.Project_Size_Index, 'Project Size Index', 0, 10);
         addRangeError(val.Economic_Risk_Index, 'Economic Risk Index', 0, 10);
-        
+
         // Risk scores (already constrained by sliders, but double-check)
         addRangeError(val.Design_Completeness, 'Design Completeness (%)', 0, 100);
         addRangeError(val.Design_Risk_Score, 'Design Risk Score', 1, 10, { integer: true });
@@ -405,10 +440,10 @@ const CostPredictionView = ({ project, onBack }) => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        
+
         const errors = validateForm();
         setValidationErrors(errors);
-        
+
         if (errors.length > 0) {
             window.scrollTo({ top: 0, behavior: 'smooth' });
             return;
@@ -717,29 +752,51 @@ const CostPredictionView = ({ project, onBack }) => {
                         </div>
                         <div className={`grid ${isFormExpanded ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4' : 'grid-cols-2'} gap-3`}>
                             <div>
-                                <label className="block text-xs font-medium text-gray-400 mb-1">Floors</label>
+                                <label className="block text-xs font-medium text-gray-400 mb-1">
+                                    Floors
+                                    {floorPlanAutoFilled.Floors && (
+                                        <span className="ml-1.5 inline-flex items-center gap-1 px-1.5 py-0.5 bg-cyan-500/15 text-cyan-300 text-[9px] font-medium rounded-full border border-cyan-500/30 animate-[fadeIn_0.5s_ease-in]">
+                                            ✨ Auto-filled from Floor Plan
+                                        </span>
+                                    )}
+                                </label>
                                 <input
                                     type="number"
                                     min="1"
                                     max="60"
                                     step="1"
                                     value={formValues.Floors}
-                                    onChange={handleChange('Floors', parseIntOrEmpty)}
-                                    className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                                    onChange={(e) => {
+                                        handleChange('Floors', parseIntOrEmpty)(e);
+                                        setFloorPlanAutoFilled(prev => ({ ...prev, Floors: false }));
+                                    }}
+                                    className={`w-full px-3 py-2 bg-dark-700 border rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500 ${floorPlanAutoFilled.Floors ? 'border-cyan-500/40' : 'border-white/10'
+                                        }`}
                                     required
                                 />
                                 <p className="text-[10px] text-gray-500 mt-0.5">Range: 1-60 floors</p>
                             </div>
                             <div>
-                                <label className="block text-xs font-medium text-gray-400 mb-1">Area (SQFT)</label>
+                                <label className="block text-xs font-medium text-gray-400 mb-1">
+                                    Area (SQFT)
+                                    {floorPlanAutoFilled.Area_SQFT && (
+                                        <span className="ml-1.5 inline-flex items-center gap-1 px-1.5 py-0.5 bg-cyan-500/15 text-cyan-300 text-[9px] font-medium rounded-full border border-cyan-500/30 animate-[fadeIn_0.5s_ease-in]">
+                                            ✨ Auto-filled from Floor Plan
+                                        </span>
+                                    )}
+                                </label>
                                 <input
                                     type="number"
                                     min="500"
                                     max="200000"
                                     step="0.01"
                                     value={formValues.Area_SQFT}
-                                    onChange={handleChange('Area_SQFT', parseFloatOrEmpty)}
-                                    className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                                    onChange={(e) => {
+                                        handleChange('Area_SQFT', parseFloatOrEmpty)(e);
+                                        setFloorPlanAutoFilled(prev => ({ ...prev, Area_SQFT: false }));
+                                    }}
+                                    className={`w-full px-3 py-2 bg-dark-700 border rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500 ${floorPlanAutoFilled.Area_SQFT ? 'border-cyan-500/40' : 'border-white/10'
+                                        }`}
                                     required
                                 />
                                 <p className="text-[10px] text-gray-500 mt-0.5">Range: 500-200,000 SQFT</p>
@@ -765,8 +822,8 @@ const CostPredictionView = ({ project, onBack }) => {
                                         type="button"
                                         onClick={() => setInitialValueMode(initialValueMode === 'auto' ? 'manual' : 'auto')}
                                         className={`text-[10px] px-2 py-0.5 rounded border ${initialValueMode === 'auto'
-                                                ? 'border-green-500/40 text-green-400 bg-green-500/10'
-                                                : 'border-yellow-500/40 text-yellow-400 bg-yellow-500/10'
+                                            ? 'border-green-500/40 text-green-400 bg-green-500/10'
+                                            : 'border-yellow-500/40 text-yellow-400 bg-yellow-500/10'
                                             }`}
                                     >
                                         {initialValueMode === 'auto' ? '🔄 Auto' : '✏️ Manual'}
@@ -1182,27 +1239,27 @@ const CostPredictionView = ({ project, onBack }) => {
                                                         alert('❌ Error: No project selected.');
                                                         return;
                                                     }
-                                                    
+
                                                     if (!hasPrediction) {
                                                         alert('❌ Error: No prediction available to save.');
                                                         return;
                                                     }
-                                                    
-                                                    const timestamp = new Date().toLocaleString('en-US', { 
-                                                        month: 'short', 
-                                                        day: 'numeric', 
+
+                                                    const timestamp = new Date().toLocaleString('en-US', {
+                                                        month: 'short',
+                                                        day: 'numeric',
                                                         year: 'numeric',
                                                         hour: '2-digit',
                                                         minute: '2-digit'
                                                     });
                                                     const scenarioName = `Prediction - ${timestamp}`;
-                                                    
+
                                                     const result = await savePrediction(projectId, formValues, {
                                                         scenarioName,
                                                         notes: `${isHighRisk ? 'HIGH' : 'LOW'} Risk, ${overrunPct?.toFixed(1)}% Overrun`,
                                                         tags: [isHighRisk ? 'high-risk' : 'low-risk']
                                                     });
-                                                    
+
                                                     if (result.success) {
                                                         alert('✅ Prediction saved successfully!');
                                                     } else {
@@ -1354,7 +1411,7 @@ const CostPredictionView = ({ project, onBack }) => {
                                                     <stop offset="100%" style={{ stopColor: '#be185d', stopOpacity: 1 }} />
                                                 </linearGradient>
                                             </defs>
-                                            
+
                                             {(() => {
                                                 // Categorize risk factors
                                                 const categories = {
@@ -1364,11 +1421,11 @@ const CostPredictionView = ({ project, onBack }) => {
                                                     Contractor: { count: 0, impact: 0, color: 'url(#contractorGradient)' },
                                                     Other: { count: 0, impact: 0, color: 'url(#otherGradient)' }
                                                 };
-                                                
+
                                                 topRiskFactors.forEach(factor => {
                                                     const feature = factor.feature.toLowerCase();
                                                     const impact = Number(factor.impact) || 0;
-                                                    
+
                                                     if (feature.includes('design') || feature.includes('complexity')) {
                                                         categories.Design.count++;
                                                         categories.Design.impact += impact;
@@ -1386,40 +1443,40 @@ const CostPredictionView = ({ project, onBack }) => {
                                                         categories.Other.impact += impact;
                                                     }
                                                 });
-                                                
+
                                                 const totalImpact = Object.values(categories).reduce((sum, cat) => sum + cat.impact, 0);
-                                                
+
                                                 let currentAngle = -90;
                                                 const centerX = 200;
                                                 const centerY = 160;
                                                 const radius = 100;
                                                 const innerRadius = 60;
-                                                
+
                                                 return (
                                                     <>
                                                         {Object.entries(categories).map(([name, data], idx) => {
                                                             if (data.impact === 0) return null;
-                                                            
+
                                                             const percentage = (data.impact / totalImpact) * 100;
                                                             const angle = (percentage / 100) * 360;
                                                             const endAngle = currentAngle + angle;
-                                                            
+
                                                             // Calculate arc path
                                                             const startRadians = (currentAngle * Math.PI) / 180;
                                                             const endRadians = (endAngle * Math.PI) / 180;
-                                                            
+
                                                             const x1Outer = centerX + radius * Math.cos(startRadians);
                                                             const y1Outer = centerY + radius * Math.sin(startRadians);
                                                             const x2Outer = centerX + radius * Math.cos(endRadians);
                                                             const y2Outer = centerY + radius * Math.sin(endRadians);
-                                                            
+
                                                             const x1Inner = centerX + innerRadius * Math.cos(startRadians);
                                                             const y1Inner = centerY + innerRadius * Math.sin(startRadians);
                                                             const x2Inner = centerX + innerRadius * Math.cos(endRadians);
                                                             const y2Inner = centerY + innerRadius * Math.sin(endRadians);
-                                                            
+
                                                             const largeArc = angle > 180 ? 1 : 0;
-                                                            
+
                                                             const path = `
                                                                 M ${x1Outer} ${y1Outer}
                                                                 A ${radius} ${radius} 0 ${largeArc} 1 ${x2Outer} ${y2Outer}
@@ -1427,14 +1484,14 @@ const CostPredictionView = ({ project, onBack }) => {
                                                                 A ${innerRadius} ${innerRadius} 0 ${largeArc} 0 ${x1Inner} ${y1Inner}
                                                                 Z
                                                             `;
-                                                            
+
                                                             // Label position
                                                             const midAngle = currentAngle + angle / 2;
                                                             const midRadians = (midAngle * Math.PI) / 180;
                                                             const labelRadius = (radius + innerRadius) / 2;
                                                             const labelX = centerX + labelRadius * Math.cos(midRadians);
                                                             const labelY = centerY + labelRadius * Math.sin(midRadians);
-                                                            
+
                                                             const result = (
                                                                 <g key={name}>
                                                                     <path
@@ -1458,11 +1515,11 @@ const CostPredictionView = ({ project, onBack }) => {
                                                                     )}
                                                                 </g>
                                                             );
-                                                            
+
                                                             currentAngle = endAngle;
                                                             return result;
                                                         })}
-                                                        
+
                                                         {/* Center text */}
                                                         <text x={centerX} y={centerY - 5} textAnchor="middle" fontSize="24" fontWeight="bold" fill="#fff">
                                                             {topRiskFactors.length}
@@ -1484,11 +1541,11 @@ const CostPredictionView = ({ project, onBack }) => {
                                                 Contractor: { count: 0, impact: 0, color: 'bg-purple-500' },
                                                 Other: { count: 0, impact: 0, color: 'bg-pink-500' }
                                             };
-                                            
+
                                             topRiskFactors.forEach(factor => {
                                                 const feature = factor.feature.toLowerCase();
                                                 const impact = Number(factor.impact) || 0;
-                                                
+
                                                 if (feature.includes('design') || feature.includes('complexity')) {
                                                     categories.Design.count++;
                                                     categories.Design.impact += impact;
@@ -1506,9 +1563,9 @@ const CostPredictionView = ({ project, onBack }) => {
                                                     categories.Other.impact += impact;
                                                 }
                                             });
-                                            
+
                                             const totalImpact = Object.values(categories).reduce((sum, cat) => sum + cat.impact, 0);
-                                            
+
                                             return Object.entries(categories).map(([name, data]) => {
                                                 if (data.count === 0) return null;
                                                 const percentage = totalImpact > 0 ? ((data.impact / totalImpact) * 100).toFixed(1) : 0;
@@ -1546,18 +1603,18 @@ const CostPredictionView = ({ project, onBack }) => {
                                                     <stop offset="100%" style={{ stopColor: '#0891b2', stopOpacity: 0.1 }} />
                                                 </radialGradient>
                                             </defs>
-                                            
+
                                             {(() => {
                                                 const centerX = 250;
                                                 const centerY = 200;
                                                 const maxRadius = 150;
                                                 const parameters = topRiskFactors.slice(0, 6);
                                                 const numParams = parameters.length;
-                                                
+
                                                 if (numParams === 0) return null;
-                                                
+
                                                 const angleStep = (2 * Math.PI) / numParams;
-                                                
+
                                                 return (
                                                     <>
                                                         {/* Background circles */}
@@ -1572,13 +1629,13 @@ const CostPredictionView = ({ project, onBack }) => {
                                                                 strokeWidth="1"
                                                             />
                                                         ))}
-                                                        
+
                                                         {/* Radar lines */}
                                                         {parameters.map((param, idx) => {
                                                             const angle = -Math.PI / 2 + idx * angleStep;
                                                             const x = centerX + maxRadius * Math.cos(angle);
                                                             const y = centerY + maxRadius * Math.sin(angle);
-                                                            
+
                                                             return (
                                                                 <line
                                                                     key={`line-${idx}`}
@@ -1591,7 +1648,7 @@ const CostPredictionView = ({ project, onBack }) => {
                                                                 />
                                                             );
                                                         })}
-                                                        
+
                                                         {/* Data polygon */}
                                                         <polygon
                                                             points={parameters.map((param, idx) => {
@@ -1608,7 +1665,7 @@ const CostPredictionView = ({ project, onBack }) => {
                                                             strokeWidth="3"
                                                             strokeLinejoin="round"
                                                         />
-                                                        
+
                                                         {/* Data points and labels */}
                                                         {parameters.map((param, idx) => {
                                                             const angle = -Math.PI / 2 + idx * angleStep;
@@ -1617,12 +1674,12 @@ const CostPredictionView = ({ project, onBack }) => {
                                                             const r = maxRadius * normalizedImpact;
                                                             const x = centerX + r * Math.cos(angle);
                                                             const y = centerY + r * Math.sin(angle);
-                                                            
+
                                                             // Label position (outside)
                                                             const labelR = maxRadius + 40;
                                                             const labelX = centerX + labelR * Math.cos(angle);
                                                             const labelY = centerY + labelR * Math.sin(angle);
-                                                            
+
                                                             return (
                                                                 <g key={`point-${idx}`}>
                                                                     <circle cx={x} cy={y} r="6" fill="#06b6d4" stroke="#fff" strokeWidth="2" />
@@ -1674,7 +1731,7 @@ const CostPredictionView = ({ project, onBack }) => {
                                                     <stop offset="100%" style={{ stopColor: '#f59e0b', stopOpacity: 0.2 }} />
                                                 </linearGradient>
                                             </defs>
-                                            
+
                                             {/* Grid */}
                                             {[0, 1, 2, 3, 4, 5].map((i) => (
                                                 <line
@@ -1688,15 +1745,15 @@ const CostPredictionView = ({ project, onBack }) => {
                                                     strokeDasharray="4"
                                                 />
                                             ))}
-                                            
+
                                             {(() => {
                                                 const mean = projectedFinalCost;
                                                 const stdDev = mean * 0.15; // 15% standard deviation
-                                                
+
                                                 const minCost = mean - 3 * stdDev;
                                                 const maxCost = mean + 3 * stdDev;
                                                 const range = maxCost - minCost;
-                                                
+
                                                 // Generate bell curve points
                                                 const points = [];
                                                 for (let i = 0; i <= 100; i++) {
@@ -1705,21 +1762,21 @@ const CostPredictionView = ({ project, onBack }) => {
                                                     const y = (1 / (stdDev * Math.sqrt(2 * Math.PI))) * Math.exp(exponent);
                                                     points.push({ x, y });
                                                 }
-                                                
+
                                                 const maxY = Math.max(...points.map(p => p.y));
-                                                
+
                                                 const pathData = points.map((p, idx) => {
                                                     const px = 80 + ((p.x - minCost) / range) * 640;
                                                     const py = 265 - ((p.y / maxY) * 220);
                                                     return `${idx === 0 ? 'M' : 'L'} ${px} ${py}`;
                                                 }).join(' ') + ' L 720 265 L 80 265 Z';
-                                                
+
                                                 // Confidence intervals
                                                 const confidence68 = { min: mean - stdDev, max: mean + stdDev };
                                                 const confidence95 = { min: mean - 2 * stdDev, max: mean + 2 * stdDev };
-                                                
+
                                                 const getX = (value) => 80 + ((value - minCost) / range) * 640;
-                                                
+
                                                 return (
                                                     <>
                                                         {/* 95% confidence band */}
@@ -1731,7 +1788,7 @@ const CostPredictionView = ({ project, onBack }) => {
                                                             fill="#3b82f6"
                                                             opacity="0.1"
                                                         />
-                                                        
+
                                                         {/* 68% confidence band */}
                                                         <rect
                                                             x={getX(confidence68.min)}
@@ -1741,7 +1798,7 @@ const CostPredictionView = ({ project, onBack }) => {
                                                             fill="#3b82f6"
                                                             opacity="0.15"
                                                         />
-                                                        
+
                                                         {/* Distribution curve */}
                                                         <path
                                                             d={pathData}
@@ -1749,7 +1806,7 @@ const CostPredictionView = ({ project, onBack }) => {
                                                             stroke="#fbbf24"
                                                             strokeWidth="2"
                                                         />
-                                                        
+
                                                         {/* Mean line */}
                                                         <line
                                                             x1={getX(mean)}
@@ -1760,12 +1817,12 @@ const CostPredictionView = ({ project, onBack }) => {
                                                             strokeWidth="3"
                                                             strokeDasharray="6"
                                                         />
-                                                        
+
                                                         {/* Labels */}
                                                         <text x={getX(mean)} y="30" textAnchor="middle" fontSize="12" fontWeight="600" fill="#ef4444">
                                                             Predicted: LKR {(mean / 1000000).toFixed(2)}M
                                                         </text>
-                                                        
+
                                                         <text x={getX(confidence68.min)} y="280" textAnchor="middle" fontSize="10" fill="#60a5fa">
                                                             -1σ
                                                         </text>
@@ -1778,7 +1835,7 @@ const CostPredictionView = ({ project, onBack }) => {
                                                         <text x={getX(confidence95.max)} y="295" textAnchor="middle" fontSize="10" fill="#60a5fa">
                                                             +2σ
                                                         </text>
-                                                        
+
                                                         {/* Initial budget marker */}
                                                         <line
                                                             x1={getX(initialBudget)}
@@ -1795,7 +1852,7 @@ const CostPredictionView = ({ project, onBack }) => {
                                                     </>
                                                 );
                                             })()}
-                                            
+
                                             {/* Axes */}
                                             <line x1="80" y1="265" x2="720" y2="265" stroke="#ffffff30" strokeWidth="2" />
                                             <line x1="80" y1="45" x2="80" y2="265" stroke="#ffffff30" strokeWidth="2" />
@@ -1957,8 +2014,8 @@ const CostPredictionView = ({ project, onBack }) => {
                                                             <p className="text-xs text-gray-400">{optimal.description}</p>
                                                         </div>
                                                         <span className={`text-xs px-2 py-1 rounded ${needsImprovement
-                                                                ? 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/40'
-                                                                : 'bg-green-500/20 text-green-300 border border-green-500/40'
+                                                            ? 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/40'
+                                                            : 'bg-green-500/20 text-green-300 border border-green-500/40'
                                                             }`}>
                                                             {(Number(factor.impact) || 0).toFixed(4)} impact
                                                         </span>
@@ -1982,8 +2039,8 @@ const CostPredictionView = ({ project, onBack }) => {
                                                     {needsImprovement && (
                                                         <div className="mt-2 flex items-center gap-2 text-xs">
                                                             <span className={`px-2 py-1 rounded ${optimal.direction === 'increase'
-                                                                    ? 'bg-blue-500/20 text-blue-300'
-                                                                    : 'bg-purple-500/20 text-purple-300'
+                                                                ? 'bg-blue-500/20 text-blue-300'
+                                                                : 'bg-purple-500/20 text-purple-300'
                                                                 }`}>
                                                                 {optimal.direction === 'increase' ? '↑ Increase' : '↓ Decrease'}
                                                             </span>

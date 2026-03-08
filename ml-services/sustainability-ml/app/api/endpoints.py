@@ -2,9 +2,11 @@ import logging
 from fastapi import APIRouter, HTTPException
 from ..models.schemas import (
     SustainabilityInput, SustainabilityOutput, ParetoPoint, GBCSLBreakdown, 
-    CIDABoqItem, AiOptimization, ErrorResponse
+    CIDABoqItem, AiOptimization, ErrorResponse,
+    OptimizeInput, OptimizeOutput,
 )
 from ..services.inference import build_feature_vector, generate_recommendations, resolve_efficiency
+from ..services.optimizer import optimize_materials, MATERIAL_CATALOG
 from ..config import (
     FEATURE_ORDER, CIDA_MATERIAL_ADJUSTMENT, CIDA_BASE_RATE_PER_SQFT, 
     CIDA_BOQ_ELEMENTS, MATERIAL_PRICE_INDEX
@@ -175,3 +177,44 @@ async def calculate_sustainability(payload: SustainabilityInput):
         cidaTotalLKR=cida_total_lkr,
         aiOptimization=ai_optimization,
     )
+
+
+@router.post(
+    "/api/sustainability/optimize-materials",
+    response_model=OptimizeOutput,
+    tags=["Optimizer"],
+    summary="Inverse Optimization — Auto-prescribe materials to minimise CO₂",
+)
+async def run_material_optimization(payload: OptimizeInput):
+    """
+    Solves a MILP to select exactly one material per building category
+    (walls, floors, doors, windows) that **minimises total carbon**
+    while keeping total cost ≤ max_budget.
+    """
+    logger.info(f"[Optimizer] Request: {payload.model_dump()}")
+
+    try:
+        result = optimize_materials(
+            wall_area=payload.wall_area,
+            floor_area=payload.floor_area,
+            door_count=payload.door_count,
+            window_count=payload.window_count,
+            max_budget=payload.max_budget,
+        )
+    except Exception as exc:
+        logger.error(f"[Optimizer] Solver error: {exc}")
+        raise HTTPException(status_code=500, detail=str(exc))
+
+    if result["status"] != "Optimal":
+        raise HTTPException(status_code=422, detail=result["message"])
+
+    return OptimizeOutput(**result)
+
+
+@router.get(
+    "/api/sustainability/material-catalog",
+    tags=["Optimizer"],
+    summary="Return the available material options and their unit costs/carbon",
+)
+async def get_material_catalog():
+    return {"catalog": MATERIAL_CATALOG}
