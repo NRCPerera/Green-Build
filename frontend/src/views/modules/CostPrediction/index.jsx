@@ -105,7 +105,7 @@ const CostPredictionView = ({ project, onBack }) => {
 
     const [availableDistricts, setAvailableDistricts] = useState(getInitialDistricts());
     const [isFormExpanded, setIsFormExpanded] = useState(false);
-    const [validationErrors, setValidationErrors] = useState([]);
+    const [validationErrors, setValidationErrors] = useState({});
     const [indicatorTouched, setIndicatorTouched] = useState({
         Inflation_Rate: false,
         Exchange_Rate_LKR: false,
@@ -267,10 +267,10 @@ const CostPredictionView = ({ project, onBack }) => {
                     startQuarter = Math.ceil(startMonth / 3); // 1-4
                     startWeekday = startDateObj.getDay(); // 0-6
                     yearOfTender = startDateObj.getFullYear();
-                    
+
                     // Format date for input[type="date"] (YYYY-MM-DD)
                     formattedStartDate = startDateObj.toISOString().split('T')[0];
-                    
+
                     // Determine season based on Sri Lanka monsoon patterns
                     if (startMonth >= 5 && startMonth <= 9) {
                         season = 'Southwest-Monsoon'; // May-Sep
@@ -289,6 +289,9 @@ const CostPredictionView = ({ project, onBack }) => {
 
             if (formattedStartDate) {
                 setStartDate(formattedStartDate);
+            }
+            if (budget > 0) {
+                setInitialValueMode('manual');
             }
 
             setFormValues(prev => ({
@@ -410,7 +413,7 @@ const CostPredictionView = ({ project, onBack }) => {
             window.scrollTo({ top: 0, behavior: 'smooth' });
             return;
         }
-        
+
         await predictCost(formValues);
     };
 
@@ -488,8 +491,8 @@ const CostPredictionView = ({ project, onBack }) => {
             clearIndicatorsError();
         }
         // Clear validation errors when user makes changes
-        if (validationErrors.length > 0) {
-            setValidationErrors([]);
+        if (validationErrors[key]) {
+            setValidationErrors((prev) => ({ ...prev, [key]: undefined }));
         }
         setFormValues((prev) => ({ ...prev, [key]: parsed }));
     };
@@ -506,7 +509,7 @@ const CostPredictionView = ({ project, onBack }) => {
     const handleStartDateChange = (e) => {
         const dateValue = e.target.value;
         setStartDate(dateValue);
-        
+
         if (dateValue) {
             const date = new Date(dateValue);
             if (!isNaN(date.getTime())) {
@@ -514,7 +517,7 @@ const CostPredictionView = ({ project, onBack }) => {
                 const quarter = Math.ceil(month / 3); // 1-4
                 const weekday = date.getDay(); // 0-6 (Sun-Sat)
                 const year = date.getFullYear();
-                
+
                 // Determine season based on Sri Lanka monsoon patterns
                 let season = '';
                 if (month >= 5 && month <= 9) {
@@ -526,12 +529,12 @@ const CostPredictionView = ({ project, onBack }) => {
                 } else {
                     season = 'Dry-Season';
                 }
-                
+
                 // Clear validation errors when user makes changes
                 if (validationErrors.length > 0) {
                     setValidationErrors([]);
                 }
-                
+
                 setFormValues(prev => ({
                     ...prev,
                     Start_Month: month,
@@ -761,11 +764,10 @@ const CostPredictionView = ({ project, onBack }) => {
                                     <button
                                         type="button"
                                         onClick={() => setInitialValueMode(initialValueMode === 'auto' ? 'manual' : 'auto')}
-                                        className={`text-[10px] px-2 py-0.5 rounded border ${
-                                            initialValueMode === 'auto'
+                                        className={`text-[10px] px-2 py-0.5 rounded border ${initialValueMode === 'auto'
                                                 ? 'border-green-500/40 text-green-400 bg-green-500/10'
                                                 : 'border-yellow-500/40 text-yellow-400 bg-yellow-500/10'
-                                        }`}
+                                            }`}
                                     >
                                         {initialValueMode === 'auto' ? '🔄 Auto' : '✏️ Manual'}
                                     </button>
@@ -861,8 +863,8 @@ const CostPredictionView = ({ project, onBack }) => {
                                     min="100"
                                     max="500"
                                     step="0.01"
-                                    value={formValues.Exchange_Rate_LKR !== '' && formValues.Exchange_Rate_LKR !== 0 
-                                        ? Number(formValues.Exchange_Rate_LKR).toFixed(2) 
+                                    value={formValues.Exchange_Rate_LKR !== '' && formValues.Exchange_Rate_LKR !== 0
+                                        ? Number(formValues.Exchange_Rate_LKR).toFixed(2)
                                         : formValues.Exchange_Rate_LKR}
                                     onChange={handleChange('Exchange_Rate_LKR', parseFloatTwoDecimals)}
                                     className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
@@ -1927,7 +1929,7 @@ const CostPredictionView = ({ project, onBack }) => {
                             {topRiskFactors.length > 0 && (
                                 <div className="bg-dark-800/70 border border-green-500/20 rounded-2xl p-6">
                                     <h3 className="text-lg font-semibold text-white mb-2 flex items-center gap-2">
-                                        <span className="text-green-400">🎯</span> 
+                                        <span className="text-green-400">🎯</span>
                                         Low Risk Target Parameters
                                     </h3>
                                     <p className="text-sm text-gray-400 mb-4">
@@ -1939,7 +1941,7 @@ const CostPredictionView = ({ project, onBack }) => {
                                             const featureName = factor.feature;
                                             const currentValue = formValues[featureName];
                                             const optimal = getOptimalValue(featureName, currentValue);
-                                            
+
                                             if (!optimal) return null;
 
                                             const isNumeric = typeof currentValue === 'number';
@@ -1954,11 +1956,10 @@ const CostPredictionView = ({ project, onBack }) => {
                                                             </h4>
                                                             <p className="text-xs text-gray-400">{optimal.description}</p>
                                                         </div>
-                                                        <span className={`text-xs px-2 py-1 rounded ${
-                                                            needsImprovement 
-                                                                ? 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/40' 
+                                                        <span className={`text-xs px-2 py-1 rounded ${needsImprovement
+                                                                ? 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/40'
                                                                 : 'bg-green-500/20 text-green-300 border border-green-500/40'
-                                                        }`}>
+                                                            }`}>
                                                             {(Number(factor.impact) || 0).toFixed(4)} impact
                                                         </span>
                                                     </div>
@@ -1980,11 +1981,10 @@ const CostPredictionView = ({ project, onBack }) => {
 
                                                     {needsImprovement && (
                                                         <div className="mt-2 flex items-center gap-2 text-xs">
-                                                            <span className={`px-2 py-1 rounded ${
-                                                                optimal.direction === 'increase' 
-                                                                    ? 'bg-blue-500/20 text-blue-300' 
+                                                            <span className={`px-2 py-1 rounded ${optimal.direction === 'increase'
+                                                                    ? 'bg-blue-500/20 text-blue-300'
                                                                     : 'bg-purple-500/20 text-purple-300'
-                                                            }`}>
+                                                                }`}>
                                                                 {optimal.direction === 'increase' ? '↑ Increase' : '↓ Decrease'}
                                                             </span>
                                                             <span className="text-gray-400">
@@ -1999,7 +1999,7 @@ const CostPredictionView = ({ project, onBack }) => {
 
                                     <div className="mt-4 p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
                                         <p className="text-xs text-green-300">
-                                            💡 <span className="font-semibold">Pro Tip:</span> Implementing these optimizations could potentially reduce your cost overrun risk by 
+                                            💡 <span className="font-semibold">Pro Tip:</span> Implementing these optimizations could potentially reduce your cost overrun risk by
                                             <span className="font-bold"> 15-30%</span>, depending on how many factors you improve.
                                         </p>
                                     </div>

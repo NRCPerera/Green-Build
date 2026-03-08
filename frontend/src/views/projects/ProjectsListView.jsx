@@ -404,13 +404,14 @@ const ProjectsListView = ({ onSelectProject }) => {
                             </Form.Item>
                             <Form.Item name="typeOfProject" label={<span className="text-gray-300 font-medium">Project Type</span>} initialValue="residential">
                                 <Select className="!text-white" style={{ borderColor: 'rgba(255,255,255,0.15)' }}>
-                                    <Option value="residential">Residential</Option>
-                                    <Option value="apartment">Apartment</Option>
-                                    <Option value="industrial">Industrial</Option>
-                                    <Option value="commercial">Commercial</Option>
-                                    <Option value="infrastructure">Infrastructure</Option>
-                                    <Option value="mixed-use">Mixed Use</Option>
-                                    <Option value="other">Other</Option>
+                                    <Option value="residential">🏠 Residential</Option>
+                                    <Option value="apartment">🏢 Apartment</Option>
+                                    <Option value="commercial">🏢 Commercial</Option>
+                                    <Option value="industrial">🏭 Industrial</Option>
+                                    <Option value="institutional">🏛️ Institutional</Option>
+                                    <Option value="infrastructure">🛣️ Infrastructure</Option>
+                                    <Option value="mixed-use">🏙️ Mixed Use</Option>
+                                    <Option value="other">📐 Other</Option>
                                 </Select>
                             </Form.Item>
                         </div>

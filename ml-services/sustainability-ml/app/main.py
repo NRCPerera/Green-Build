@@ -21,7 +21,8 @@ from app.config import (
 )
 from app.dev_config import DEV_MODE
 from app.services import ModelLoader, Preprocessor, InferenceService
-from app.services.mock_inference import MockInferenceService
+from app.services import MockInferenceService
+from app.services.shap_explainer import SHAPExplainer
 
 # Configure logging
 logging.basicConfig(
@@ -87,12 +88,21 @@ async def lifespan(app: FastAPI):
                 feature_scaler=model_loader.feature_scaler
             )
             
-            # Initialize inference service
+            # Initialize SHAP explainer with loaded models
+            logger.info("Initializing SHAP explainer...")
+            shap_explainer = SHAPExplainer(
+                sustainability_model=model_loader.sustainability_model,
+                lifecycle_model=model_loader.lifecycle_cost_model,
+                risk_model=model_loader.risk_prediction_model
+            )
+            
+            # Initialize inference service with SHAP explainer
             inference_service = InferenceService(
                 sustainability_model=model_loader.sustainability_model,
                 lifecycle_cost_model=model_loader.lifecycle_cost_model,
                 risk_prediction_model=model_loader.risk_prediction_model,
-                preprocessor=preprocessor
+                preprocessor=preprocessor,
+                shap_explainer=shap_explainer
             )
         
         # Set the inference service in endpoints module

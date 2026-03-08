@@ -38,7 +38,32 @@ class MockInferenceService:
         
         return {
             "sustainability_score": round(score, 2),
-            "interpretation": interpretation
+            "interpretation": interpretation,
+            "confidence_interval": {
+                "lower": round(max(0, score - random.uniform(3, 8)), 2),
+                "median": round(score, 2),
+                "upper": round(min(100, score + random.uniform(3, 8)), 2),
+                "std": round(random.uniform(1, 5), 2)
+            },
+            "shap_explanation": {
+                "available": True,
+                "shap_values": {
+                    "Energy (kWh/yr)": round(random.uniform(-5, 5), 4),
+                    "Embodied CO\u2082 (tons)": round(random.uniform(-3, 3), 4),
+                    "Operational CO\u2082 (tons)": round(random.uniform(-4, 2), 4),
+                    "Energy Efficiency": round(random.uniform(0, 8), 4),
+                    "Efficiency per sqft": round(random.uniform(-2, 2), 4),
+                    "Cost/sqft for Sustainability": round(random.uniform(-1, 4), 4),
+                    "CO\u2082 Impact vs Cost": round(random.uniform(-3, 1), 4)
+                },
+                "top_drivers": [
+                    {"feature": "Energy Efficiency", "impact": round(random.uniform(2, 8), 2), "direction": "increases", "description": "Energy Efficiency increases the prediction by " + str(round(random.uniform(2, 8), 2))},
+                    {"feature": "Energy (kWh/yr)", "impact": round(random.uniform(-5, -1), 2), "direction": "decreases", "description": "Energy (kWh/yr) decreases the prediction by " + str(round(random.uniform(1, 5), 2))},
+                    {"feature": "Embodied CO\u2082 (tons)", "impact": round(random.uniform(-3, 3), 2), "direction": "increases", "description": "Embodied CO\u2082 adjusts the prediction by " + str(round(random.uniform(0, 3), 2))}
+                ],
+                "feature_values": {},
+                "model": "sustainability (mock)"
+            }
         }
     
     def predict_lifecycle_cost(self, data: dict) -> dict:
@@ -76,7 +101,34 @@ class MockInferenceService:
         # Return in multi-output format (scaled values as model would return)
         return {
             "multi_output_predictions": [scaled_initial, scaled_maintenance, scaled_sust],
-            "is_multioutput": True
+            "is_multioutput": True,
+            "confidence_interval": {
+                "lower_millions": round(max(0, scaled_initial * 0.85), 2),
+                "median_millions": round(scaled_initial, 2),
+                "upper_millions": round(scaled_initial * 1.15, 2),
+                "lower_lkr": round(max(0, scaled_initial * 0.85) * 1_000_000, 2),
+                "upper_lkr": round(scaled_initial * 1.15 * 1_000_000, 2),
+                "std_millions": round(random.uniform(0.5, 3), 2)
+            },
+            "shap_explanation": {
+                "available": True,
+                "shap_values": {
+                    "Construction Cost/sqft": round(random.uniform(-3, 6), 4),
+                    "Maintenance Cost/yr": round(random.uniform(-2, 4), 4),
+                    "Energy (kWh/yr)": round(random.uniform(-1, 2), 4),
+                    "Energy Efficiency": round(random.uniform(-3, 1), 4),
+                    "Sustainability Score": round(random.uniform(-2, 3), 4),
+                    "Efficiency per sqft": round(random.uniform(-1, 1), 4),
+                    "Cost/sqft for Sustainability": round(random.uniform(-2, 2), 4),
+                    "CO\u2082 Impact vs Cost": round(random.uniform(-1, 1), 4)
+                },
+                "top_drivers": [
+                    {"feature": "Construction Cost/sqft", "impact": round(random.uniform(2, 6), 2), "direction": "increases", "description": "Construction Cost/sqft increases lifecycle cost by " + str(round(random.uniform(2, 6), 2))},
+                    {"feature": "Energy Efficiency", "impact": round(random.uniform(-3, -1), 2), "direction": "decreases", "description": "Energy Efficiency reduces lifecycle cost by " + str(round(random.uniform(1, 3), 2))}
+                ],
+                "feature_values": {},
+                "model": "lifecycle (mock)"
+            }
         }
     
     def predict_risk(self, data: dict) -> dict:
@@ -137,5 +189,28 @@ class MockInferenceService:
             "is_high_risk": is_high_risk,
             "risk_probability": round(risk_probability, 3),
             "risk_level": risk_level,
-            "recommendations": recommendations
+            "recommendations": recommendations,
+            "confidence_interval": {
+                "lower": round(max(0, risk_probability - random.uniform(0.05, 0.15)), 3),
+                "median": round(risk_probability, 3),
+                "upper": round(min(1, risk_probability + random.uniform(0.05, 0.15)), 3),
+                "std": round(random.uniform(0.02, 0.08), 3)
+            },
+            "shap_explanation": {
+                "available": True,
+                "shap_values": {
+                    "Design Completeness": round((100 - design_completeness) * 0.005, 4),
+                    "Project Complexity": round(complexity * 0.003, 4),
+                    "Change Order Frequency": round(change_orders * 0.02, 4),
+                    "Inflation Rate": round(inflation * 0.01, 4),
+                    "Interest Rate": round(interest * 0.005, 4),
+                    "Contractor Experience (yrs)": round(-experience * 0.01, 4)
+                },
+                "top_drivers": [
+                    {"feature": "Design Completeness", "impact": round((100 - design_completeness) * 0.005, 2), "direction": "increases" if design_completeness < 80 else "decreases", "description": f"Design Completeness ({design_completeness}%) " + ("increases" if design_completeness < 80 else "decreases") + f" risk by {abs((100 - design_completeness) * 0.005):.2f}"},
+                    {"feature": "Contractor Experience (yrs)", "impact": round(-experience * 0.01, 2), "direction": "decreases", "description": f"Contractor Experience ({experience} yrs) decreases risk by {abs(experience * 0.01):.2f}"}
+                ],
+                "feature_values": {},
+                "model": "risk (mock)"
+            }
         }

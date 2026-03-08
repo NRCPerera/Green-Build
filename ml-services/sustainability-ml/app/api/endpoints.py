@@ -244,11 +244,31 @@ async def simplified_predict(request: SimplifiedPredictionRequest):
         }
         
         # ===================================================================
-        # SMART SUGGESTIONS (Hybrid Analysis)
+        # SHAP-DRIVEN SMART SUGGESTIONS + Threshold Alerts
         # ===================================================================
         smart_suggestions = []
         
-        # High long-term maintenance alert (from AI)
+        # --- SHAP-driven suggestions from sustainability model ---
+        sust_shap = sustainability_result.get('shap_explanation', {})
+        if sust_shap.get('available') and sust_shap.get('top_drivers'):
+            for driver in sust_shap['top_drivers'][:2]:
+                impact = driver['impact']
+                feat = driver['feature']
+                if abs(impact) > 0.5:  # Only significant contributions
+                    if impact < 0:
+                        smart_suggestions.append({
+                            "type": "warning",
+                            "title": f"{feat} Dragging Score Down",
+                            "text": f"{feat} reduces your sustainability score by {abs(impact):.1f} points. Improving this factor would boost your rating."
+                        })
+                    else:
+                        smart_suggestions.append({
+                            "type": "success",
+                            "title": f"{feat} Boosting Score",
+                            "text": f"{feat} contributes +{impact:.1f} to your sustainability score."
+                        })
+        
+        # --- Threshold-based alerts (engineering-derived) ---
         if maintenance_total_50yr > initial_cost:
             smart_suggestions.append({
                 "type": "alert",
@@ -256,7 +276,6 @@ async def simplified_predict(request: SimplifiedPredictionRequest):
                 "text": f"AI predicts maintenance (LKR {maintenance_total_50yr/1_000_000:.1f}M) exceeds initial cost. Consider higher quality materials."
             })
         
-        # Green investment ratio check (from AI)
         green_ratio = green_features_cost / total_lifecycle_cost if total_lifecycle_cost > 0 else 0
         if green_ratio < 0.05:
             smart_suggestions.append({
@@ -271,7 +290,6 @@ async def simplified_predict(request: SimplifiedPredictionRequest):
                 "text": f"Excellent! {green_ratio*100:.1f}% allocated to sustainability features."
             })
         
-        # High operational CO2 warning (from Engineering)
         if operational_co2 > 10:
             smart_suggestions.append({
                 "type": "eco",
@@ -279,7 +297,6 @@ async def simplified_predict(request: SimplifiedPredictionRequest):
                 "text": f"Operational CO2 is {operational_co2:.1f} tons/year. Consider solar panels or energy-efficient systems."
             })
         
-        # Low efficiency warning (from Engineering)
         if efficiency_rating < 60:
             smart_suggestions.append({
                 "type": "warning",
@@ -293,7 +310,6 @@ async def simplified_predict(request: SimplifiedPredictionRequest):
                 "text": f"Efficiency rating of {efficiency_rating:.0f}/100 qualifies for green building certification."
             })
         
-        # High energy cost warning (from Engineering)
         if annual_energy_cost > 1_000_000:
             smart_suggestions.append({
                 "type": "info",
@@ -301,7 +317,6 @@ async def simplified_predict(request: SimplifiedPredictionRequest):
                 "text": f"Annual energy cost is LKR {annual_energy_cost/1_000_000:.2f}M. Consider renewable energy options."
             })
         
-        # Well-balanced project success
         if risk_result['risk_level'] == 'low' and sustainability_result['sustainability_score'] >= 70:
             smart_suggestions.append({
                 "type": "success",
@@ -323,8 +338,22 @@ async def simplified_predict(request: SimplifiedPredictionRequest):
             rating = 'Poor'
         
         # ===================================================================
-        # BUILD RESPONSE (Hybrid: AI + Engineering)
+        # BUILD RESPONSE (Hybrid: AI + Engineering + Explainability)
         # ===================================================================
+        
+        # Extract SHAP and CI data from model results
+        shap_analysis = {
+            "sustainability": sustainability_result.get('shap_explanation', {}),
+            "lifecycle": lifecycle_result.get('shap_explanation', {}),
+            "risk": risk_result.get('shap_explanation', {})
+        }
+        
+        confidence_intervals = {
+            "sustainability_score": sustainability_result.get('confidence_interval', {}),
+            "lifecycle_cost": lifecycle_result.get('confidence_interval', {}),
+            "risk_probability": risk_result.get('confidence_interval', {})
+        }
+        
         return {
             "success": True,
             "data": {
@@ -338,11 +367,11 @@ async def simplified_predict(request: SimplifiedPredictionRequest):
                 "is_high_risk": risk_result['is_high_risk'],
                 "is_high_efficiency": efficiency_rating > 75,
                 
-                # NEW: Separate Financials (AI) and Engineering (Formulas)
+                # Financials (AI) and Engineering (Formulas)
                 "financials": financials,
                 "engineering": engineering,
                 
-                # Cost breakdown for Pie Chart (from financials)
+                # Cost breakdown for Pie Chart
                 "cost_breakdown": {
                     "initial_construction": round(initial_cost, 0),
                     "lifetime_maintenance": round(maintenance_total_50yr, 0),
@@ -350,8 +379,14 @@ async def simplified_predict(request: SimplifiedPredictionRequest):
                     "is_ai_predicted": is_ai_predicted
                 },
                 
-                # Smart suggestions
+                # Smart suggestions (SHAP-driven + threshold-based)
                 "smart_suggestions": smart_suggestions,
+                
+                # NEW: SHAP Explainability Analysis
+                "shap_analysis": shap_analysis,
+                
+                # NEW: MC Dropout Confidence Intervals
+                "confidence_intervals": confidence_intervals,
                 
                 # Legacy format (for backwards compatibility)
                 "ai_cost_breakdown": {
@@ -362,7 +397,7 @@ async def simplified_predict(request: SimplifiedPredictionRequest):
                     "lifetime_maintenance_50yr": round(maintenance_total_50yr, 0)
                 },
                 
-                # Legacy analysis_details (combining both)
+                # Legacy analysis_details
                 "analysis_details": {
                     "energy_kwh_year": round(energy_usage_kwh, 0),
                     "annual_energy_cost": round(annual_energy_cost, 0),
@@ -386,15 +421,60 @@ async def simplified_predict(request: SimplifiedPredictionRequest):
         return {"success": False, "error": str(e)}
 
 
+@router.get("/feature-importance")
+async def get_feature_importance():
+    """
+    Get global feature importance for all 3 models.
+    Returns the feature names and their average SHAP importance.
+    """
+    try:
+        service = get_inference_service()
+        
+        # Check if SHAP is available
+        if not hasattr(service, 'shap_explainer') or not service.shap_explainer or not service.shap_explainer.is_available():
+            return {
+                "available": False,
+                "message": "SHAP explainability not available. Models may not be loaded."
+            }
+        
+        from app.services.shap_explainer import SHAPExplainer
+        return {
+            "available": True,
+            "models": {
+                "sustainability": {
+                    "features": SHAPExplainer.SUSTAINABILITY_FEATURE_NAMES,
+                    "description": "Predicts sustainability score (0-100)"
+                },
+                "lifecycle_cost": {
+                    "features": SHAPExplainer.LIFECYCLE_FEATURE_NAMES,
+                    "description": "Predicts 50-year lifecycle cost in millions LKR"
+                },
+                "risk": {
+                    "features": SHAPExplainer.RISK_FEATURE_NAMES,
+                    "description": "Predicts project risk probability (0-1)"
+                }
+            }
+        }
+    except Exception as e:
+        logger.error(f"Feature importance error: {str(e)}", exc_info=True)
+        return {"available": False, "error": str(e)}
+
+
 @router.get("/")
 async def root():
     """API information endpoint"""
     return {
         "service": "Sustainability Prediction API",
-        "version": "3.0.0",
+        "version": "4.0.0",
         "status": "running",
+        "features": [
+            "SHAP Explainability",
+            "MC Dropout Confidence Intervals",
+            "Multi-Model Predictions"
+        ],
         "endpoints": {
             "simplified_predict": "/predict",
+            "feature_importance": "/feature-importance",
             "sustainability_score": "/predict/sustainability",
             "lifecycle_cost": "/predict/lifecycle-cost",
             "risk_prediction": "/predict/risk",

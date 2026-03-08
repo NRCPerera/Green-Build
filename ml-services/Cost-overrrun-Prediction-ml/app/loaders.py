@@ -5,11 +5,30 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import keras
 import joblib
 import shap
 from tensorflow.keras.models import load_model
+from tensorflow.keras.layers import Dense as _OriginalDense
 
 from app.config import AppConfig
+
+# Monkey-patch Dense to accept (and ignore) the ``quantization_config``
+# keyword that Keras >=3.12 writes into saved model configs but whose
+# ``__init__`` does not yet handle on this installed version.
+_original_dense_init = _OriginalDense.__init__
+
+
+def _patched_dense_init(self, *args, **kwargs):
+    kwargs.pop("quantization_config", None)
+    _original_dense_init(self, *args, **kwargs)
+
+
+_OriginalDense.__init__ = _patched_dense_init
+
+
+def _load_model(path: Path):
+    return keras.saving.load_model(path)
 
 logger = logging.getLogger(__name__)
 

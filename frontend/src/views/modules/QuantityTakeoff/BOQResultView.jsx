@@ -9,7 +9,7 @@
 import { useState, useMemo } from 'react';
 import {
     Card, Table, Row, Col, Statistic, Divider,
-    Typography, Space, Tag, Tabs, Collapse, Empty
+    Typography, Space, Tag, Tabs, Collapse, Empty, Button
 } from 'antd';
 import {
     FileTextOutlined,
@@ -17,7 +17,8 @@ import {
     CheckCircleOutlined,
     EyeOutlined,
     BarChartOutlined,
-    DownloadOutlined
+    DownloadOutlined,
+    ArrowLeftOutlined
 } from '@ant-design/icons';
 import { generateFullBOQ } from '../../../models/boqModel';
 import { FloorPlan3DViewer } from '../../components';
@@ -89,7 +90,7 @@ const boqColumns = [
 
 /* ── Component ─────────────────────────────────────────────────── */
 
-const BOQResultView = ({ mlResults, manualInputs, geometry3D, loading3D, loadingBOQ, boqData, previewImage }) => {
+const BOQResultView = ({ mlResults, manualInputs, geometry3D, loading3D, loadingBOQ, boqData, previewImage, onStartOver }) => {
     // Prefer backend-generated BOQ (dynamic rates) over local calculation
     const boq = useMemo(() => {
         if (boqData) {
@@ -297,12 +298,25 @@ const BOQResultView = ({ mlResults, manualInputs, geometry3D, loading3D, loading
     ];
 
     return (
-        <Tabs
-            defaultActiveKey="boq"
-            type="card"
-            items={tabItems}
-            className="quantity-takeoff-tabs"
-        />
+        <div>
+            <Tabs
+                defaultActiveKey="boq"
+                type="card"
+                items={tabItems}
+                className="quantity-takeoff-tabs"
+                tabBarExtraContent={
+                    onStartOver && (
+                        <Button
+                            icon={<ArrowLeftOutlined />}
+                            onClick={onStartOver}
+                            size="middle"
+                        >
+                            Start Over
+                        </Button>
+                    )
+                }
+            />
+        </div>
     );
 };
 

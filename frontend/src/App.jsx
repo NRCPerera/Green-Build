@@ -11,6 +11,7 @@ import QuantityTakeoffView from './views/modules/QuantityTakeoff/index.jsx';
 import CostPredictionView from './views/modules/CostPrediction/index.jsx';
 import SustainabilityView from './views/modules/Sustainability/index.jsx';
 import DelayForecastView from './views/modules/DelayForecast/index.jsx';
+import MaterialRatesAdminView from './views/modules/MaterialRatesAdmin/index.jsx';
 
 // Auth Views
 import { LoginView, RegisterView, ProfileView } from './views/auth';
@@ -316,6 +317,7 @@ function App() {
       case 'cost': return <CostPredictionView project={selectedProject} onBack={() => selectedProject ? setActiveModule('project-detail') : setActiveModule('dashboard')} />;
       case 'sustainability': return <SustainabilityView />;
       case 'delay': return <DelayForecastView project={selectedProject} onBack={() => selectedProject ? setActiveModule('project-detail') : setActiveModule('dashboard')} />;
+      case 'admin-rates': return <MaterialRatesAdminView />;
       case 'profile': return <ProfileView />;
 
       case 'dashboard':

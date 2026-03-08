@@ -14,8 +14,12 @@ const SustainabilityView = () => {
     const [apiStatus, setApiStatus] = useState('checking');
     const [showAdvanced, setShowAdvanced] = useState(false);
     const [showDetails, setShowDetails] = useState(false);
+    const [showWhatIf, setShowWhatIf] = useState(false);
+    const [sensitivityLoading, setSensitivityLoading] = useState(false);
     const chartRef = useRef(null);
     const chartInstance = useRef(null);
+    const shapChartRef = useRef(null);
+    const shapChartInstance = useRef(null);
 
     const [formValues, setFormValues] = useState({
         Area_SQFT: 2000,
@@ -75,6 +79,25 @@ const SustainabilityView = () => {
         return () => {
             if (chartInstance.current) {
                 chartInstance.current.destroy();
+            }
+        };
+    }, [prediction]);
+
+    // Render SHAP waterfall chart when prediction changes
+    useEffect(() => {
+        if (prediction?.shap_analysis && shapChartRef.current) {
+            const tryRenderShapChart = (retries = 5) => {
+                if (window.Chart) {
+                    renderShapWaterfallChart();
+                } else if (retries > 0) {
+                    setTimeout(() => tryRenderShapChart(retries - 1), 300);
+                }
+            };
+            tryRenderShapChart();
+        }
+        return () => {
+            if (shapChartInstance.current) {
+                shapChartInstance.current.destroy();
             }
         };
     }, [prediction]);
@@ -234,6 +257,108 @@ const SustainabilityView = () => {
         }
 
         return recs;
+    };
+
+    // ============================================================
+    // SHAP Waterfall Chart Renderer
+    // ============================================================
+    const renderShapWaterfallChart = () => {
+        if (!window.Chart || !shapChartRef.current || !prediction?.shap_analysis) return;
+
+        if (shapChartInstance.current) {
+            shapChartInstance.current.destroy();
+        }
+
+        // Get sustainability SHAP values (primary model to visualize)
+        const shapData = prediction.shap_analysis?.sustainability;
+        if (!shapData?.available || !shapData?.shap_values) return;
+
+        const entries = Object.entries(shapData.shap_values)
+            .sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))
+            .slice(0, 7);
+
+        const labels = entries.map(([name]) => name);
+        const values = entries.map(([, val]) => val);
+        const colors = values.map(v => v >= 0 ? 'rgba(16, 185, 129, 0.8)' : 'rgba(239, 68, 68, 0.8)');
+        const borderColors = values.map(v => v >= 0 ? 'rgba(16, 185, 129, 1)' : 'rgba(239, 68, 68, 1)');
+
+        const ctx = shapChartRef.current.getContext('2d');
+        shapChartInstance.current = new window.Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'SHAP Impact on Score',
+                    data: values,
+                    backgroundColor: colors,
+                    borderColor: borderColors,
+                    borderWidth: 1,
+                    borderRadius: 4
+                }]
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: (ctx) => {
+                                const val = ctx.raw;
+                                return `${val >= 0 ? '+' : ''}${val.toFixed(2)} impact`;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        grid: { color: 'rgba(255,255,255,0.05)' },
+                        ticks: { color: '#9ca3af', font: { size: 10 } },
+                        title: {
+                            display: true,
+                            text: '← Decreases Score    |    Increases Score →',
+                            color: '#6b7280',
+                            font: { size: 10 }
+                        }
+                    },
+                    y: {
+                        grid: { display: false },
+                        ticks: { color: '#d1d5db', font: { size: 11 } }
+                    }
+                }
+            }
+        });
+    };
+
+    // ============================================================
+    // What-If Sensitivity Analysis
+    // ============================================================
+    const [whatIfValues, setWhatIfValues] = useState(null);
+
+    const runWhatIfAnalysis = async (key, newValue) => {
+        if (!whatIfValues && formValues) {
+            setWhatIfValues({ ...formValues });
+        }
+        const updatedValues = { ...(whatIfValues || formValues), [key]: newValue };
+        setWhatIfValues(updatedValues);
+        setSensitivityLoading(true);
+
+        try {
+            const response = await fetch(`${API_URL}/predict`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(updatedValues)
+            });
+            const result = await response.json();
+            if (result.success) {
+                setPrediction(result.data);
+            }
+        } catch (err) {
+            console.error('What-if analysis failed:', err);
+        } finally {
+            setSensitivityLoading(false);
+        }
     };
 
     const exportToPDF = async () => {
@@ -870,6 +995,138 @@ const SustainabilityView = () => {
                                             )}
                                         </div>
                                     </div>
+
+                                    {/* ============================================== */}
+                                    {/* SHAP WATERFALL CHART - Feature Contributions    */}
+                                    {/* ============================================== */}
+                                    {prediction.shap_analysis && (
+                                        <div className="bg-slate-900/80 border border-slate-700 rounded-xl overflow-hidden">
+                                            <div className="bg-indigo-600/20 border-b border-indigo-500/30 px-4 py-3 flex items-center justify-between">
+                                                <div>
+                                                    <h3 className="text-sm font-bold text-indigo-300">🔍 SHAP FEATURE ANALYSIS</h3>
+                                                    <p className="text-xs text-indigo-400/70">Why the model made this prediction</p>
+                                                </div>
+                                                {prediction.shap_analysis?.sustainability?.available && (
+                                                    <span className="px-2 py-0.5 bg-indigo-500/20 text-indigo-300 text-xs rounded border border-indigo-500/30">DeepExplainer</span>
+                                                )}
+                                            </div>
+                                            <div className="p-4">
+                                                {prediction.shap_analysis?.sustainability?.available ? (
+                                                    <div className="relative h-56">
+                                                        <canvas ref={shapChartRef}></canvas>
+                                                    </div>
+                                                ) : (
+                                                    <div className="text-center py-8 text-slate-500">
+                                                        <p className="text-sm">SHAP analysis unavailable — model may be running in dev mode</p>
+                                                    </div>
+                                                )}
+                                                {prediction.shap_analysis?.sustainability?.top_drivers?.length > 0 && (
+                                                    <div className="mt-3 space-y-1">
+                                                        {prediction.shap_analysis.sustainability.top_drivers.slice(0, 3).map((driver, idx) => (
+                                                            <div key={idx} className={`flex items-center gap-2 text-xs px-3 py-1.5 rounded ${driver.impact >= 0 ? 'bg-green-500/10 text-green-300' : 'bg-red-500/10 text-red-300'}`}>
+                                                                <span>{driver.impact >= 0 ? '▲' : '▼'}</span>
+                                                                <span>{driver.description}</span>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* ============================================== */}
+                                    {/* CONFIDENCE INTERVALS - MC Dropout Uncertainty   */}
+                                    {/* ============================================== */}
+                                    {prediction.confidence_intervals && (
+                                        <div className="bg-slate-900/80 border border-slate-700 rounded-xl overflow-hidden">
+                                            <div className="bg-cyan-600/20 border-b border-cyan-500/30 px-4 py-3">
+                                                <h3 className="text-sm font-bold text-cyan-300">📊 PREDICTION CONFIDENCE</h3>
+                                                <p className="text-xs text-cyan-400/70">MC Dropout uncertainty quantification (P10 / P50 / P90)</p>
+                                            </div>
+                                            <div className="p-4 space-y-4">
+                                                {/* Sustainability Score CI */}
+                                                {prediction.confidence_intervals.sustainability_score && (
+                                                    <div>
+                                                        <div className="flex items-center justify-between mb-2">
+                                                            <span className="text-xs font-medium text-slate-400">Sustainability Score</span>
+                                                            <span className="text-xs text-slate-500">±{prediction.confidence_intervals.sustainability_score.std?.toFixed(1)}</span>
+                                                        </div>
+                                                        <div className="relative h-8 bg-slate-800 rounded-lg overflow-hidden">
+                                                            {/* Range bar */}
+                                                            <div
+                                                                className="absolute h-full bg-gradient-to-r from-green-600/40 to-green-500/40 rounded"
+                                                                style={{
+                                                                    left: `${Math.max(0, prediction.confidence_intervals.sustainability_score.lower)}%`,
+                                                                    width: `${Math.max(1, (prediction.confidence_intervals.sustainability_score.upper || 0) - (prediction.confidence_intervals.sustainability_score.lower || 0))}%`
+                                                                }}
+                                                            />
+                                                            {/* Median marker */}
+                                                            <div
+                                                                className="absolute w-0.5 h-full bg-green-400"
+                                                                style={{ left: `${Math.max(0, Math.min(100, prediction.confidence_intervals.sustainability_score.median || 0))}%` }}
+                                                            />
+                                                        </div>
+                                                        <div className="flex justify-between mt-1 text-xs">
+                                                            <span className="text-red-400">{prediction.confidence_intervals.sustainability_score.lower?.toFixed(1)}</span>
+                                                            <span className="text-green-400 font-bold">{prediction.confidence_intervals.sustainability_score.median?.toFixed(1)}</span>
+                                                            <span className="text-green-400">{prediction.confidence_intervals.sustainability_score.upper?.toFixed(1)}</span>
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {/* Lifecycle Cost CI */}
+                                                {prediction.confidence_intervals.lifecycle_cost && (
+                                                    <div>
+                                                        <div className="flex items-center justify-between mb-2">
+                                                            <span className="text-xs font-medium text-slate-400">Lifecycle Cost (Millions LKR)</span>
+                                                            <span className="text-xs text-slate-500">±{prediction.confidence_intervals.lifecycle_cost.std_millions?.toFixed(2)}M</span>
+                                                        </div>
+                                                        <div className="flex items-center gap-3 text-sm">
+                                                            <span className="px-2 py-1 rounded bg-blue-500/10 text-blue-300 font-mono">
+                                                                {prediction.confidence_intervals.lifecycle_cost.lower_millions?.toFixed(1)}M
+                                                            </span>
+                                                            <div className="flex-1 h-px bg-gradient-to-r from-blue-500/50 via-blue-400 to-blue-500/50" />
+                                                            <span className="px-3 py-1 rounded bg-blue-500/30 text-blue-200 font-bold font-mono border border-blue-500/40">
+                                                                {prediction.confidence_intervals.lifecycle_cost.median_millions?.toFixed(1)}M
+                                                            </span>
+                                                            <div className="flex-1 h-px bg-gradient-to-r from-blue-500/50 via-blue-400 to-blue-500/50" />
+                                                            <span className="px-2 py-1 rounded bg-blue-500/10 text-blue-300 font-mono">
+                                                                {prediction.confidence_intervals.lifecycle_cost.upper_millions?.toFixed(1)}M
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                )}
+
+                                                {/* Risk CI */}
+                                                {prediction.confidence_intervals.risk_probability && (
+                                                    <div>
+                                                        <div className="flex items-center justify-between mb-2">
+                                                            <span className="text-xs font-medium text-slate-400">Risk Probability</span>
+                                                            <span className="text-xs text-slate-500">±{prediction.confidence_intervals.risk_probability.std?.toFixed(3)}</span>
+                                                        </div>
+                                                        <div className="relative h-6 bg-slate-800 rounded-lg overflow-hidden">
+                                                            <div
+                                                                className="absolute h-full bg-gradient-to-r from-yellow-600/40 to-red-500/40 rounded"
+                                                                style={{
+                                                                    left: `${(prediction.confidence_intervals.risk_probability.lower || 0) * 100}%`,
+                                                                    width: `${Math.max(1, ((prediction.confidence_intervals.risk_probability.upper || 0) - (prediction.confidence_intervals.risk_probability.lower || 0)) * 100)}%`
+                                                                }}
+                                                            />
+                                                            <div
+                                                                className="absolute w-0.5 h-full bg-yellow-400"
+                                                                style={{ left: `${(prediction.confidence_intervals.risk_probability.median || 0) * 100}%` }}
+                                                            />
+                                                        </div>
+                                                        <div className="flex justify-between mt-1 text-xs">
+                                                            <span className="text-green-400">{((prediction.confidence_intervals.risk_probability.lower || 0) * 100).toFixed(0)}%</span>
+                                                            <span className="text-yellow-400 font-bold">{((prediction.confidence_intervals.risk_probability.median || 0) * 100).toFixed(0)}%</span>
+                                                            <span className="text-red-400">{((prediction.confidence_intervals.risk_probability.upper || 0) * 100).toFixed(0)}%</span>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
                                 </div>
 
                                 {/* RIGHT COLUMN (30%) - Chart */}
@@ -912,6 +1169,106 @@ const SustainabilityView = () => {
                                                     </div>
                                                     <span className="text-white font-medium">{formatCost(prediction.cost_breakdown.green_investment)}</span>
                                                 </div>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* ============================================== */}
+                                    {/* WHAT-IF SENSITIVITY PANEL                      */}
+                                    {/* ============================================== */}
+                                    <div className="bg-slate-900/80 border border-slate-700 rounded-xl overflow-hidden">
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                setShowWhatIf(!showWhatIf);
+                                                if (!whatIfValues) setWhatIfValues({ ...formValues });
+                                            }}
+                                            className="w-full flex items-center justify-between px-4 py-3 bg-amber-600/10 border-b border-amber-500/20 hover:bg-amber-600/20 transition-colors"
+                                        >
+                                            <div className="flex items-center gap-2">
+                                                <span className="text-amber-400">🎯</span>
+                                                <h3 className="text-sm font-bold text-amber-300">WHAT-IF SENSITIVITY ANALYSIS</h3>
+                                                {sensitivityLoading && <span className="text-xs text-amber-400 animate-pulse">updating...</span>}
+                                            </div>
+                                            <span className={`text-amber-400 transition-transform ${showWhatIf ? 'rotate-180' : ''}`}>▼</span>
+                                        </button>
+                                        {showWhatIf && (
+                                            <div className="p-4 space-y-4">
+                                                <p className="text-xs text-slate-400">Drag sliders to see how parameter changes affect predictions in real-time.</p>
+
+                                                {/* Area slider */}
+                                                <div>
+                                                    <div className="flex justify-between mb-1">
+                                                        <label className="text-xs text-slate-300">Area (SQFT)</label>
+                                                        <span className="text-xs text-amber-400 font-mono">{(whatIfValues || formValues).Area_SQFT}</span>
+                                                    </div>
+                                                    <input
+                                                        type="range"
+                                                        min="500" max="50000" step="500"
+                                                        value={(whatIfValues || formValues).Area_SQFT}
+                                                        onChange={(e) => runWhatIfAnalysis('Area_SQFT', parseFloat(e.target.value))}
+                                                        className="w-full h-2 bg-dark-700 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                                                    />
+                                                    <div className="flex justify-between text-xs text-slate-600"><span>500</span><span>50,000</span></div>
+                                                </div>
+
+                                                {/* Floors slider */}
+                                                <div>
+                                                    <div className="flex justify-between mb-1">
+                                                        <label className="text-xs text-slate-300">Floors</label>
+                                                        <span className="text-xs text-amber-400 font-mono">{(whatIfValues || formValues).Floors}</span>
+                                                    </div>
+                                                    <input
+                                                        type="range"
+                                                        min="1" max="20" step="1"
+                                                        value={(whatIfValues || formValues).Floors}
+                                                        onChange={(e) => runWhatIfAnalysis('Floors', parseInt(e.target.value))}
+                                                        className="w-full h-2 bg-dark-700 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                                                    />
+                                                    <div className="flex justify-between text-xs text-slate-600"><span>1</span><span>20</span></div>
+                                                </div>
+
+                                                {/* Design Completeness slider */}
+                                                <div>
+                                                    <div className="flex justify-between mb-1">
+                                                        <label className="text-xs text-slate-300">Design Completeness</label>
+                                                        <span className="text-xs text-amber-400 font-mono">{(whatIfValues || formValues).Design_Completeness}%</span>
+                                                    </div>
+                                                    <input
+                                                        type="range"
+                                                        min="10" max="100" step="5"
+                                                        value={(whatIfValues || formValues).Design_Completeness}
+                                                        onChange={(e) => runWhatIfAnalysis('Design_Completeness', parseFloat(e.target.value))}
+                                                        className="w-full h-2 bg-dark-700 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                                                    />
+                                                    <div className="flex justify-between text-xs text-slate-600"><span>10%</span><span>100%</span></div>
+                                                </div>
+
+                                                {/* Contractor Experience slider */}
+                                                <div>
+                                                    <div className="flex justify-between mb-1">
+                                                        <label className="text-xs text-slate-300">Contractor Experience (yrs)</label>
+                                                        <span className="text-xs text-amber-400 font-mono">{(whatIfValues || formValues).Contractor_Experience}</span>
+                                                    </div>
+                                                    <input
+                                                        type="range"
+                                                        min="1" max="30" step="1"
+                                                        value={(whatIfValues || formValues).Contractor_Experience}
+                                                        onChange={(e) => runWhatIfAnalysis('Contractor_Experience', parseFloat(e.target.value))}
+                                                        className="w-full h-2 bg-dark-700 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                                                    />
+                                                    <div className="flex justify-between text-xs text-slate-600"><span>1 yr</span><span>30 yrs</span></div>
+                                                </div>
+
+                                                <button
+                                                    onClick={() => {
+                                                        setWhatIfValues({ ...formValues });
+                                                        handleSubmit({ preventDefault: () => { } });
+                                                    }}
+                                                    className="w-full text-xs py-2 rounded-lg bg-slate-800 border border-slate-600 text-slate-400 hover:bg-slate-700 transition-colors"
+                                                >
+                                                    ↺ Reset to Original Values
+                                                </button>
                                             </div>
                                         )}
                                     </div>
