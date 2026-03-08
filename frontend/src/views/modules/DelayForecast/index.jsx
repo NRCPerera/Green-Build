@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import useDelayController from '../../../controllers/useDelayController';
+import useProjectStore from '../../../models/useProjectStore';
 
 /**
  * Delay Forecast View
@@ -67,6 +68,11 @@ const DelayForecastView = ({ project, onBack }) => {
         checkMlHealth();
     }, [checkMlHealth]);
 
+    // ── Floor Plan Pipeline: fetch extracted quantities from global store ──
+    const quantityResult = useProjectStore((state) => state.quantityResult);
+    const quantityData = useProjectStore((state) => state.quantityData);
+    const [floorPlanAutoFilled, setFloorPlanAutoFilled] = useState({ projectArea: false, floors: false });
+
     // Pre-fill form with project data
     useEffect(() => {
         if (project) {
@@ -102,6 +108,33 @@ const DelayForecastView = ({ project, onBack }) => {
             }));
         }
     }, [project]);
+
+    // ── Auto-fill from Quantity Takeoff floor plan results ──
+    useEffect(() => {
+        if (!quantityResult) return;
+
+        const floorAreaM2 = quantityResult?.room_detection?.total_floor_area_m2 || 0;
+
+        const updates = {};
+        const autoFlags = { projectArea: false, floors: false };
+
+        if (floorAreaM2 > 0) {
+            updates.projectArea = Math.round(floorAreaM2);
+            autoFlags.projectArea = true;
+        }
+
+        // Floor plans are single-floor; default to 1 if not already set from project
+        const detectedRooms = quantityData?.detectedRooms || [];
+        if (detectedRooms.length > 0 && (!formValues.floors || formValues.floors <= 1)) {
+            updates.floors = 1;
+            autoFlags.floors = true;
+        }
+
+        if (Object.keys(updates).length > 0) {
+            setFormValues(prev => ({ ...prev, ...updates }));
+            setFloorPlanAutoFilled(prev => ({ ...prev, ...autoFlags }));
+        }
+    }, [quantityResult, quantityData]);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
@@ -269,15 +302,24 @@ const DelayForecastView = ({ project, onBack }) => {
                         <div>
                             <label className="block text-sm font-medium text-gray-300 mb-2">
                                 Project Area (sq.m)
+                                {floorPlanAutoFilled.projectArea && (
+                                    <span className="ml-1.5 inline-flex items-center gap-1 px-1.5 py-0.5 bg-cyan-500/15 text-cyan-300 text-[9px] font-medium rounded-full border border-cyan-500/30 animate-[fadeIn_0.5s_ease-in]">
+                                        ✨ Auto-filled from Floor Plan
+                                    </span>
+                                )}
                             </label>
                             <input
                                 type="number"
                                 value={formValues.projectArea}
-                                onChange={(e) => setFormValues({ ...formValues, projectArea: parseInt(e.target.value) || 0 })}
+                                onChange={(e) => {
+                                    setFormValues({ ...formValues, projectArea: parseInt(e.target.value) || 0 });
+                                    setFloorPlanAutoFilled(prev => ({ ...prev, projectArea: false }));
+                                }}
                                 min="50"
                                 step="50"
-                                className="w-full px-4 py-3 bg-dark-700 border border-white/10 rounded-xl text-white 
-                                         focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className={`w-full px-4 py-3 bg-dark-700 border rounded-xl text-white 
+                                         focus:outline-none focus:ring-2 focus:ring-blue-500 ${floorPlanAutoFilled.projectArea ? 'border-cyan-500/40' : 'border-white/10'
+                                    }`}
                             />
                         </div>
 
@@ -285,15 +327,24 @@ const DelayForecastView = ({ project, onBack }) => {
                         <div>
                             <label className="block text-sm font-medium text-gray-300 mb-2">
                                 Number of Floors
+                                {floorPlanAutoFilled.floors && (
+                                    <span className="ml-1.5 inline-flex items-center gap-1 px-1.5 py-0.5 bg-cyan-500/15 text-cyan-300 text-[9px] font-medium rounded-full border border-cyan-500/30 animate-[fadeIn_0.5s_ease-in]">
+                                        ✨ Auto-filled from Floor Plan
+                                    </span>
+                                )}
                             </label>
                             <input
                                 type="number"
                                 value={formValues.floors}
-                                onChange={(e) => setFormValues({ ...formValues, floors: parseInt(e.target.value) || 1 })}
+                                onChange={(e) => {
+                                    setFormValues({ ...formValues, floors: parseInt(e.target.value) || 1 });
+                                    setFloorPlanAutoFilled(prev => ({ ...prev, floors: false }));
+                                }}
                                 min="1"
                                 max="50"
-                                className="w-full px-4 py-3 bg-dark-700 border border-white/10 rounded-xl text-white 
-                                         focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className={`w-full px-4 py-3 bg-dark-700 border rounded-xl text-white 
+                                         focus:outline-none focus:ring-2 focus:ring-blue-500 ${floorPlanAutoFilled.floors ? 'border-cyan-500/40' : 'border-white/10'
+                                    }`}
                             />
                         </div>
 
@@ -715,7 +766,7 @@ const DelayForecastView = ({ project, onBack }) => {
                                     {/* Predicted Completion (with delays) */}
                                     <div className="relative pl-10">
                                         <div className={`absolute left-2.5 w-3 h-3 rounded-full ${forecast.predictedDelayDays > 60 ? 'bg-red-500' :
-                                                forecast.predictedDelayDays > 0 ? 'bg-orange-500' : 'bg-green-500'
+                                            forecast.predictedDelayDays > 0 ? 'bg-orange-500' : 'bg-green-500'
                                             }`} />
                                         <p className="text-sm text-gray-400">Predicted Completion</p>
                                         <p className="text-white font-medium">

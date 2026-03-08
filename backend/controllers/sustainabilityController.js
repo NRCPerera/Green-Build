@@ -194,6 +194,72 @@ const calculateSustainability = async (req, res) => {
 };
 
 /**
+ * POST /api/sustainability/optimize-materials
+ * Inverse Optimization — MILP solver via Python service
+ */
+const optimizeMaterials = async (req, res) => {
+    try {
+        const body = req.body;
+
+        // Validate required fields
+        const wallArea = parseFloat(body.wall_area);
+        const floorArea = parseFloat(body.floor_area);
+        const doorCount = parseInt(body.door_count, 10);
+        const windowCount = parseInt(body.window_count, 10);
+        const maxBudget = parseFloat(body.max_budget);
+
+        if (!wallArea || !floorArea || !maxBudget) {
+            return res.status(400).json({
+                success: false,
+                message: 'wall_area, floor_area, and max_budget are required and must be > 0',
+            });
+        }
+
+        const mlPayload = {
+            wall_area: wallArea,
+            floor_area: floorArea,
+            door_count: doorCount || 0,
+            window_count: windowCount || 0,
+            max_budget: maxBudget,
+        };
+
+        const config = require('../config');
+        const mlServiceUrl = `${config.sustainabilityMlUrl}/api/sustainability/optimize-materials`;
+        console.log(`[Optimizer Proxy] Forwarding to: ${mlServiceUrl}`);
+
+        const response = await axios.post(mlServiceUrl, mlPayload, {
+            headers: { 'Content-Type': 'application/json' },
+            timeout: 30000,
+        });
+
+        console.log(`[Optimizer Proxy] Received ${response.status} from ML`);
+
+        return res.json({
+            success: true,
+            data: response.data,
+        });
+
+    } catch (error) {
+        console.error('[Optimizer Proxy] Error:', error.message);
+
+        if (error.code === 'ECONNREFUSED' || !error.response) {
+            return res.status(503).json({
+                success: false,
+                message: 'Python ML Service is offline or unreachable.',
+            });
+        }
+
+        const status = error.response.status || 500;
+        const detail = error.response.data?.detail;
+        const message = typeof detail === 'string'
+            ? detail
+            : (error.response.data?.message || 'Material optimization failed');
+
+        return res.status(status).json({ success: false, message });
+    }
+};
+
+/**
  * Common error handler for ML service errors
  */
 const handleMLServiceError = (error, res, context) => {
@@ -231,5 +297,6 @@ module.exports = {
     handleLifecycleCostPrediction,
     handleRiskPrediction,
     handleFeatureImportance,
-    calculateSustainability
+    calculateSustainability,
+    optimizeMaterials
 };

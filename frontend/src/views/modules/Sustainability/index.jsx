@@ -11,8 +11,9 @@
  *  - Advice     → components/Recommendations.jsx
  */
 
-import { useState } from 'react';
-import { calculateSustainability, formatCarbon, formatCurrency } from '../../../services/sustainabilityService';
+import { useState, useEffect, useMemo } from 'react';
+import { calculateSustainability, optimizeMaterials, formatCarbon, formatCurrency } from '../../../services/sustainabilityService';
+import useProjectStore from '../../../models/useProjectStore';
 import ResultsCard from './components/ResultsCard';
 import ParetoChart from './components/ParetoChart';
 import Recommendations from './components/Recommendations';
@@ -87,6 +88,40 @@ const SustainabilityView = () => {
     const [error, setError] = useState(null);
     const [result, setResult] = useState(null);
 
+    // ── Floor Plan Pipeline: fetch extracted quantities from global store ──
+    const quantityResult = useProjectStore((state) => state.quantityResult);
+    const quantityData = useProjectStore((state) => state.quantityData);
+    const [floorPlanAutoFilled, setFloorPlanAutoFilled] = useState({ projectArea: false });
+
+    // Derived constraints from the floor plan CV results
+    const floorPlanConstraints = useMemo(() => {
+        if (!quantityResult && !quantityData) return null;
+        return {
+            wallArea: quantityData?.wallNetSurfaceAreaM2 || 0,
+            floorArea: quantityResult?.room_detection?.total_floor_area_m2 || 0,
+            doorCount: quantityData?.itemCounts?.doors || 0,
+            windowCount: quantityData?.itemCounts?.windows || 0,
+        };
+    }, [quantityResult, quantityData]);
+
+    // ── Optimizer State ──
+    const [maxBudget, setMaxBudget] = useState(2500000);
+    const [isOptimizing, setIsOptimizing] = useState(false);
+    const [optimizationResult, setOptimizationResult] = useState(null);
+    const [optError, setOptError] = useState(null);
+
+    // Auto-fill projectArea from floor plan results
+    useEffect(() => {
+        if (!quantityResult) return;
+
+        const floorAreaM2 = quantityResult?.room_detection?.total_floor_area_m2 || 0;
+
+        if (floorAreaM2 > 0) {
+            setProjectArea(Math.round(floorAreaM2));
+            setFloorPlanAutoFilled(prev => ({ ...prev, projectArea: true }));
+        }
+    }, [quantityResult]);
+
     const addMaterial = () => {
         const matConfig = MATERIAL_OPTIONS.find((m) => m.value === primaryMaterial) || MATERIAL_OPTIONS[0];
         const dynamicQty = Math.round(projectArea * matConfig.kgPerM2);
@@ -136,6 +171,48 @@ const SustainabilityView = () => {
         }
     };
 
+    // ── Optimizer handler ──
+    const handleRunOptimization = async (e) => {
+        e.preventDefault();
+        setIsOptimizing(true);
+        setOptError(null);
+        setOptimizationResult(null);
+
+        try {
+            // Use CV data if available, otherwise fallback to rough manual estimations
+            const wArea = floorPlanConstraints?.wallArea > 0 ? floorPlanConstraints.wallArea : projectArea * 2.5;
+            const fArea = floorPlanConstraints?.floorArea > 0 ? floorPlanConstraints.floorArea : projectArea;
+            const dCount = floorPlanConstraints?.doorCount > 0 ? floorPlanConstraints.doorCount : Math.max(1, Math.round(projectArea / 20));
+            const wCount = floorPlanConstraints?.windowCount > 0 ? floorPlanConstraints.windowCount : Math.max(2, Math.round(projectArea / 15));
+
+            const payload = {
+                wall_area: parseFloat(wArea) || 1,
+                floor_area: parseFloat(fArea) || 1,
+                door_count: parseInt(dCount, 10),
+                window_count: parseInt(wCount, 10),
+                max_budget: parseFloat(maxBudget)
+            };
+
+            const response = await optimizeMaterials(payload);
+
+            if (response.success && response.data) {
+                setOptimizationResult(response.data);
+            } else {
+                setOptimizationResult(response);
+            }
+
+        } catch (err) {
+            const msg =
+                err.response?.data?.message ||
+                err.response?.data?.detail ||
+                err.message ||
+                'Optimization failed';
+            setOptError(msg);
+        } finally {
+            setIsOptimizing(false);
+        }
+    };
+
     return (
         <div className="space-y-6">
 
@@ -174,14 +251,23 @@ const SustainabilityView = () => {
                         <div>
                             <label className="block text-sm font-medium text-gray-300 mb-2">
                                 Project Area (m²)
+                                {floorPlanAutoFilled.projectArea && (
+                                    <span className="ml-1.5 inline-flex items-center gap-1 px-1.5 py-0.5 bg-cyan-500/15 text-cyan-300 text-[9px] font-medium rounded-full border border-cyan-500/30 animate-[fadeIn_0.5s_ease-in]">
+                                        ✨ Auto-filled from Floor Plan
+                                    </span>
+                                )}
                             </label>
                             <input
                                 type="number"
                                 value={projectArea}
-                                onChange={(e) => setProjectArea(parseFloat(e.target.value) || 0)}
+                                onChange={(e) => {
+                                    setProjectArea(parseFloat(e.target.value) || 0);
+                                    setFloorPlanAutoFilled(prev => ({ ...prev, projectArea: false }));
+                                }}
                                 min="1"
-                                className="w-full px-4 py-3 bg-dark-700 border border-white/10 rounded-xl text-white
-                                           focus:outline-none focus:ring-2 focus:ring-green-500"
+                                className={`w-full px-4 py-3 bg-dark-700 border rounded-xl text-white
+                                           focus:outline-none focus:ring-2 focus:ring-green-500 ${floorPlanAutoFilled.projectArea ? 'border-cyan-500/40' : 'border-white/10'
+                                    }`}
                             />
                         </div>
 
@@ -219,6 +305,36 @@ const SustainabilityView = () => {
                         </div>
                     </div>
 
+                    {/* ── Floor Plan Constraints Banner ── */}
+                    {floorPlanConstraints && (floorPlanConstraints.wallArea > 0 || floorPlanConstraints.doorCount > 0 || floorPlanConstraints.windowCount > 0) && (
+                        <div className="bg-dark-800/50 border border-cyan-500/20 rounded-2xl p-5">
+                            <div className="flex items-center gap-2 mb-3">
+                                <span className="text-base">✨</span>
+                                <h3 className="text-sm font-semibold text-cyan-300">Floor Plan Constraints</h3>
+                                <span className="ml-auto px-2 py-0.5 bg-cyan-500/15 text-cyan-400 text-[10px] font-medium rounded-full border border-cyan-500/30">
+                                    From Quantity Takeoff
+                                </span>
+                            </div>
+                            <p className="text-xs text-gray-400 mb-3">
+                                These values were extracted from your floor plan and provide context for the sustainability analysis.
+                            </p>
+                            <div className="grid grid-cols-3 gap-3">
+                                <div className="text-center p-2.5 bg-dark-700/60 rounded-lg border border-white/5">
+                                    <p className="text-lg font-bold text-white">{floorPlanConstraints.wallArea.toFixed(1)}</p>
+                                    <p className="text-[10px] text-gray-400 mt-0.5">Wall Area (m²)</p>
+                                </div>
+                                <div className="text-center p-2.5 bg-dark-700/60 rounded-lg border border-white/5">
+                                    <p className="text-lg font-bold text-white">{floorPlanConstraints.doorCount}</p>
+                                    <p className="text-[10px] text-gray-400 mt-0.5">Doors</p>
+                                </div>
+                                <div className="text-center p-2.5 bg-dark-700/60 rounded-lg border border-white/5">
+                                    <p className="text-lg font-bold text-white">{floorPlanConstraints.windowCount}</p>
+                                    <p className="text-[10px] text-gray-400 mt-0.5">Windows</p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
                     {/* ── Materials List ── */}
                     <div className="bg-dark-800/50 border border-white/5 rounded-2xl p-6">
                         <div className="flex items-center justify-between mb-4">
@@ -252,6 +368,54 @@ const SustainabilityView = () => {
                         ) : (
                             <p className="text-gray-500 text-sm text-center py-4">No materials added</p>
                         )}
+                    </div>
+
+                    {/* ── Auto-Optimize Mode (Inverse Optimization) ── */}
+                    <div className="bg-gradient-to-br from-cyan-900/40 to-dark-800/80 border border-cyan-500/30 rounded-2xl p-6 space-y-5">
+                        <div className="flex items-start justify-between">
+                            <div>
+                                <h3 className="text-lg font-semibold text-cyan-400 flex items-center gap-2">
+                                    <span className="text-xl">🤖</span>
+                                    AI Auto-Optimizer
+                                </h3>
+                                <p className="text-xs text-gray-400 mt-1">
+                                    Uses Mixed-Integer Linear Programming (MILP) to automatically select the optimal materials that minimize Total CO₂ under your budget limit.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className="block text-sm font-medium text-gray-300 mb-2">
+                                Maximum Material Budget (LKR)
+                            </label>
+                            <input
+                                type="number"
+                                value={maxBudget}
+                                onChange={(e) => setMaxBudget(parseFloat(e.target.value) || 0)}
+                                min="1000"
+                                step="1000"
+                                className="w-full px-4 py-3 bg-dark-700/80 border border-cyan-500/30 rounded-xl text-white
+                                           focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                            />
+                        </div>
+
+                        {optError && (
+                            <div className="p-3 bg-red-500/10 border border-red-500/30 rounded-lg">
+                                <p className="text-sm text-red-400">{optError}</p>
+                            </div>
+                        )}
+
+                        <button
+                            onClick={handleRunOptimization}
+                            disabled={isOptimizing}
+                            className={`w-full px-6 py-3 rounded-xl font-semibold transition-all duration-200 cursor-pointer
+                                ${isOptimizing
+                                    ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                                    : 'bg-gradient-to-r from-cyan-600 to-blue-600 text-white hover:from-cyan-500 hover:to-blue-500 shadow-lg shadow-cyan-500/20'
+                                }`}
+                        >
+                            {isOptimizing ? 'Solving MILP...' : '✨ Generate Optimal Blueprint'}
+                        </button>
                     </div>
 
                     {/* ── Analysis Parameters & Submit ── */}
@@ -379,16 +543,95 @@ const SustainabilityView = () => {
                             )}
                         </div>
                     ) : (
-                        <div className="h-96 flex flex-col items-center justify-center bg-dark-800/50 border border-white/5 rounded-2xl">
-                            <div className="w-20 h-20 mb-6 rounded-full bg-dark-700 flex items-center justify-center">
-                                <span className="text-4xl">🌍</span>
-                            </div>
-                            <h3 className="text-xl font-semibold text-white mb-2">No Analysis Yet</h3>
-                            <p className="text-gray-400 text-center max-w-md">
-                                Enter your project area, select materials, and click
-                                <strong className="text-green-400"> "Run Sustainability Analysis" </strong>
-                                to see lifecycle cost and carbon footprint results.
-                            </p>
+                        <div className="flex flex-col gap-6">
+                            {/* AI Blueprint Rendering */}
+                            {optimizationResult && (
+                                <div className="bg-dark-800/80 border border-cyan-500/30 rounded-3xl overflow-hidden shadow-2xl">
+                                    <div className="bg-gradient-to-r from-cyan-900/60 to-blue-900/40 p-6 border-b border-cyan-500/20">
+                                        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                                            <div>
+                                                <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                                                    <span className="text-3xl">✨</span>
+                                                    Optimal Material Blueprint
+                                                </h2>
+                                                <p className="text-cyan-300/80 mt-1">Minimum Carbon Configuration under {formatCurrency(maxBudget)}</p>
+                                            </div>
+                                            <div className="flex gap-4">
+                                                <div className="text-right">
+                                                    <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Total Cost</p>
+                                                    <p className={`text-xl font-bold ${optimizationResult.totalCost > maxBudget ? 'text-red-400' : 'text-green-400'}`}>
+                                                        {formatCurrency(optimizationResult.totalCost)}
+                                                    </p>
+                                                </div>
+                                                <div className="text-right">
+                                                    <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Total Carbon</p>
+                                                    <p className="text-xl font-bold text-cyan-400">
+                                                        {formatCarbon(optimizationResult.totalCarbon)}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        {/* Budget Utilization Bar */}
+                                        <div className="mt-5">
+                                            <div className="flex justify-between text-xs mb-1">
+                                                <span className="text-gray-400">Budget Utilization</span>
+                                                <span className={optimizationResult.budgetUtilization > 100 ? 'text-red-400' : 'text-cyan-400 text-shadow-sm font-medium'}>
+                                                    {optimizationResult.budgetUtilization}%
+                                                </span>
+                                            </div>
+                                            <div className="h-2 w-full bg-dark-900 rounded-full overflow-hidden">
+                                                <div
+                                                    className={`h-full ${optimizationResult.budgetUtilization > 100 ? 'bg-red-500' : 'bg-gradient-to-r from-cyan-500 to-blue-500'}`}
+                                                    style={{ width: `${Math.min(100, optimizationResult.budgetUtilization)}%` }}
+                                                />
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="p-6">
+                                        <h3 className="text-sm font-medium text-gray-400 uppercase tracking-wider mb-4">Prescribed Selections</h3>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                            {optimizationResult.selections?.map((sel, idx) => (
+                                                <div key={idx} className="bg-dark-700/40 border border-white/5 rounded-xl p-4 hover:bg-dark-700/60 transition-colors">
+                                                    <div className="flex justify-between items-start mb-2">
+                                                        <span className="px-2 py-0.5 bg-dark-900 text-gray-400 text-[10px] rounded-md font-semibold uppercase tracking-wider border border-white/5">
+                                                            {sel.category}
+                                                        </span>
+                                                        <span className="text-green-400 font-bold text-sm">{formatCurrency(sel.totalCost)}</span>
+                                                    </div>
+                                                    <p className="text-lg font-bold text-white mb-2">{sel.material}</p>
+                                                    <div className="flex items-center gap-4 text-xs text-gray-400">
+                                                        <div className="flex items-center gap-1.5">
+                                                            <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 block" />
+                                                            {sel.quantity} {sel.unit}
+                                                        </div>
+                                                        <div className="flex items-center gap-1.5">
+                                                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 block" />
+                                                            {formatCarbon(sel.totalCarbon)}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {!optimizationResult && (
+                                <div className="h-96 flex flex-col items-center justify-center bg-dark-800/50 border border-white/5 rounded-2xl">
+                                    <div className="w-20 h-20 mb-6 rounded-full bg-dark-700 flex items-center justify-center">
+                                        <span className="text-4xl">🌍</span>
+                                    </div>
+                                    <h3 className="text-xl font-semibold text-white mb-2">No Analysis Yet</h3>
+                                    <p className="text-gray-400 text-center max-w-md">
+                                        Enter your project area, select materials, and click
+                                        <strong className="text-green-400"> "Run Sustainability Analysis" </strong>
+                                        to see lifecycle cost and carbon footprint results. OR try the
+                                        <strong className="text-cyan-400"> Auto-Optimizer</strong> to let AI prescribe the best materials.
+                                    </p>
+                                </div>
+                            )}
                         </div>
                     )}
                 </div>

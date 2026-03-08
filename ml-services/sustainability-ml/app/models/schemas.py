@@ -57,6 +57,36 @@ class SustainabilityOutput(BaseModel):
 class ErrorResponse(BaseModel):
     detail: str
 
+class OptimizeInput(BaseModel):
+    """Input schema for the material optimization endpoint."""
+    wall_area: float = Field(..., gt=0, description="Net wall area in m²")
+    floor_area: float = Field(..., gt=0, description="Floor area in m²")
+    door_count: int = Field(..., ge=0, description="Number of doors")
+    window_count: int = Field(..., ge=0, description="Number of windows")
+    max_budget: float = Field(..., gt=0, description="Maximum budget in LKR")
+
+class MaterialSelection(BaseModel):
+    """A single material selection from the optimizer."""
+    category: str
+    material: str
+    quantity: float
+    unit: str
+    costPerUnit: float
+    carbonPerUnit: float
+    totalCost: float
+    totalCarbon: float
+
+class OptimizeOutput(BaseModel):
+    """Output schema for the material optimization endpoint."""
+    status: str
+    message: str
+    selections: List[MaterialSelection]
+    totalCost: float
+    totalCarbon: float
+    budgetUsed: Optional[float] = None
+    budgetRemaining: Optional[float] = None
+    budgetUtilization: Optional[float] = None
+
 class HealthResponse(BaseModel):
     status: str
     service: str

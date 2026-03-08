@@ -7,7 +7,7 @@
 const express = require('express');
 const axios = require('axios');
 const config = require('../config');
-const { calculateSustainability } = require('../controllers/sustainabilityController');
+const { calculateSustainability, optimizeMaterials } = require('../controllers/sustainabilityController');
 
 const router = express.Router();
 
@@ -16,6 +16,12 @@ const router = express.Router();
  * Calculate sustainability metrics
  */
 router.post('/api/sustainability/calculate', calculateSustainability);
+
+/**
+ * POST /api/sustainability/optimize-materials
+ * Inverse Optimization - Auto-prescribe materials to minimise CO2
+ */
+router.post('/api/sustainability/optimize-materials', optimizeMaterials);
 
 /**
  * GET /api/sustainability-ml-health
