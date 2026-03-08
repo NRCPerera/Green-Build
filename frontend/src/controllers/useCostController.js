@@ -12,6 +12,10 @@ const useCostController = () => {
     const costPrediction = useProjectStore((state) => state.costPrediction);
     const setCostPrediction = useProjectStore((state) => state.setCostPrediction);
 
+    // For Monte Carlo simulation state
+    const [monteCarloResult, setMonteCarloResult] = useState(null);
+    const [monteCarloLoading, setMonteCarloLoading] = useState(false);
+
     // ML model expects these fields only
     const ML_EXPECTED_FIELDS = [
         'Project_Type',
@@ -60,7 +64,7 @@ const useCostController = () => {
         try {
             // Build whitelisted payload (excludes UI-only fields)
             const mlPayload = buildMLPayload(formValues);
-            
+
             console.log('📤 Request Data (filtered):', mlPayload);
             console.log('📋 Full Form Values:', formValues);
 
@@ -99,7 +103,7 @@ const useCostController = () => {
             }
         } catch (err) {
             let errorMessage = 'Failed to connect to prediction service';
-            
+
             if (err.response) {
                 // Server responded with error
                 errorMessage = err.response.data?.message || err.response.data?.error || errorMessage;
@@ -112,7 +116,7 @@ const useCostController = () => {
                 // Request setup error
                 errorMessage = err.message;
             }
-            
+
             setError(errorMessage);
             console.error('[CostController] Prediction error:', err);
             return { success: false, error: errorMessage };
@@ -120,6 +124,40 @@ const useCostController = () => {
             setLoading(false);
         }
     }, [setCostPrediction]);
+
+    const predictMonteCarlo = useCallback(async (formValues, uncertainRanges, numSimulations = 1000) => {
+        setMonteCarloLoading(true);
+        setError(null);
+        try {
+            const mlPayload = buildMLPayload(formValues);
+            const response = await costApi.predictMonteCarlo({
+                fixed_inputs: mlPayload,
+                uncertain_ranges: uncertainRanges,
+                num_simulations: numSimulations
+            });
+            const isSuccess = response.data?.success ?? true;
+            if (isSuccess) {
+                const data = response.data?.data ?? response.data ?? {};
+                setMonteCarloResult(data);
+                return { success: true, data };
+            } else {
+                throw new Error(response.data.message || 'Monte Carlo failed');
+            }
+        } catch (err) {
+            let errorMessage = 'Failed to run Monte Carlo Simulation';
+            if (err.response) {
+                errorMessage = err.response.data?.message || err.response.data?.error || errorMessage;
+            } else if (err.request) {
+                errorMessage = 'Backend API is unavilable';
+            } else {
+                errorMessage = err.message;
+            }
+            setError(errorMessage);
+            return { success: false, error: errorMessage };
+        } finally {
+            setMonteCarloLoading(false);
+        }
+    }, []);
 
     const clearPrediction = useCallback(() => {
         useProjectStore.getState().resetModule('cost');
@@ -193,7 +231,7 @@ const useCostController = () => {
         console.log('🔄 [savePrediction] Called with:', { projectId, metadata });
         console.log('🔄 [savePrediction] Form values:', formValues);
         console.log('🔄 [savePrediction] Current prediction:', costPrediction);
-        
+
         if (!costPrediction) {
             console.error('❌ [savePrediction] No prediction available');
             return { success: false, error: 'No prediction to save' };
@@ -208,7 +246,7 @@ const useCostController = () => {
                     mlPayload[field] = formValues[field];
                 }
             });
-            
+
             console.log('📦 [savePrediction] ML Payload:', mlPayload);
             console.log('📦 [savePrediction] Prediction object:', {
                 predicted_cost_overrun_pct: costPrediction.predicted_cost_overrun_pct,
@@ -218,7 +256,7 @@ const useCostController = () => {
             });
             console.log('📦 [savePrediction] Top risk factors count:', (costPrediction.top_risk_factors || []).length);
             console.log('📦 [savePrediction] Risk scorecard count:', (costPrediction.risk_scorecard || []).length);
-            
+
             const response = await costApi.savePrediction(
                 projectId,
                 mlPayload,
@@ -306,6 +344,9 @@ const useCostController = () => {
         prediction: costPrediction,
         hasPrediction: costPrediction !== null,
         predictCost,
+        predictMonteCarlo,
+        monteCarloResult,
+        monteCarloLoading,
         fetchEconomicIndicators,
         clearPrediction,
         clearError,

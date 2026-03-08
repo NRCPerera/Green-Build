@@ -8,8 +8,8 @@
 const express = require('express');
 const axios = require('axios');
 const config = require('../config');
-const { 
-    handlePreProjectPrediction, 
+const {
+    handlePreProjectPrediction,
     handleInProgressPrediction,
     savePrediction,
     getLatestPrediction,
@@ -17,7 +17,8 @@ const {
     getPredictionById,
     updatePrediction,
     deletePrediction,
-    recordActualOutcome
+    recordActualOutcome,
+    handleMonteCarloPrediction
 } = require('../controllers/costPredictionController');
 const { authenticate } = require('../middleware/authMiddleware');
 
@@ -77,6 +78,13 @@ router.post('/pre-project', handlePreProjectPrediction);
  * }
  */
 router.post('/in-progress', handleInProgressPrediction);
+
+/**
+ * POST /api/cost-prediction/monte-carlo
+ * 
+ * Predict cost overrun utilizing a Monte Carlo Simulation by wrapping the standard prediction model.
+ */
+router.post('/monte-carlo', handleMonteCarloPrediction);
 
 /**
  * POST /api/cost-prediction/save
@@ -160,11 +168,11 @@ router.post('/:predictionId/actual', authenticate, recordActualOutcome);
 router.get('/health', async (req, res, next) => {
     try {
         const mlServiceUrl = process.env.COST_ML_SERVICE_URL || 'http://localhost:8085';
-        
+
         const response = await axios.get(`${mlServiceUrl}/health`, {
             timeout: 5000
         });
-        
+
         res.json({
             success: true,
             mlService: {
