@@ -8,6 +8,7 @@ from typing import Any
 import keras
 import joblib
 import shap
+import keras
 from tensorflow.keras.models import load_model
 from tensorflow.keras.layers import Dense as _OriginalDense
 
