@@ -5,11 +5,14 @@ import {
 } from 'antd';
 import {
     ArrowLeftOutlined, FileImageOutlined, DeleteOutlined,
-    EyeOutlined, FileTextOutlined, EditOutlined
+    EyeOutlined, FileTextOutlined, EditOutlined,
+    DashboardOutlined, UnorderedListOutlined, FlagOutlined,
+    FileDoneOutlined, HistoryOutlined, InfoCircleOutlined,
+    AlertOutlined, ClockCircleOutlined, HomeOutlined
 } from '@ant-design/icons';
 import useProjectsController from '../../controllers/useProjectsController';
 import useTaskController from '../../controllers/useTaskController';
-import usePMStore, { PROJECT_STATUSES, ROLES } from '../../models/usePMStore';
+import usePMStore, { PROJECT_STATUSES } from '../../models/usePMStore';
 import { projectApi } from '../../services/projectService';
 import { costApi } from '../../models/api';
 
@@ -55,10 +58,7 @@ const ProgressRing = ({ percentage }) => {
 const ProjectDetailView = ({ project, onBack, onNavigate }) => {
     const projectId = project?._id || project?.id;
 
-    const userRole = usePMStore((s) => s.userRole);
-    const defaultTab = ROLES.find((r) => r.key === userRole)?.defaultTab || 'overview';
-
-    const [activeTab, setActiveTab] = useState(defaultTab);
+    const [activeTab, setActiveTab] = useState('overview');
     const [uploading, setUploading] = useState(false);
     const [uploadProgress, setUploadProgress] = useState(0);
     const [selectedFloorPlan, setSelectedFloorPlan] = useState(null);
@@ -84,6 +84,10 @@ const ProjectDetailView = ({ project, onBack, onNavigate }) => {
             fetchLatestCostPrediction();
             trackRecentProject(projectId);
         }
+    }, [projectId]);
+
+    useEffect(() => {
+        setActiveTab('overview');
     }, [projectId]);
 
     const fetchLatestCostPrediction = async () => {
@@ -178,51 +182,74 @@ const ProjectDetailView = ({ project, onBack, onNavigate }) => {
     const tabItems = [
         {
             key: 'overview',
-            label: <span className="text-gray-300">📊 Overview</span>,
+            label: <span className="text-gray-300 inline-flex items-center gap-2"><DashboardOutlined /> Overview</span>,
             children: (
                 <div className="space-y-6">
+                    <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
+                        <div className="xl:col-span-2 rounded-xl border border-white/10 p-5" style={{ background: 'linear-gradient(135deg, rgba(14,116,144,0.24), rgba(15,23,42,0.8) 45%, rgba(21,128,61,0.18))' }}>
+                            <div className="flex items-start justify-between gap-4 mb-5">
+                                <div>
+                                    <p className="text-cyan-200/90 text-xs uppercase tracking-wide font-semibold">Project Snapshot</p>
+                                    <h3 className="text-white text-xl font-semibold mt-1">{project.name}</h3>
+                                    <p className="text-slate-300/90 text-sm mt-1">{project.projectType?.replace('-', ' ') || 'General project'}</p>
+                                </div>
+                                <div className="h-10 w-10 rounded-lg bg-white/10 border border-white/15 flex items-center justify-center text-cyan-200">
+                                    <HomeOutlined />
+                                </div>
+                            </div>
 
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        <div style={{ gridColumn: 'span 2', background: 'rgba(30,41,59,0.5)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '0.75rem', padding: '1.25rem' }}>
-                            <h3 style={{ color: '#e2e8f0', fontWeight: 600, marginBottom: '0.75rem' }}>Project Information</h3>
-                            <div className="grid grid-cols-2 gap-4">
-                                {[
-                                    { label: 'Type', value: project.projectType?.replace('-', ' ') },
-                                    { label: 'Client', value: getClientName(project) || '—' },
-                                    { label: 'Location', value: getLocationText(project) || '—' },
-                                    { label: 'Budget', value: getBudgetValue(project) ? `Rs. ${getBudgetValue(project).toLocaleString()}` : '—' },
-                                    { label: 'Start Date', value: project.startDate ? new Date(project.startDate).toLocaleDateString() : '—' },
-                                    { label: 'End Date', value: project.expectedEndDate ? new Date(project.expectedEndDate).toLocaleDateString() : '—' },
-                                    { label: 'Created', value: new Date(project.createdAt).toLocaleDateString() },
-                                    { label: 'Updated', value: new Date(project.updatedAt).toLocaleDateString() },
-                                ].map((item, i) => (
-                                    <div key={i}>
-                                        <span style={{ fontSize: '0.6875rem', color: '#64748b', display: 'block' }}>{item.label}</span>
-                                        <span style={{ fontSize: '0.8125rem', color: '#e2e8f0' }}>{item.value}</span>
-                                    </div>
-                                ))}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <div className="rounded-lg bg-black/20 border border-white/10 px-3 py-2.5">
+                                    <p className="text-[11px] text-slate-400 uppercase tracking-wide">Client</p>
+                                    <p className="text-sm text-slate-100 mt-0.5 truncate">{getClientName(project) || 'Not specified'}</p>
+                                </div>
+                                <div className="rounded-lg bg-black/20 border border-white/10 px-3 py-2.5">
+                                    <p className="text-[11px] text-slate-400 uppercase tracking-wide">Budget</p>
+                                    <p className="text-sm text-slate-100 mt-0.5">{getBudgetValue(project) ? `Rs. ${getBudgetValue(project).toLocaleString()}` : 'Not specified'}</p>
+                                </div>
+                                <div className="rounded-lg bg-black/20 border border-white/10 px-3 py-2.5 md:col-span-2">
+                                    <p className="text-[11px] text-slate-400 uppercase tracking-wide">Location</p>
+                                    <p className="text-sm text-slate-100 mt-0.5 truncate">{getLocationText(project) || 'Not specified'}</p>
+                                </div>
+                                <div className="rounded-lg bg-black/20 border border-white/10 px-3 py-2.5">
+                                    <p className="text-[11px] text-slate-400 uppercase tracking-wide">Timeline</p>
+                                    <p className="text-sm text-slate-100 mt-0.5">
+                                        {project.startDate ? new Date(project.startDate).toLocaleDateString() : 'N/A'} - {project.expectedEndDate ? new Date(project.expectedEndDate).toLocaleDateString() : 'N/A'}
+                                    </p>
+                                </div>
+                                <div className="rounded-lg bg-black/20 border border-white/10 px-3 py-2.5">
+                                    <p className="text-[11px] text-slate-400 uppercase tracking-wide">Updated</p>
+                                    <p className="text-sm text-slate-100 mt-0.5">{new Date(project.updatedAt).toLocaleDateString()}</p>
+                                </div>
                             </div>
                         </div>
 
-                        {/* Progress Widget */}
-                        <div style={{ background: 'rgba(30,41,59,0.5)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '0.75rem', padding: '1.25rem', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center' }}>
+                        <div className="rounded-xl border border-emerald-300/20 bg-emerald-500/5 p-5 flex flex-col items-center justify-center">
+                            <div className="text-emerald-300 text-xs uppercase tracking-wide font-semibold mb-3 inline-flex items-center gap-2"><InfoCircleOutlined /> Delivery Progress</div>
                             <ProgressRing percentage={progress.percentage} />
                             <div style={{ textAlign: 'center', marginTop: '0.75rem' }}>
-                                <div style={{ color: '#e2e8f0', fontWeight: 600 }}>{progress.done}/{progress.total} Tasks</div>
-                                <div style={{ fontSize: '0.6875rem', color: '#64748b', marginTop: '0.125rem' }}>
-                                    Weighted: {progress.weighted}%
+                                <div style={{ color: '#e2e8f0', fontWeight: 600 }}>{progress.done}/{progress.total} Tasks Completed</div>
+                                <div style={{ fontSize: '0.6875rem', color: '#94a3b8', marginTop: '0.125rem' }}>
+                                    Weighted completion: {progress.weighted}%
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    {/* Summary stats row */}
-                    <Row gutter={16}>
-                        <Col span={6}><Card className="!bg-dark-800/50 !border-white/10"><Statistic title={<span className="text-gray-400">Floor Plans</span>} value={floorPlans.length} prefix={<FileImageOutlined className="text-primary-400" />} valueStyle={{ color: '#fff' }} /></Card></Col>
-                        <Col span={6}><Card className="!bg-dark-800/50 !border-white/10"><Statistic title={<span className="text-gray-400">Wall Area</span>} value={totals.totalWallArea.toFixed(1)} suffix="m²" valueStyle={{ color: '#fff' }} /></Card></Col>
-                        <Col span={6}><Card className="!bg-dark-800/50 !border-white/10"><Statistic title={<span className="text-gray-400">Doors</span>} value={totals.totalDoors} valueStyle={{ color: '#fff' }} /></Card></Col>
-                        <Col span={6}><Card className="!bg-dark-800/50 !border-white/10"><Statistic title={<span className="text-gray-400">Windows</span>} value={totals.totalWindows} valueStyle={{ color: '#fff' }} /></Card></Col>
-                    </Row>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+                        <Card className="!bg-dark-800/60 !border-white/10">
+                            <Statistic title={<span className="text-gray-400">Floor Plans</span>} value={floorPlans.length} prefix={<FileImageOutlined className="text-sky-400" />} valueStyle={{ color: '#fff' }} />
+                        </Card>
+                        <Card className="!bg-dark-800/60 !border-white/10">
+                            <Statistic title={<span className="text-gray-400">Wall Area</span>} value={totals.totalWallArea.toFixed(1)} suffix="m2" valueStyle={{ color: '#fff' }} />
+                        </Card>
+                        <Card className="!bg-dark-800/60 !border-white/10">
+                            <Statistic title={<span className="text-gray-400">Doors</span>} value={totals.totalDoors} valueStyle={{ color: '#fff' }} />
+                        </Card>
+                        <Card className="!bg-dark-800/60 !border-white/10">
+                            <Statistic title={<span className="text-gray-400">Windows</span>} value={totals.totalWindows} valueStyle={{ color: '#fff' }} />
+                        </Card>
+                    </div>
 
                     {/* Cost Overrun Risk Display */}
                     {latestCostPrediction && (
@@ -354,17 +381,17 @@ const ProjectDetailView = ({ project, onBack, onNavigate }) => {
         },
         {
             key: 'tasks',
-            label: <span className="text-gray-300">📋 Tasks {tasks.length > 0 ? `(${tasks.length})` : ''}</span>,
+            label: <span className="text-gray-300 inline-flex items-center gap-2"><UnorderedListOutlined /> Tasks {tasks.length > 0 ? `(${tasks.length})` : ''}</span>,
             children: <TaskBoard projectId={projectId} taskController={taskController} />,
         },
         {
             key: 'milestones',
-            label: <span className="text-gray-300">🎯 Milestones {milestones.length > 0 ? `(${milestones.length})` : ''}</span>,
+            label: <span className="text-gray-300 inline-flex items-center gap-2"><FlagOutlined /> Milestones {milestones.length > 0 ? `(${milestones.length})` : ''}</span>,
             children: <MilestoneTimeline projectId={projectId} taskController={taskController} />,
         },
         {
             key: 'floorplans',
-            label: <span className="text-gray-300">📐 Floor Plans ({floorPlans.length})</span>,
+            label: <span className="text-gray-300 inline-flex items-center gap-2"><FileImageOutlined /> Floor Plans ({floorPlans.length})</span>,
             children: (
                 <div className="space-y-6">
                     <Dragger
@@ -425,7 +452,7 @@ const ProjectDetailView = ({ project, onBack, onNavigate }) => {
         },
         {
             key: 'analysis',
-            label: <span className="text-gray-300">📋 BOQ Reports</span>,
+            label: <span className="text-gray-300 inline-flex items-center gap-2"><FileDoneOutlined /> BOQ Reports</span>,
             children: (
                 <div className="space-y-4">
                     {boqLoading ? (
@@ -460,7 +487,7 @@ const ProjectDetailView = ({ project, onBack, onNavigate }) => {
         },
         {
             key: 'activity',
-            label: <span className="text-gray-300">📝 Activity ({activity.length})</span>,
+            label: <span className="text-gray-300 inline-flex items-center gap-2"><HistoryOutlined /> Activity ({activity.length})</span>,
             children: <ActivityFeed activity={activity} />,
         },
     ];

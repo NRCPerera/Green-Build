@@ -2,7 +2,10 @@
 import { Card, Button, Empty, Spin, Modal, Form, Input, Select, message, Dropdown } from 'antd';
 import {
     PlusOutlined, FolderOutlined, MoreOutlined,
-    EditOutlined, DeleteOutlined, EyeOutlined, SearchOutlined, FilterOutlined
+    EditOutlined, DeleteOutlined, EyeOutlined, SearchOutlined,
+    UserOutlined, EnvironmentOutlined, WalletOutlined, CalendarOutlined,
+    HomeOutlined, ShopOutlined, BuildOutlined, BankOutlined,
+    ApartmentOutlined, DeploymentUnitOutlined
 } from '@ant-design/icons';
 import useProjectsController from '../../controllers/useProjectsController';
 import usePMStore, { PROJECT_STATUSES, PROJECT_TEMPLATES, PRIORITIES } from '../../models/usePMStore';
@@ -159,8 +162,18 @@ const ProjectsListView = ({ onSelectProject }) => {
     };
 
     const getProjectTypeIcon = (type) => {
-        const icons = { residential: 'ðŸ ', commercial: 'ðŸ¢', industrial: 'ðŸ­', institutional: 'ðŸ›ï¸', 'mixed-use': 'ðŸ™ï¸', apartment: 'ðŸ¢', other: 'ðŸ“' };
-        return icons[type] || 'ðŸ“';
+        const iconClass = 'text-slate-200 text-[1.35rem]';
+        const icons = {
+            residential: <HomeOutlined className={iconClass} />,
+            commercial: <ShopOutlined className={iconClass} />,
+            industrial: <BuildOutlined className={iconClass} />,
+            institutional: <BankOutlined className={iconClass} />,
+            'mixed-use': <ApartmentOutlined className={iconClass} />,
+            apartment: <ApartmentOutlined className={iconClass} />,
+            infrastructure: <DeploymentUnitOutlined className={iconClass} />,
+            other: <FolderOutlined className={iconClass} />,
+        };
+        return icons[type] || <FolderOutlined className={iconClass} />;
     };
 
     const getProjectDropdownItems = (project) => ({
@@ -235,25 +248,30 @@ const ProjectsListView = ({ onSelectProject }) => {
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                     {filteredProjects.map((project) => {
                         const progress = computeProgress(project._id || project.id);
+                        const projectBudget = getBudgetValue(project);
                         return (
                             <Card
                                 key={project._id || project.id}
-                                className="!bg-dark-800/50 !border-white/10 hover:!border-primary-500/30 transition-all cursor-pointer"
+                                className="group relative overflow-hidden !bg-dark-800/55 !border-white/10 hover:!border-primary-400/40 transition-all duration-300 cursor-pointer hover:-translate-y-1 hover:shadow-[0_18px_36px_rgba(2,6,23,0.55)]"
                                 onClick={() => onSelectProject?.(project)}
                             >
-                                <div className="flex justify-between items-start mb-3">
-                                    <div className="flex items-center gap-3">
-                                        <span className="text-3xl">{getProjectTypeIcon(project.projectType)}</span>
-                                        <div>
-                                            <h3 className="text-lg font-semibold text-white">{project.name}</h3>
-                                            <div style={{ display: 'flex', gap: '0.375rem', marginTop: '0.25rem', flexWrap: 'wrap' }}>
+                                <div className="pointer-events-none absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300" style={{ background: 'radial-gradient(circle at top right, rgba(14,165,233,0.16), transparent 50%), radial-gradient(circle at bottom left, rgba(34,197,94,0.14), transparent 45%)' }} />
+
+                                <div className="relative flex justify-between items-start mb-4 gap-3">
+                                    <div className="flex items-center gap-3 min-w-0">
+                                        <div className="h-12 w-12 rounded-xl border border-white/10 bg-white/5 flex items-center justify-center text-2xl shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
+                                            {getProjectTypeIcon(project.projectType)}
+                                        </div>
+                                        <div className="min-w-0">
+                                            <h3 className="text-base font-semibold text-white truncate">{project.name}</h3>
+                                            <div className="flex gap-2 mt-2 flex-wrap">
                                                 <span className={`status-badge ${project.status || 'draft'}`}>
                                                     <span className="status-dot" />
                                                     {(project.status || 'draft').replace('-', ' ')}
                                                 </span>
                                                 {project.priority && project.priority !== 'medium' && (
                                                     <span className={`priority-badge ${project.priority}`}>
-                                                        {project.priority}
+                                                        {project.priority} priority
                                                     </span>
                                                 )}
                                             </div>
@@ -263,48 +281,64 @@ const ProjectsListView = ({ onSelectProject }) => {
                                         menu={getProjectDropdownItems(project)} trigger={['click']}
                                         onClick={(e) => e.stopPropagation()}
                                     >
-                                        <Button type="text" icon={<MoreOutlined />} onClick={(e) => e.stopPropagation()} className="!text-gray-400" />
+                                        <Button
+                                            type="text"
+                                            icon={<MoreOutlined />}
+                                            onClick={(e) => e.stopPropagation()}
+                                            className="!text-gray-400 hover:!text-gray-200"
+                                        />
                                     </Dropdown>
                                 </div>
 
                                 {project.description && (
-                                    <p className="text-gray-400 text-sm mb-3 line-clamp-2">{project.description}</p>
+                                    <p className="relative text-gray-400 text-sm mb-4 line-clamp-2 leading-relaxed">{project.description}</p>
                                 )}
 
                                 {/* Extra info row */}
-                                <div style={{ display: 'flex', gap: '0.75rem', flexWrap: 'wrap', marginBottom: '0.75rem' }}>
+                                <div className="relative grid grid-cols-1 gap-2 mb-4">
                                     {getClientName(project) && (
-                                        <span style={{ fontSize: '0.6875rem', color: '#64748b' }}>ðŸ‘¤ {getClientName(project)}</span>
+                                        <div className="inline-flex items-center gap-2 text-xs text-slate-300 bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5">
+                                            <UserOutlined className="text-slate-400" />
+                                            <span className="truncate">{getClientName(project)}</span>
+                                        </div>
                                     )}
                                     {getLocationText(project) && (
-                                        <span style={{ fontSize: '0.6875rem', color: '#64748b' }}>ðŸ“ {getLocationText(project)}</span>
+                                        <div className="inline-flex items-center gap-2 text-xs text-slate-300 bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5">
+                                            <EnvironmentOutlined className="text-slate-400" />
+                                            <span className="truncate">{getLocationText(project)}</span>
+                                        </div>
                                     )}
-                                    {getBudgetValue(project) > 0 && (
-                                        <span style={{ fontSize: '0.6875rem', color: '#64748b' }}>
-                                            ðŸ’° {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'LKR', maximumFractionDigits: 0 }).format(getBudgetValue(project))}
-                                        </span>
+                                    {projectBudget > 0 && (
+                                        <div className="inline-flex items-center gap-2 text-xs text-slate-300 bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5">
+                                            <WalletOutlined className="text-emerald-400" />
+                                            <span>
+                                                {new Intl.NumberFormat('en-US', { style: 'currency', currency: 'LKR', maximumFractionDigits: 0 }).format(projectBudget)}
+                                            </span>
+                                        </div>
                                     )}
                                 </div>
 
                                 {/* Progress */}
                                 {progress.total > 0 && (
-                                    <div style={{ marginBottom: '0.75rem' }}>
-                                        <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
-                                            <span style={{ fontSize: '0.6875rem', color: '#64748b' }}>{progress.done}/{progress.total} tasks</span>
-                                            <span style={{ fontSize: '0.6875rem', color: '#4ade80', fontWeight: 600 }}>{progress.percentage}%</span>
+                                    <div className="relative mb-4 rounded-xl border border-emerald-400/15 bg-emerald-500/5 px-3 py-2.5">
+                                        <div className="flex justify-between items-center mb-1.5">
+                                            <span className="text-[11px] text-slate-300 font-medium">Execution Progress</span>
+                                            <span className="text-[11px] text-emerald-300 font-semibold">{progress.percentage}%</span>
                                         </div>
-                                        <div style={{ width: '100%', height: '0.25rem', background: 'rgba(255,255,255,0.06)', borderRadius: '9999px', overflow: 'hidden' }}>
-                                            <div style={{ height: '100%', width: `${progress.percentage}%`, background: 'linear-gradient(to right, #22c55e, #4ade80)', borderRadius: '9999px', transition: 'width 0.3s' }} />
+                                        <div style={{ width: '100%', height: '0.3125rem', background: 'rgba(255,255,255,0.07)', borderRadius: '9999px', overflow: 'hidden' }}>
+                                            <div style={{ height: '100%', width: `${progress.percentage}%`, background: 'linear-gradient(to right, #22c55e, #86efac)', borderRadius: '9999px', transition: 'width 0.3s' }} />
                                         </div>
+                                        <span className="text-[11px] text-slate-400 mt-1.5 inline-block">{progress.done}/{progress.total} tasks completed</span>
                                     </div>
                                 )}
 
-                                <div className="flex items-center justify-between pt-3 border-t border-white/5">
-                                    <div className="flex items-center gap-2 text-gray-400">
+                                <div className="relative flex items-center justify-between pt-3 border-t border-white/10">
+                                    <div className="flex items-center gap-2 text-slate-300">
                                         <FolderOutlined />
                                         <span className="text-sm">{project.floorPlans?.length || 0} floor plans</span>
                                     </div>
-                                    <span className="text-xs text-gray-500">
+                                    <span className="inline-flex items-center gap-1.5 text-xs text-slate-400">
+                                        <CalendarOutlined />
                                         {new Date(project.updatedAt || project.createdAt).toLocaleDateString()}
                                     </span>
                                 </div>
