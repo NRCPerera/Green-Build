@@ -97,6 +97,10 @@ const projectSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: 'BOQReport'
     }],
+    costPredictions: [{
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'CostPrediction'
+    }],
     tags: [{
         type: String,
         trim: true

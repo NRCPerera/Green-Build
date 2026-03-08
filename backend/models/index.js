@@ -11,6 +11,7 @@ const BOQReport = require('./BOQReport');
 const Rate = require('./Rate');
 const DelayPrediction = require('./DelayPrediction');
 const SustainabilityAnalysis = require('./SustainabilityAnalysis');
+const CostPrediction = require('./CostPrediction');
 
 // Legacy models (keeping for backward compatibility)
 const { calculateCosts } = require('./costModel');
@@ -25,6 +26,7 @@ module.exports = {
     Rate,
     DelayPrediction,
     SustainabilityAnalysis,
+    CostPrediction,
 
     // Legacy utility functions
     calculateCosts,

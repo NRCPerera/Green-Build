@@ -183,6 +183,120 @@ const useCostController = () => {
         setIndicatorsError(null);
     }, []);
 
+    // ── Persistence Methods ──────────────────────────────────────
+
+    const [savingPrediction, setSavingPrediction] = useState(false);
+    const [predictionHistory, setPredictionHistory] = useState([]);
+    const [loadingHistory, setLoadingHistory] = useState(false);
+
+    const savePrediction = useCallback(async (projectId, formValues, metadata = {}) => {
+        console.log('🔄 [savePrediction] Called with:', { projectId, metadata });
+        console.log('🔄 [savePrediction] Form values:', formValues);
+        console.log('🔄 [savePrediction] Current prediction:', costPrediction);
+        
+        if (!costPrediction) {
+            console.error('❌ [savePrediction] No prediction available');
+            return { success: false, error: 'No prediction to save' };
+        }
+
+        setSavingPrediction(true);
+        try {
+            // Build ML payload from form values
+            const mlPayload = {};
+            ML_EXPECTED_FIELDS.forEach(field => {
+                if (field in formValues) {
+                    mlPayload[field] = formValues[field];
+                }
+            });
+            
+            console.log('📦 [savePrediction] ML Payload:', mlPayload);
+            console.log('📦 [savePrediction] Prediction object:', {
+                predicted_cost_overrun_pct: costPrediction.predicted_cost_overrun_pct,
+                predicted_high_risk_class: costPrediction.predicted_high_risk_class,
+                predicted_high_risk_probability: costPrediction.predicted_high_risk_probability,
+                model_version: costPrediction.model_version
+            });
+            console.log('📦 [savePrediction] Top risk factors count:', (costPrediction.top_risk_factors || []).length);
+            console.log('📦 [savePrediction] Risk scorecard count:', (costPrediction.risk_scorecard || []).length);
+            
+            const response = await costApi.savePrediction(
+                projectId,
+                mlPayload,
+                {
+                    predicted_cost_overrun_pct: costPrediction.predicted_cost_overrun_pct,
+                    predicted_high_risk_class: costPrediction.predicted_high_risk_class,
+                    predicted_high_risk_probability: costPrediction.predicted_high_risk_probability,
+                    model_version: costPrediction.model_version
+                },
+                costPrediction.top_risk_factors || [],
+                costPrediction.risk_scorecard || [],
+                metadata
+            );
+
+            console.log('✅ [savePrediction] Response:', response.data);
+            return { success: true, data: response.data };
+        } catch (err) {
+            const errorMessage = parseApiError(err);
+            console.error('❌ [savePrediction] Error:', errorMessage);
+            console.error('❌ [savePrediction] Full error:', err);
+            return { success: false, error: errorMessage };
+        } finally {
+            setSavingPrediction(false);
+        }
+    }, [costPrediction]);
+
+    const fetchPredictionHistory = useCallback(async (projectId, filters = {}) => {
+        setLoadingHistory(true);
+        try {
+            const response = await costApi.getPredictionHistory(projectId, filters);
+            const predictions = response.data?.data?.predictions || [];
+            setPredictionHistory(predictions);
+            return { success: true, data: response.data };
+        } catch (err) {
+            const errorMessage = parseApiError(err);
+            console.error('❌ Fetch history error:', errorMessage);
+            return { success: false, error: errorMessage };
+        } finally {
+            setLoadingHistory(false);
+        }
+    }, []);
+
+    const updatePrediction = useCallback(async (predictionId, updates) => {
+        try {
+            const response = await costApi.updatePrediction(predictionId, updates);
+            console.log('✅ Prediction updated:', response.data);
+            return { success: true, data: response.data };
+        } catch (err) {
+            const errorMessage = parseApiError(err);
+            console.error('❌ Update prediction error:', errorMessage);
+            return { success: false, error: errorMessage };
+        }
+    }, []);
+
+    const deletePrediction = useCallback(async (predictionId) => {
+        try {
+            const response = await costApi.deletePrediction(predictionId);
+            console.log('✅ Prediction deleted');
+            return { success: true, data: response.data };
+        } catch (err) {
+            const errorMessage = parseApiError(err);
+            console.error('❌ Delete prediction error:', errorMessage);
+            return { success: false, error: errorMessage };
+        }
+    }, []);
+
+    const recordActualOutcome = useCallback(async (predictionId, actualData) => {
+        try {
+            const response = await costApi.recordActualOutcome(predictionId, actualData);
+            console.log('✅ Actual outcome recorded:', response.data);
+            return { success: true, data: response.data };
+        } catch (err) {
+            const errorMessage = parseApiError(err);
+            console.error('❌ Record outcome error:', errorMessage);
+            return { success: false, error: errorMessage };
+        }
+    }, []);
+
     return {
         loading,
         error,
@@ -196,6 +310,15 @@ const useCostController = () => {
         clearPrediction,
         clearError,
         clearIndicatorsError,
+        // Persistence methods
+        savePrediction,
+        savingPrediction,
+        fetchPredictionHistory,
+        predictionHistory,
+        loadingHistory,
+        updatePrediction,
+        deletePrediction,
+        recordActualOutcome
     };
 };
 

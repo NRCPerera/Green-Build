@@ -16,39 +16,94 @@ const provinceDistrictMap = {
 };
 
 const CostPredictionView = ({ project, onBack }) => {
-    const [formValues, setFormValues] = useState({
-        Project_Type: '',
-        Province: '',
-        District: '',
-        CIDA_Grade: '',
-        Season: '',
-        Floors: 0,
-        Area_SQFT: 0,
-        Year_of_Tender: 0,
-        Contractor_Experience_Years: 0,
-        Complexity_Score: 0,
-        Change_Order_Freq: 0,
-        Start_Month: 0,
-        Start_Quarter: 0,
-        Start_Weekday: 0,
-        Initial_Period_Months: 0,
-        Inflation_Rate: 0,
-        Exchange_Rate_LKR: 0,
-        Material_Index: 0,
-        Design_Completeness: 0,
-        Project_Size_Index: 0,
-        Economic_Risk_Index: 0,
-        Design_Risk_Score: 0,
-        Contractor_Risk_Score: 0,
-        Weather_Risk_Score: 0,
-        Rate_per_SQFT: 0,
-        Initial_Value: 0
-    });
+    const currentYear = new Date().getFullYear();
+
+    // Helper to get initial form values from project
+    const getInitialFormValues = () => {
+        const defaults = {
+            Project_Type: '',
+            Province: '',
+            District: '',
+            CIDA_Grade: '',
+            Season: '',
+            Floors: 0,
+            Area_SQFT: 0,
+            Year_of_Tender: 0,
+            Contractor_Experience_Years: 0,
+            Complexity_Score: 1,
+            Change_Order_Freq: 0,
+            Start_Month: 0,
+            Start_Quarter: 0,
+            Start_Weekday: 0,
+            Initial_Period_Months: 0,
+            Inflation_Rate: 0,
+            Exchange_Rate_LKR: 0,
+            Material_Index: 0,
+            Design_Completeness: 0,
+            Project_Size_Index: 0,
+            Economic_Risk_Index: 0,
+            Design_Risk_Score: 1,
+            Contractor_Risk_Score: 1,
+            Weather_Risk_Score: 1,
+            Rate_per_SQFT: 0,
+            Initial_Value: 0
+        };
+
+        if (!project) return defaults;
+
+        // Map project type
+        const getProjectType = (type) => {
+            if (!type) return '';
+            const typeMap = {
+                'residential': 'Residential-House',
+                'apartment': 'Residential-Apartment',
+                'commercial': 'Commercial-Building',
+                'industrial': 'Industrial-Building',
+                'infrastructure': 'Infrastructure',
+                'institutional': 'Commercial-Building',
+                'mixed-use': 'Mixed-Development',
+                'other': 'Residential-House'
+            };
+            return typeMap[type.toLowerCase()] || 'Residential-House';
+        };
+
+        // Get province
+        const province = typeof project.location === 'object' && project.location.province 
+            ? project.location.province 
+            : '';
+
+        // Get district
+        const district = typeof project.location === 'object' && project.location.district 
+            ? project.location.district 
+            : '';
+
+        const budget = typeof project.budget === 'number' ? project.budget : (project.budget?.estimated || 0);
+        const areaSqft = project.areaSQFT || project.area || project.Area_SQFT || 0;
+        const floors = project.floors || project.Floors || 0;
+
+        return {
+            ...defaults,
+            Project_Type: getProjectType(project.projectType),
+            Province: province,
+            District: district,
+            Area_SQFT: areaSqft,
+            Floors: floors,
+            Initial_Value: budget
+        };
+    };
+
+    const [formValues, setFormValues] = useState(getInitialFormValues());
 
     const [initialValueMode, setInitialValueMode] = useState('auto'); // 'auto' or 'manual'
     const [startDate, setStartDate] = useState(''); // Store the selected start date
 
-    const [availableDistricts, setAvailableDistricts] = useState([]);
+    // Initialize available districts based on initial province
+    const getInitialDistricts = () => {
+        const initialProvince = project?.location?.province || '';
+        return initialProvince ? (provinceDistrictMap[initialProvince] || []) : [];
+    };
+
+    const [availableDistricts, setAvailableDistricts] = useState(getInitialDistricts());
     const [isFormExpanded, setIsFormExpanded] = useState(false);
     const [validationErrors, setValidationErrors] = useState([]);
     const [indicatorTouched, setIndicatorTouched] = useState({
@@ -71,8 +126,11 @@ const CostPredictionView = ({ project, onBack }) => {
         fetchEconomicIndicators,
         clearPrediction,
         clearIndicatorsError,
+        savePrediction,
+        savingPrediction
     } = useCostController();
 
+    const projectId = project?._id || project?.id;
     const riskFlag = prediction?.predicted_high_risk_class;
     const isHighRisk = riskFlag === true || riskFlag === 1;
     const overrunPct = prediction?.predicted_cost_overrun_pct;
@@ -156,13 +214,16 @@ const CostPredictionView = ({ project, onBack }) => {
             const getProjectType = (type) => {
                 if (!type) return '';
                 const typeMap = {
-                    'residential': 'Residential',
-                    'apartment': 'Apartment',
-                    'industrial': 'Industrial',
-                    'commercial': 'Industrial',
-                    'infrastructure': 'Industrial'
+                    'residential': 'Residential-House',
+                    'apartment': 'Residential-Apartment',
+                    'commercial': 'Commercial-Building',
+                    'industrial': 'Industrial-Building',
+                    'infrastructure': 'Infrastructure',
+                    'institutional': 'Commercial-Building',
+                    'mixed-use': 'Mixed-Development',
+                    'other': 'Residential-House'
                 };
-                return typeMap[type.toLowerCase()] || type;
+                return typeMap[type.toLowerCase()] || 'Residential-House';
             };
 
             const getProvince = (location) => {
@@ -265,36 +326,61 @@ const CostPredictionView = ({ project, onBack }) => {
 
     const validateForm = () => {
         const errors = [];
+        const addRangeError = (value, label, min, max, options = {}) => {
+            const { integer = false } = options;
+            const parsed = Number(value);
+
+            if (!Number.isFinite(parsed)) {
+                errors.push(`${label} is required`);
+                return;
+            }
+
+            if (integer && !Number.isInteger(parsed)) {
+                errors.push(`${label} must be a whole number`);
+                return;
+            }
+
+            if (parsed < min || parsed > max) {
+                errors.push(`${label} must be between ${min.toLocaleString()} and ${max.toLocaleString()}`);
+            }
+        };
 
         // Required dropdown fields
         if (!formValues.Project_Type) errors.push('Please select a Project Type');
         if (!formValues.Province) errors.push('Please select a Province');
+        if (!formValues.District) errors.push('Please select a District');
         if (!formValues.CIDA_Grade) errors.push('Please select a CIDA Grade');
         if (!formValues.Season) errors.push('Please select a Season');
+        if (!startDate) errors.push('Please select a Project Start Date');
 
-        // Numeric range validations
         const val = formValues;
-        if (val.Floors < 1 || val.Floors > 60) errors.push('Floors must be between 1 and 60');
-        if (val.Area_SQFT < 500 || val.Area_SQFT > 200000) errors.push('Area must be between 500 and 200,000 SQFT');
-        if (val.Rate_per_SQFT < 2000 || val.Rate_per_SQFT > 100000) errors.push('Rate per SQFT must be between 2,000 and 100,000 LKR');
-        if (val.Year_of_Tender < 2015 || val.Year_of_Tender > 2026) errors.push('Year of Tender must be between 2015 and 2026');
-        if (val.Initial_Period_Months < 1 || val.Initial_Period_Months > 100) errors.push('Initial Duration must be between 1 and 100 months');
-        if (val.Contractor_Experience_Years < 0 || val.Contractor_Experience_Years > 50) errors.push('Contractor Experience must be between 0 and 50 years');
-        if (val.Change_Order_Freq < 0 || val.Change_Order_Freq > 50) errors.push('Change Order Frequency must be between 0 and 50');
-        if (val.Complexity_Score < 1 || val.Complexity_Score > 10) errors.push('Complexity Score must be between 1 and 10');
+        addRangeError(val.Floors, 'Floors', 1, 60, { integer: true });
+        addRangeError(val.Area_SQFT, 'Area (SQFT)', 500, 200000);
+        addRangeError(val.Rate_per_SQFT, 'Rate per SQFT (LKR)', 2000, 100000);
+        addRangeError(val.Initial_Value, 'Initial Value (LKR)', 1, 20000000000);
+        addRangeError(val.Year_of_Tender, 'Year of Tender', 2015, currentYear, { integer: true });
+        addRangeError(val.Initial_Period_Months, 'Initial Duration (months)', 1, 100);
+        addRangeError(val.Contractor_Experience_Years, 'Contractor Experience (Years)', 0, 50, { integer: true });
+        addRangeError(val.Change_Order_Freq, 'Change Order Frequency', 0, 50, { integer: true });
+        addRangeError(val.Complexity_Score, 'Project Complexity Score', 1, 10, { integer: true });
+
+        // Derived timeline fields from selected start date
+        addRangeError(val.Start_Month, 'Start Month', 1, 12, { integer: true });
+        addRangeError(val.Start_Quarter, 'Start Quarter', 1, 4, { integer: true });
+        addRangeError(val.Start_Weekday, 'Start Weekday', 0, 6, { integer: true });
         
         // Economic indicators
-        if (val.Inflation_Rate < -10 || val.Inflation_Rate > 50) errors.push('Inflation Rate must be between -10% and 50%');
-        if (val.Material_Index < 50 || val.Material_Index > 500) errors.push('Material Index must be between 50 and 500');
-        if (val.Exchange_Rate_LKR < 100 || val.Exchange_Rate_LKR > 500) errors.push('Exchange Rate must be between 100 and 500');
-        if (val.Project_Size_Index < 0 || val.Project_Size_Index > 10) errors.push('Project Size Index must be between 0 and 10');
-        if (val.Economic_Risk_Index < 0 || val.Economic_Risk_Index > 10) errors.push('Economic Risk Index must be between 0 and 10');
+        addRangeError(val.Inflation_Rate, 'Inflation Rate (%)', -10, 50);
+        addRangeError(val.Material_Index, 'Material Price Index', 50, 500);
+        addRangeError(val.Exchange_Rate_LKR, 'Exchange Rate (LKR/USD)', 100, 500);
+        addRangeError(val.Project_Size_Index, 'Project Size Index', 0, 10);
+        addRangeError(val.Economic_Risk_Index, 'Economic Risk Index', 0, 10);
         
         // Risk scores (already constrained by sliders, but double-check)
-        if (val.Design_Completeness < 0 || val.Design_Completeness > 100) errors.push('Design Completeness must be between 0% and 100%');
-        if (val.Design_Risk_Score < 1 || val.Design_Risk_Score > 10) errors.push('Design Risk Score must be between 1 and 10');
-        if (val.Contractor_Risk_Score < 1 || val.Contractor_Risk_Score > 10) errors.push('Contractor Risk Score must be between 1 and 10');
-        if (val.Weather_Risk_Score < 1 || val.Weather_Risk_Score > 10) errors.push('Weather Risk Score must be between 1 and 10');
+        addRangeError(val.Design_Completeness, 'Design Completeness (%)', 0, 100);
+        addRangeError(val.Design_Risk_Score, 'Design Risk Score', 1, 10, { integer: true });
+        addRangeError(val.Contractor_Risk_Score, 'Contractor Risk Score', 1, 10, { integer: true });
+        addRangeError(val.Weather_Risk_Score, 'Weather Risk Score', 1, 10, { integer: true });
 
         return errors;
     };
@@ -302,12 +388,10 @@ const CostPredictionView = ({ project, onBack }) => {
     const handleSubmit = async (e) => {
         e.preventDefault();
         
-        // Validate form
         const errors = validateForm();
         setValidationErrors(errors);
         
         if (errors.length > 0) {
-            // Scroll to top to show errors
             window.scrollTo({ top: 0, behavior: 'smooth' });
             return;
         }
@@ -516,11 +600,12 @@ const CostPredictionView = ({ project, onBack }) => {
                         </div>
                         <div className={`grid ${isFormExpanded ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4' : 'grid-cols-2'} gap-3`}>
                             <div className="col-span-2">
-                                <label className="block text-xs font-medium text-gray-400 mb-1">Type of Project</label>
+                                <label className="block text-xs font-medium text-gray-400 mb-1">Type of Project {project && <span className="text-xs text-gray-500">(from project)</span>}</label>
                                 <select
                                     value={formValues.Project_Type}
                                     onChange={handleChange('Project_Type')}
-                                    className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                                    disabled={!!project}
+                                    className={`w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500 ${project ? 'opacity-60 cursor-not-allowed' : ''}`}
                                     required
                                 >
                                     <option value="">Select Project Type</option>
@@ -533,11 +618,12 @@ const CostPredictionView = ({ project, onBack }) => {
                                 </select>
                             </div>
                             <div>
-                                <label className="block text-xs font-medium text-gray-400 mb-1">Province</label>
+                                <label className="block text-xs font-medium text-gray-400 mb-1">Province {project && <span className="text-xs text-gray-500">(from project)</span>}</label>
                                 <select
                                     value={formValues.Province}
                                     onChange={handleChange('Province')}
-                                    className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                                    disabled={!!project}
+                                    className={`w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500 ${project ? 'opacity-60 cursor-not-allowed' : ''}`}
                                 >
                                     <option value="">Select Province</option>
                                     {Object.keys(provinceDistrictMap).map(province => (
@@ -546,11 +632,12 @@ const CostPredictionView = ({ project, onBack }) => {
                                 </select>
                             </div>
                             <div>
-                                <label className="block text-xs font-medium text-gray-400 mb-1">District</label>
+                                <label className="block text-xs font-medium text-gray-400 mb-1">District {project && <span className="text-xs text-gray-500">(from project)</span>}</label>
                                 <select
                                     value={formValues.District}
                                     onChange={handleChange('District')}
-                                    className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                                    disabled={!!project}
+                                    className={`w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500 ${project ? 'opacity-60 cursor-not-allowed' : ''}`}
                                 >
                                     <option value="">Select District</option>
                                     {availableDistricts.map(district => (
@@ -578,7 +665,7 @@ const CostPredictionView = ({ project, onBack }) => {
                                 <input
                                     type="number"
                                     min="2015"
-                                    max="2026"
+                                    max={currentYear}
                                     step="1"
                                     value={formValues.Year_of_Tender}
                                     onChange={handleChange('Year_of_Tender', parseIntOrEmpty)}
@@ -711,6 +798,8 @@ const CostPredictionView = ({ project, onBack }) => {
                                     type="date"
                                     value={startDate}
                                     onChange={handleStartDateChange}
+                                    min="2015-01-01"
+                                    max={`${currentYear}-12-31`}
                                     className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
                                 />
                                 <p className="text-[10px] text-gray-500 mt-1">
@@ -1030,6 +1119,83 @@ const CostPredictionView = ({ project, onBack }) => {
                                     </div>
                                 </div>
                             </div>
+
+                            {/* Save Prediction Button */}
+                            {project && (
+                                <div className="bg-gradient-to-r from-green-600/20 via-emerald-500/15 to-teal-500/20 border border-green-500/30 rounded-xl p-4">
+                                    <div className="flex items-center justify-between gap-4 flex-wrap">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 rounded-lg bg-green-500/20 flex items-center justify-center">
+                                                <svg className="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+                                                </svg>
+                                            </div>
+                                            <div>
+                                                <h4 className="text-sm font-semibold text-white">Save This Prediction</h4>
+                                                <p className="text-xs text-green-200/70">Store for historical tracking and scenario comparison</p>
+                                            </div>
+                                        </div>
+                                        <button
+                                            onClick={async () => {
+                                                try {
+                                                    if (!projectId) {
+                                                        alert('❌ Error: No project selected.');
+                                                        return;
+                                                    }
+                                                    
+                                                    if (!hasPrediction) {
+                                                        alert('❌ Error: No prediction available to save.');
+                                                        return;
+                                                    }
+                                                    
+                                                    const timestamp = new Date().toLocaleString('en-US', { 
+                                                        month: 'short', 
+                                                        day: 'numeric', 
+                                                        year: 'numeric',
+                                                        hour: '2-digit',
+                                                        minute: '2-digit'
+                                                    });
+                                                    const scenarioName = `Prediction - ${timestamp}`;
+                                                    
+                                                    const result = await savePrediction(projectId, formValues, {
+                                                        scenarioName,
+                                                        notes: `${isHighRisk ? 'HIGH' : 'LOW'} Risk, ${overrunPct?.toFixed(1)}% Overrun`,
+                                                        tags: [isHighRisk ? 'high-risk' : 'low-risk']
+                                                    });
+                                                    
+                                                    if (result.success) {
+                                                        alert('✅ Prediction saved successfully!');
+                                                    } else {
+                                                        alert(`❌ Failed to save: ${result.error || 'Unknown error'}`);
+                                                    }
+                                                } catch (error) {
+                                                    console.error('❌ Save error:', error);
+                                                    alert(`❌ Error saving prediction: ${error.message || 'Unknown error'}`);
+                                                }
+                                            }}
+                                            disabled={savingPrediction}
+                                            className="px-5 py-2.5 bg-gradient-to-r from-green-500 to-emerald-600 text-white font-semibold rounded-lg hover:shadow-lg hover:shadow-green-500/25 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                                        >
+                                            {savingPrediction ? (
+                                                <>
+                                                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                                    </svg>
+                                                    Saving...
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+                                                    </svg>
+                                                    Save Prediction
+                                                </>
+                                            )}
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
 
                             <div className="bg-dark-800/70 border border-white/5 rounded-2xl p-6">
                                 <h3 className="text-lg font-semibold text-white mb-4">Budget Summary</h3>

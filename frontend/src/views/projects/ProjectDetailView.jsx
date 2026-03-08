@@ -11,6 +11,7 @@ import useProjectsController from '../../controllers/useProjectsController';
 import useTaskController from '../../controllers/useTaskController';
 import usePMStore, { PROJECT_STATUSES, ROLES } from '../../models/usePMStore';
 import { projectApi } from '../../services/projectService';
+import { costApi } from '../../models/api';
 
 // PM Components
 import TaskBoard from './TaskBoard';
@@ -67,6 +68,8 @@ const ProjectDetailView = ({ project, onBack, onNavigate }) => {
     const [boqModalVisible, setBOQModalVisible] = useState(false);
     const [boqLoading, setBOQLoading] = useState(false);
     const [projectStatus, setProjectStatus] = useState(project?.status || 'draft');
+    const [latestCostPrediction, setLatestCostPrediction] = useState(null);
+    const [loadingCostPrediction, setLoadingCostPrediction] = useState(false);
 
     const { floorPlans, loading, fetchFloorPlans, uploadFloorPlan, deleteFloorPlan, fetchFloorPlan } = useProjectsController();
     const taskController = useTaskController(projectId);
@@ -78,10 +81,26 @@ const ProjectDetailView = ({ project, onBack, onNavigate }) => {
         if (projectId) {
             fetchFloorPlans(projectId);
             fetchBOQReports();
+            fetchLatestCostPrediction();
             trackRecentProject(projectId);
         }
     }, [projectId]);
 
+    const fetchLatestCostPrediction = async () => {
+        if (!projectId) return;
+        setLoadingCostPrediction(true);
+        try {
+            const response = await costApi.getLatestPrediction(projectId);
+            if (response.data?.success && response.data?.data?.prediction) {
+                setLatestCostPrediction(response.data.data.prediction);
+            }
+        } catch (error) {
+            // Silently fail if no predictions exist yet
+            console.log('No cost predictions found for this project');
+        } finally {
+            setLoadingCostPrediction(false);
+        }
+    };
 
     const fetchBOQReports = async () => {
         if (!projectId) return;
@@ -204,6 +223,67 @@ const ProjectDetailView = ({ project, onBack, onNavigate }) => {
                         <Col span={6}><Card className="!bg-dark-800/50 !border-white/10"><Statistic title={<span className="text-gray-400">Doors</span>} value={totals.totalDoors} valueStyle={{ color: '#fff' }} /></Card></Col>
                         <Col span={6}><Card className="!bg-dark-800/50 !border-white/10"><Statistic title={<span className="text-gray-400">Windows</span>} value={totals.totalWindows} valueStyle={{ color: '#fff' }} /></Card></Col>
                     </Row>
+
+                    {/* Cost Overrun Risk Display */}
+                    {latestCostPrediction && (
+                        <div style={{ background: 'linear-gradient(135deg, rgba(251, 191, 36, 0.1) 0%, rgba(249, 115, 22, 0.1) 100%)', border: '1px solid rgba(251, 191, 36, 0.3)', borderRadius: '0.75rem', padding: '1.5rem' }}>
+                            <div className="flex items-center justify-between mb-4">
+                                <div className="flex items-center gap-3">
+                                    <div style={{ fontSize: '2rem' }}>⚠️</div>
+                                    <div>
+                                        <h3 style={{ color: '#fbbf24', fontSize: '1.125rem', fontWeight: 700, marginBottom: '0.25rem' }}>Cost Overrun Risk Assessment</h3>
+                                        <p style={{ color: '#94a3b8', fontSize: '0.8125rem' }}>Latest prediction from {new Date(latestCostPrediction.createdAt).toLocaleDateString()}</p>
+                                    </div>
+                                </div>
+                                <Tag color={
+                                    latestCostPrediction.riskLevel === 'critical' ? 'red' :
+                                    latestCostPrediction.riskLevel === 'high' ? 'orange' :
+                                    latestCostPrediction.riskLevel === 'medium' ? 'gold' : 'green'
+                                } style={{ fontSize: '0.875rem', padding: '0.375rem 0.875rem', borderRadius: '0.5rem', fontWeight: 600 }}>
+                                    {latestCostPrediction.riskLevel?.toUpperCase() || 'UNKNOWN'} RISK
+                                </Tag>
+                            </div>
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div style={{ background: 'rgba(30,41,59,0.5)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '0.5rem', padding: '1rem' }}>
+                                    <p style={{ fontSize: '0.6875rem', color: '#64748b', marginBottom: '0.375rem' }}>Predicted Overrun</p>
+                                    <p style={{ fontSize: '1.5rem', fontWeight: 700, color: latestCostPrediction.prediction?.predicted_cost_overrun_pct > 15 ? '#f87171' : latestCostPrediction.prediction?.predicted_cost_overrun_pct > 5 ? '#fbbf24' : '#4ade80' }}>
+                                        {latestCostPrediction.prediction?.predicted_cost_overrun_pct?.toFixed(1) || 'N/A'}%
+                                    </p>
+                                </div>
+                                <div style={{ background: 'rgba(30,41,59,0.5)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '0.5rem', padding: '1rem' }}>
+                                    <p style={{ fontSize: '0.6875rem', color: '#64748b', marginBottom: '0.375rem' }}>High Risk Probability</p>
+                                    <p style={{ fontSize: '1.5rem', fontWeight: 700, color: '#e2e8f0' }}>
+                                        {latestCostPrediction.prediction?.predicted_high_risk_probability 
+                                            ? `${(latestCostPrediction.prediction.predicted_high_risk_probability * 100).toFixed(1)}%` 
+                                            : 'N/A'}
+                                    </p>
+                                </div>
+                                <div style={{ background: 'rgba(30,41,59,0.5)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '0.5rem', padding: '1rem' }}>
+                                    <p style={{ fontSize: '0.6875rem', color: '#64748b', marginBottom: '0.375rem' }}>Scenario</p>
+                                    <p style={{ fontSize: '0.875rem', fontWeight: 600, color: '#e2e8f0', marginTop: '0.25rem' }}>
+                                        {latestCostPrediction.scenarioName || 'Baseline'}
+                                    </p>
+                                    {latestCostPrediction.tags && latestCostPrediction.tags.length > 0 && (
+                                        <div className="flex gap-1 mt-1 flex-wrap">
+                                            {latestCostPrediction.tags.slice(0, 2).map((tag, idx) => (
+                                                <Tag key={idx} style={{ fontSize: '0.625rem', margin: 0 }}>{tag}</Tag>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+                            </div>
+                            <div className="mt-3">
+                                <Button 
+                                    size="small" 
+                                    type="link" 
+                                    onClick={() => onNavigate?.('cost', project)}
+                                    style={{ color: '#fbbf24', padding: 0 }}
+                                >
+                                    View Full Analysis →
+                                </Button>
+                            </div>
+                        </div>
+                    )}
 
                     {/* Prediction Tools Navigation */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
