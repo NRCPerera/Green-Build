@@ -1,5 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
+import { BarChart, Bar, XAxis, YAxis, Tooltip as RechartsTooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import useCostController from '../../../controllers/useCostController';
+import CostImpactCard from './components/CostImpactCard';
 
 const INDICATOR_KEYS = ['Inflation_Rate', 'Exchange_Rate_LKR', 'Material_Index'];
 
@@ -68,13 +70,13 @@ const CostPredictionView = ({ project, onBack }) => {
         };
 
         // Get province
-        const province = typeof project.location === 'object' && project.location.province 
-            ? project.location.province 
+        const province = typeof project.location === 'object' && project.location.province
+            ? project.location.province
             : '';
 
         // Get district
-        const district = typeof project.location === 'object' && project.location.district 
-            ? project.location.district 
+        const district = typeof project.location === 'object' && project.location.district
+            ? project.location.district
             : '';
 
         const budget = typeof project.budget === 'number' ? project.budget : (project.budget?.estimated || 0);
@@ -127,8 +129,55 @@ const CostPredictionView = ({ project, onBack }) => {
         clearPrediction,
         clearIndicatorsError,
         savePrediction,
-        savingPrediction
+        savingPrediction,
+        predictMonteCarlo,
+        monteCarloResult,
+        monteCarloLoading
     } = useCostController();
+
+    // Monte Carlo State
+    const [mcEnabled, setMcEnabled] = useState(false);
+    const [mcRanges, setMcRanges] = useState({
+        Inflation_Rate: { min: Math.max((formValues.Inflation_Rate || 5) - 2, -10), max: Math.min((formValues.Inflation_Rate || 5) + 5, 50) },
+        Exchange_Rate_LKR: { min: Math.max((formValues.Exchange_Rate_LKR || 300) - 10, 100), max: Math.min((formValues.Exchange_Rate_LKR || 300) + 20, 500) },
+        Material_Index: { min: Math.max((formValues.Material_Index || 120) - 10, 50), max: Math.min((formValues.Material_Index || 120) + 20, 500) },
+        Complexity_Score: { min: Math.max((formValues.Complexity_Score || 5) - 2, 1), max: Math.min((formValues.Complexity_Score || 5) + 2, 10) }
+    });
+    const [numSimulations, setNumSimulations] = useState(1000);
+
+    const handleMcRangeChange = (key, type, value) => {
+        setMcRanges(prev => ({
+            ...prev,
+            [key]: { ...prev[key], [type]: parseFloatOrEmpty(value) }
+        }));
+    };
+
+    // Update default MC ranges if base form values change
+    useEffect(() => {
+        setMcRanges(prev => ({
+            ...prev,
+            Inflation_Rate: { ...prev.Inflation_Rate, min: (formValues.Inflation_Rate || 5) - 2, max: (formValues.Inflation_Rate || 5) + 5 },
+            Exchange_Rate_LKR: { ...prev.Exchange_Rate_LKR, min: (formValues.Exchange_Rate_LKR || 300) - 10, max: (formValues.Exchange_Rate_LKR || 300) + 20 },
+            Material_Index: { ...prev.Material_Index, min: (formValues.Material_Index || 120) - 10, max: (formValues.Material_Index || 120) + 20 },
+            Complexity_Score: { ...prev.Complexity_Score, min: Math.max((formValues.Complexity_Score || 5) - 2, 1), max: Math.min((formValues.Complexity_Score || 5) + 2, 10) }
+        }));
+    }, [formValues.Inflation_Rate, formValues.Exchange_Rate_LKR, formValues.Material_Index, formValues.Complexity_Score]);
+
+    const handleRunMonteCarlo = async () => {
+        // Validate form before running
+        const errors = validateForm();
+        setValidationErrors(errors);
+        if (errors.length > 0) return;
+
+        await predictMonteCarlo(formValues, mcRanges, numSimulations);
+    };
+
+    // Slider trigger for lightweight simulation (300 sims)
+    const handleSliderSensitivity = async (val) => {
+        handleMcRangeChange('Complexity_Score', 'max', val);
+        const newRanges = { ...mcRanges, Complexity_Score: { ...mcRanges.Complexity_Score, max: val } };
+        await predictMonteCarlo(formValues, newRanges, 300);
+    };
 
     const projectId = project?._id || project?.id;
     const riskFlag = prediction?.predicted_high_risk_class;
@@ -386,14 +435,14 @@ const CostPredictionView = ({ project, onBack }) => {
         addRangeError(val.Start_Month, 'Start Month', 1, 12, { integer: true });
         addRangeError(val.Start_Quarter, 'Start Quarter', 1, 4, { integer: true });
         addRangeError(val.Start_Weekday, 'Start Weekday', 0, 6, { integer: true });
-        
+
         // Economic indicators
         addRangeError(val.Inflation_Rate, 'Inflation Rate (%)', -10, 50);
         addRangeError(val.Material_Index, 'Material Price Index', 50, 500);
         addRangeError(val.Exchange_Rate_LKR, 'Exchange Rate (LKR/USD)', 100, 500);
         addRangeError(val.Project_Size_Index, 'Project Size Index', 0, 10);
         addRangeError(val.Economic_Risk_Index, 'Economic Risk Index', 0, 10);
-        
+
         // Risk scores (already constrained by sliders, but double-check)
         addRangeError(val.Design_Completeness, 'Design Completeness (%)', 0, 100);
         addRangeError(val.Design_Risk_Score, 'Design Risk Score', 1, 10, { integer: true });
@@ -405,10 +454,10 @@ const CostPredictionView = ({ project, onBack }) => {
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        
+
         const errors = validateForm();
         setValidationErrors(errors);
-        
+
         if (errors.length > 0) {
             window.scrollTo({ top: 0, behavior: 'smooth' });
             return;
@@ -765,8 +814,8 @@ const CostPredictionView = ({ project, onBack }) => {
                                         type="button"
                                         onClick={() => setInitialValueMode(initialValueMode === 'auto' ? 'manual' : 'auto')}
                                         className={`text-[10px] px-2 py-0.5 rounded border ${initialValueMode === 'auto'
-                                                ? 'border-green-500/40 text-green-400 bg-green-500/10'
-                                                : 'border-yellow-500/40 text-yellow-400 bg-yellow-500/10'
+                                            ? 'border-green-500/40 text-green-400 bg-green-500/10'
+                                            : 'border-yellow-500/40 text-yellow-400 bg-yellow-500/10'
                                             }`}
                                     >
                                         {initialValueMode === 'auto' ? '🔄 Auto' : '✏️ Manual'}
@@ -1089,7 +1138,91 @@ const CostPredictionView = ({ project, onBack }) => {
                             </div>
                         )}
 
-                        <div className="border-t border-white/[0.06] pt-5">
+                        {/* ── Section: Monte Carlo ── */}
+                        <div className="border-t border-white/[0.06] pt-4 mt-6">
+                            <div className="flex items-center justify-between mb-3">
+                                <p className="text-[11px] uppercase tracking-widest text-emerald-400/70 font-semibold flex items-center gap-1.5"><span>🎲</span> Uncertainty Simulation</p>
+                                <label className="flex items-center cursor-pointer gap-2">
+                                    <div className="relative">
+                                        <input type="checkbox" className="sr-only" checked={mcEnabled} onChange={() => setMcEnabled(!mcEnabled)} />
+                                        <div className={`block w-10 h-6 rounded-full transition-colors ${mcEnabled ? 'bg-emerald-500' : 'bg-dark-600'}`}></div>
+                                        <div className={`dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform ${mcEnabled ? 'transform translate-x-4' : ''}`}></div>
+                                    </div>
+                                    <span className="text-xs text-gray-400">Enable</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        {mcEnabled && (
+                            <div className="space-y-4 p-4 rounded-xl border border-emerald-500/20 bg-emerald-500/5 transition-all">
+                                <div className="flex justify-between items-start">
+                                    <p className="text-xs text-emerald-200/70 max-w-[70%]">Define ranges for uncertain variables. The system will run simulations to predict probabilistic outcomes.</p>
+                                    <div className="flex flex-col items-end gap-1">
+                                        <label className="text-[10px] text-gray-400">Number of Simulations</label>
+                                        <select
+                                            value={numSimulations}
+                                            onChange={(e) => setNumSimulations(Number(e.target.value))}
+                                            className="bg-dark-700 border border-white/10 text-white text-xs rounded px-2 py-1 outline-none"
+                                        >
+                                            <option value={300}>300</option>
+                                            <option value={500}>500</option>
+                                            <option value={1000}>1000 (Default)</option>
+                                        </select>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-4">
+                                    {Object.entries({
+                                        'Inflation_Rate': 'Inflation Rate (%)',
+                                        'Exchange_Rate_LKR': 'Exchange Rate (LKR)',
+                                        'Material_Index': 'Material Price Index',
+                                        'Complexity_Score': 'Project Complexity'
+                                    }).map(([key, label]) => (
+                                        <div key={key} className="p-2 border border-white/5 bg-dark-800/50 rounded-lg">
+                                            <p className="text-[10px] font-semibold text-gray-400 mb-1">{label}</p>
+                                            <div className="flex items-center gap-2">
+                                                <input
+                                                    type="number"
+                                                    value={mcRanges[key].min}
+                                                    onChange={(e) => handleMcRangeChange(key, 'min', e.target.value)}
+                                                    className="w-full px-2 py-1 bg-dark-700 border border-white/10 rounded text-xs text-white"
+                                                    placeholder="Min"
+                                                />
+                                                <span className="text-gray-500 text-xs">-</span>
+                                                <input
+                                                    type="number"
+                                                    value={mcRanges[key].max}
+                                                    onChange={(e) => handleMcRangeChange(key, 'max', e.target.value)}
+                                                    className="w-full px-2 py-1 bg-dark-700 border border-white/10 rounded text-xs text-white"
+                                                    placeholder="Max"
+                                                />
+                                            </div>
+                                            {key === 'Complexity_Score' && (
+                                                <div className="mt-2">
+                                                    <p className="text-[9px] text-gray-500 mb-1">Max Complexity Sensitivity Slider (Trigger 300 Sims)</p>
+                                                    <input
+                                                        type="range" min="1" max="10" step="1"
+                                                        value={mcRanges[key].max}
+                                                        onChange={(e) => handleSliderSensitivity(e.target.value)}
+                                                        className="w-full h-1 bg-dark-600 rounded-lg appearance-none cursor-pointer"
+                                                    />
+                                                </div>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={handleRunMonteCarlo}
+                                    disabled={monteCarloLoading}
+                                    className="w-full mt-2 py-2.5 rounded-xl font-bold transition-all border border-emerald-500/40 bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/30"
+                                >
+                                    {monteCarloLoading ? 'Running Simulations...' : '🎲 Run Monte Carlo Simulation'}
+                                </button>
+                            </div>
+                        )}
+
+                        <div className="pt-3">
                             <button
                                 type="submit"
                                 disabled={loading}
@@ -1108,16 +1241,176 @@ const CostPredictionView = ({ project, onBack }) => {
                 </div>
 
                 <div className={isFormExpanded ? 'space-y-4' : 'xl:col-span-7 space-y-4'}>
+                    {/* Monte Carlo Results Section - Moved outside hasPrediction so it displays if run independently */}
+                    {monteCarloResult && (
+                        <div className="space-y-4 mb-8">
+                            {/* 1. Prediction Overview Card & 5. Explanation Panel */}
+                            <div className="rounded-2xl border border-slate-700/50 bg-gradient-to-br from-slate-800/90 via-slate-900/90 to-slate-800/90 p-6 shadow-xl shadow-black/20">
+                                <div className="flex flex-wrap items-start justify-between gap-4 mb-6 border-b border-white/5 pb-6">
+                                    <div>
+                                        <h3 className="text-2xl font-bold text-white flex items-center gap-2">
+                                            Cost Overrun Prediction
+                                        </h3>
+                                        <p className="text-sm text-slate-400 mt-2 max-w-3xl leading-relaxed">
+                                            {monteCarloResult.explanation || `Based on the current project parameters and economic conditions, the system predicts a probabilistic boundary for cost implications.`}
+                                        </p>
+                                    </div>
+                                    <div className="text-right">
+                                        <span className="px-3 py-1.5 rounded-full text-xs font-semibold bg-slate-800 text-slate-300 border border-slate-600">
+                                            {monteCarloResult.num_successful_simulations} Iterations Simulated
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-2">
+                                    <div>
+                                        <p className="text-sm font-medium text-gray-400 mb-1">Expected Overrun</p>
+                                        <p className="text-3xl font-bold text-white">
+                                            {monteCarloResult.prediction_summary?.expected_overrun || `${monteCarloResult.mean}%`}
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <p className="text-sm font-medium text-gray-400 mb-1">Confidence Range (90%)</p>
+                                        <p className="text-xl font-bold text-white mt-1">
+                                            {monteCarloResult.prediction_summary?.confidence_range || `${monteCarloResult.confidence_interval[0]}% – ${monteCarloResult.confidence_interval[1]}%`}
+                                        </p>
+                                    </div>
+                                    <div>
+                                        <p className="text-sm font-medium text-gray-400 mb-1">Risk Level</p>
+                                        <div className="mt-1 inline-flex items-center">
+                                            <span className={`px-4 py-1.5 rounded-lg text-sm font-bold border ${(monteCarloResult.prediction_summary?.risk_level || '').includes('High')
+                                                ? 'bg-red-500/20 text-red-400 border-red-500/30'
+                                                : (monteCarloResult.prediction_summary?.risk_level || '').includes('Moderate')
+                                                    ? 'bg-orange-500/20 text-orange-400 border-orange-500/30'
+                                                    : 'bg-blue-500/20 text-blue-400 border-blue-500/30'
+                                                }`}>
+                                                {monteCarloResult.prediction_summary?.risk_level || 'Evaluated'}
+                                            </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* NEW FINANCIAL IMPACT PANEL */}
+                            {monteCarloResult.cost_summary && (
+                                <CostImpactCard
+                                    costSummary={monteCarloResult.cost_summary}
+                                    riskLevel={monteCarloResult.prediction_summary?.risk_level}
+                                    formInitialValue={Number(formValues.Initial_Value) || 0}
+                                />
+                            )}
+
+                            {/* 2. Scenario Analysis Cards */}
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div className="p-5 rounded-xl border border-green-500/20 bg-gradient-to-b from-green-500/10 to-transparent">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <h4 className="text-sm font-bold text-green-400 uppercase tracking-wider">Best Case</h4>
+                                    </div>
+                                    <p className="text-lg font-medium text-white">
+                                        {monteCarloResult.scenario_analysis?.best_case || `Cost overrun could be as low as ${monteCarloResult.p10}%`}
+                                    </p>
+                                </div>
+
+                                <div className="p-5 rounded-xl border border-blue-500/20 bg-gradient-to-b from-blue-500/10 to-transparent">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <h4 className="text-sm font-bold text-blue-400 uppercase tracking-wider">Most Likely</h4>
+                                    </div>
+                                    <p className="text-lg font-medium text-white">
+                                        {monteCarloResult.scenario_analysis?.most_likely || `Expected cost overrun around ${monteCarloResult.mean}%`}
+                                    </p>
+                                </div>
+
+                                <div className="p-5 rounded-xl border border-red-500/20 bg-gradient-to-b from-red-500/10 to-transparent">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <h4 className="text-sm font-bold text-red-400 uppercase tracking-wider">Worst Case</h4>
+                                    </div>
+                                    <p className="text-lg font-medium text-white">
+                                        {monteCarloResult.scenario_analysis?.worst_case || `Cost overrun could reach up to ${monteCarloResult.p90}%`}
+                                    </p>
+                                </div>
+                            </div>
+
+                            {/* 3. Risk Driver Section */}
+                            <div className="p-5 rounded-xl border border-white/5 bg-dark-800/80">
+                                <h4 className="text-sm font-semibold text-gray-300 mb-3 uppercase tracking-wider">Key Factors Influencing This Prediction</h4>
+                                <div className="flex flex-wrap gap-2">
+                                    {(monteCarloResult.risk_drivers || Object.keys(monteCarloResult.sensitivities).slice(0, 3)).map((driver, idx) => (
+                                        <span key={idx} className="px-3 py-1.5 rounded-lg bg-dark-700/80 border border-white/10 text-sm font-medium text-gray-200 flex items-center gap-2">
+                                            <span className="w-1.5 h-1.5 rounded-full bg-blue-400"></span>
+                                            {driver.replace(/_/g, ' ')}
+                                        </span>
+                                    ))}
+                                </div>
+                            </div>
+
+                            {/* 4. Visual Chart */}
+                            <div className="p-5 rounded-xl border border-white/5 bg-dark-800/80">
+                                <h4 className="text-sm font-semibold text-gray-300 mb-6 uppercase tracking-wider">Distribution of Predicted Outcomes</h4>
+                                <div className="w-full h-64">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <BarChart data={monteCarloResult.histogram.counts.map((c, i) => ({
+                                            bin: `${monteCarloResult.histogram.bins[i]}%`,
+                                            count: c,
+                                            val: monteCarloResult.histogram.bins[i]
+                                        }))} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
+                                            <XAxis dataKey="val" tickFormatter={(v) => Number(v).toFixed(1)} stroke="#64748b" fontSize={11} tickLine={false} axisLine={{ stroke: '#334155' }} />
+                                            <YAxis stroke="#64748b" fontSize={11} tickLine={false} axisLine={{ stroke: '#334155' }} />
+                                            <RechartsTooltip
+                                                contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', borderRadius: '8px', color: '#f8fafc' }}
+                                                itemStyle={{ color: '#60a5fa' }}
+                                                formatter={(val) => [val, 'Simulations']}
+                                                labelFormatter={(label) => `Overrun: ${Number(label).toFixed(2)}%`}
+                                                cursor={{ fill: '#334155', opacity: 0.4 }}
+                                            />
+                                            <Bar dataKey="count" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                                            <ReferenceLine x={monteCarloResult.p50} stroke="#60a5fa" strokeDasharray="3 3" label={{ position: 'top', value: `Expected (P50)`, fill: '#93c5fd', fontSize: 11 }} />
+                                            <ReferenceLine x={monteCarloResult.p90} stroke="#f87171" strokeDasharray="3 3" label={{ position: 'top', value: `Worst Case (P90)`, fill: '#fca5a5', fontSize: 11 }} />
+                                        </BarChart>
+                                    </ResponsiveContainer>
+                                </div>
+                                <div className="mt-4 flex justify-between text-xs text-slate-500 pt-3 border-t border-slate-700/50">
+                                    <span>← Lower Cost Overrun</span>
+                                    <span>Higher Cost Overrun →</span>
+                                </div>
+                            </div>
+
+                            {/* 5. Recommended Actions */}
+                            {monteCarloResult.recommendations && monteCarloResult.recommendations.length > 0 && (
+                                <div className="p-5 rounded-xl border border-white/5 bg-dark-800/80">
+                                    <h4 className="flex items-center gap-2 text-sm font-semibold text-gray-300 mb-4 uppercase tracking-wider">
+                                        <span>📋</span> Recommended Actions
+                                    </h4>
+                                    <ul className="space-y-3">
+                                        {monteCarloResult.recommendations.map((rec, idx) => (
+                                            <li key={idx} className="flex items-start gap-3 bg-dark-700/50 p-3 rounded-lg border border-white/5">
+                                                <div className="mt-0.5 text-blue-400">
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                                                    </svg>
+                                                </div>
+                                                <p className="text-sm text-gray-300 leading-relaxed">{rec}</p>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
                     {hasPrediction ? (
                         <div className="space-y-4">
-                            <div className="rounded-2xl border border-white/10 bg-gradient-to-br from-slate-800/80 via-slate-900/70 to-slate-800/80 p-5">
-                                <div className="flex flex-wrap items-start justify-between gap-4">
+                            {/* 1. Prediction Overview Card & 5. Explanation Panel */}
+                            <div className="rounded-2xl border border-slate-700/50 bg-gradient-to-br from-slate-800/90 via-slate-900/90 to-slate-800/90 p-6 shadow-xl shadow-black/20">
+                                <div className="flex flex-wrap items-start justify-between gap-4 mb-6 border-b border-white/5 pb-6">
                                     <div>
-                                        <p className="text-xs uppercase tracking-wide text-slate-400">Prediction Summary</p>
-                                        <h3 className="text-xl font-semibold text-white mt-1">{prediction?.risk_label || (isHighRisk ? 'High Risk' : 'Low Risk')} Cost Overrun Outlook</h3>
-                                        <p className="text-sm text-slate-400 mt-1">Generated from your current project and market parameters.</p>
+                                        <h3 className="text-2xl font-bold text-white flex items-center gap-2">
+                                            Cost Overrun Prediction
+                                        </h3>
+                                        <p className="text-sm text-slate-400 mt-2 max-w-3xl leading-relaxed">
+                                            This prediction considers your project characteristics, contractor experience, and current economic indicators. The model estimates a {isHighRisk ? 'severe warning' : 'healthy outlook'} regarding cost escalation.
+                                        </p>
                                         {predictionTimestamp && (
-                                            <p className="text-xs text-slate-500 mt-1.5 flex items-center gap-1.5">
+                                            <p className="text-xs text-slate-500 mt-3 flex items-center gap-1.5">
                                                 <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                                                 </svg>
@@ -1125,36 +1418,38 @@ const CostPredictionView = ({ project, onBack }) => {
                                             </p>
                                         )}
                                     </div>
-                                    <span className={`px-3 py-1.5 rounded-full text-xs font-semibold border ${isHighRisk ? 'border-red-500/40 text-red-300 bg-red-500/10' : 'border-green-500/40 text-green-300 bg-green-500/10'}`}>
-                                        {isHighRisk ? 'Attention Needed' : 'Healthy Trend'}
-                                    </span>
-                                </div>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-4">
-                                    <div className={`rounded-xl border p-4 ${isHighRisk ? 'border-red-500/35 bg-red-500/10' : 'border-green-500/35 bg-green-500/10'}`}>
-                                        <p className="text-xs text-slate-300/80">Risk Status</p>
-                                        <p className={`text-2xl font-bold mt-1 ${isHighRisk ? 'text-red-300' : 'text-green-300'}`}>
-                                            {prediction?.risk_label || (isHighRisk ? 'HIGH' : 'LOW')}
-                                        </p>
+                                    <div className="text-right">
+                                        <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/30 rounded-full">
+                                            <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                            </svg>
+                                            <span className="text-xs font-semibold text-emerald-300">ML-Validated</span>
+                                        </div>
                                     </div>
-                                    <div className="rounded-xl border border-white/10 bg-dark-700/50 p-4">
-                                        <p className="text-xs text-slate-300/80">Cost Overrun</p>
-                                        <p className={`text-2xl font-bold mt-1 ${(overrunPct ?? 0) > 10 ? 'text-red-300' : 'text-emerald-300'}`}>
+                                </div>
+
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-2">
+                                    <div>
+                                        <p className="text-sm font-medium text-gray-400 mb-1">Expected Overrun</p>
+                                        <p className="text-3xl font-bold text-white">
                                             {overrunPct != null ? `${overrunPct.toFixed(2)}%` : 'N/A'}
                                         </p>
-                                        {overrunPct != null && (
-                                            <p className="text-[10px] text-slate-400 mt-1">±{(overrunPct * 0.15).toFixed(2)}% margin</p>
-                                        )}
                                     </div>
-                                    <div className="rounded-xl border border-white/10 bg-dark-700/50 p-4">
-                                        <p className="text-xs text-slate-300/80">Overrun Probability</p>
-                                        <p className="text-2xl font-bold text-white mt-1">
+                                    <div>
+                                        <p className="text-sm font-medium text-gray-400 mb-1">Overrun Probability</p>
+                                        <p className="text-xl font-bold text-white mt-1">
                                             {hasProbability ? `${(probabilityValue * 100).toFixed(1)}%` : 'N/A'}
                                         </p>
-                                        <div className="w-full h-2 bg-dark-700 rounded-full mt-2 overflow-hidden">
-                                            <div
-                                                className={`h-full transition-all ${hasProbability ? ((probabilityValue ?? 0) > 0.7 ? 'bg-red-500' : (probabilityValue ?? 0) > 0.4 ? 'bg-yellow-500' : 'bg-green-500') : 'bg-gray-500'}`}
-                                                style={{ width: hasProbability ? `${((probabilityValue ?? 0) * 100)}%` : '0%' }}
-                                            />
+                                    </div>
+                                    <div>
+                                        <p className="text-sm font-medium text-gray-400 mb-1">Risk Level</p>
+                                        <div className="mt-1 inline-flex items-center">
+                                            <span className={`px-4 py-1.5 rounded-lg text-sm font-bold border ${isHighRisk
+                                                ? 'bg-red-500/20 text-red-400 border-red-500/30'
+                                                : 'bg-green-500/20 text-green-400 border-green-500/30'
+                                                }`}>
+                                                {prediction?.risk_label || (isHighRisk ? 'High Risk' : 'Low Risk')}
+                                            </span>
                                         </div>
                                     </div>
                                 </div>
@@ -1182,27 +1477,27 @@ const CostPredictionView = ({ project, onBack }) => {
                                                         alert('❌ Error: No project selected.');
                                                         return;
                                                     }
-                                                    
+
                                                     if (!hasPrediction) {
                                                         alert('❌ Error: No prediction available to save.');
                                                         return;
                                                     }
-                                                    
-                                                    const timestamp = new Date().toLocaleString('en-US', { 
-                                                        month: 'short', 
-                                                        day: 'numeric', 
+
+                                                    const timestamp = new Date().toLocaleString('en-US', {
+                                                        month: 'short',
+                                                        day: 'numeric',
                                                         year: 'numeric',
                                                         hour: '2-digit',
                                                         minute: '2-digit'
                                                     });
                                                     const scenarioName = `Prediction - ${timestamp}`;
-                                                    
+
                                                     const result = await savePrediction(projectId, formValues, {
                                                         scenarioName,
                                                         notes: `${isHighRisk ? 'HIGH' : 'LOW'} Risk, ${overrunPct?.toFixed(1)}% Overrun`,
                                                         tags: [isHighRisk ? 'high-risk' : 'low-risk']
                                                     });
-                                                    
+
                                                     if (result.success) {
                                                         alert('✅ Prediction saved successfully!');
                                                     } else {
@@ -1237,86 +1532,58 @@ const CostPredictionView = ({ project, onBack }) => {
                                 </div>
                             )}
 
-                            <div className="bg-dark-800/70 border border-white/10 rounded-2xl p-6">
-                                <h3 className="text-lg font-semibold text-white mb-4">Budget Impact Summary</h3>
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                    <div className="p-4 bg-dark-700/50 rounded-lg border border-blue-500/20">
-                                        <p className="text-sm text-gray-400 mb-1">Initial Budget</p>
-                                        <p className="text-2xl font-bold text-blue-400">
-                                            {initialBudget > 0
-                                                ? `LKR ${formatCurrency(initialBudget / 1000000)}M`
-                                                : 'N/A'}
-                                        </p>
-                                        {initialBudget > 0 && (
-                                            <p className="text-xs text-slate-400 mt-1">LKR {formatCurrency(initialBudget, 0)}</p>
-                                        )}
+                            {/* 2. Scenario Analysis Cards (Budget Impact) */}
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div className="p-5 rounded-xl border border-blue-500/20 bg-gradient-to-b from-blue-500/10 to-transparent">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <h4 className="text-sm font-bold text-blue-400 uppercase tracking-wider">Initial Budget</h4>
                                     </div>
-                                    <div className="p-4 bg-dark-700/50 rounded-lg border border-amber-500/20">
-                                        <p className="text-sm text-gray-400 mb-1">Predicted Final Cost</p>
-                                        <p className="text-2xl font-bold text-amber-400">
-                                            {projectedFinalCost != null
-                                                ? `LKR ${formatCurrency(projectedFinalCost / 1000000)}M`
-                                                : 'N/A'}
-                                        </p>
-                                        {projectedFinalCost != null && (
-                                            <p className="text-xs text-slate-400 mt-1">LKR {formatCurrency(projectedFinalCost, 0)}</p>
-                                        )}
+                                    <p className="text-lg font-medium text-white">
+                                        {initialBudget > 0 ? `LKR ${formatCurrency(initialBudget / 1000000)}M` : 'N/A'}
+                                    </p>
+                                    {initialBudget > 0 && (
+                                        <p className="text-xs text-slate-400 mt-1">LKR {formatCurrency(initialBudget, 0)}</p>
+                                    )}
+                                </div>
+
+                                <div className="p-5 rounded-xl border border-amber-500/20 bg-gradient-to-b from-amber-500/10 to-transparent">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <h4 className="text-sm font-bold text-amber-400 uppercase tracking-wider">Predicted Final Cost</h4>
                                     </div>
-                                    <div className="p-4 bg-dark-700/50 rounded-lg border border-red-500/20">
-                                        <p className="text-sm text-gray-400 mb-1">Projected Overrun Amount</p>
-                                        <p className="text-2xl font-bold text-red-300">
-                                            {projectedOverrunAmount != null ? `LKR ${formatCurrency(projectedOverrunAmount / 1000000)}M` : 'N/A'}
-                                        </p>
-                                        {projectedOverrunAmount != null && (
-                                            <p className="text-xs text-slate-400 mt-1">LKR {formatCurrency(projectedOverrunAmount, 0)}</p>
-                                        )}
+                                    <p className="text-lg font-medium text-white">
+                                        {projectedFinalCost != null ? `LKR ${formatCurrency(projectedFinalCost / 1000000)}M` : 'N/A'}
+                                    </p>
+                                    {projectedFinalCost != null && (
+                                        <p className="text-xs text-slate-400 mt-1">LKR {formatCurrency(projectedFinalCost, 0)}</p>
+                                    )}
+                                </div>
+
+                                <div className="p-5 rounded-xl border border-red-500/20 bg-gradient-to-b from-red-500/10 to-transparent">
+                                    <div className="flex items-center justify-between mb-2">
+                                        <h4 className="text-sm font-bold text-red-400 uppercase tracking-wider">Projected Overrun Amount</h4>
                                     </div>
+                                    <p className="text-lg font-medium text-white">
+                                        {projectedOverrunAmount != null ? `LKR ${formatCurrency(projectedOverrunAmount / 1000000)}M` : 'N/A'}
+                                    </p>
+                                    {projectedOverrunAmount != null && (
+                                        <p className="text-xs text-slate-400 mt-1">LKR {formatCurrency(projectedOverrunAmount, 0)}</p>
+                                    )}
                                 </div>
                             </div>
 
-                            <div className="bg-dark-800/70 border border-white/5 rounded-2xl p-6">
-                                <div className="flex items-center justify-between mb-4">
-                                    <h3 className="text-lg font-semibold text-white">Prediction Details</h3>
-                                    <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-500/10 border border-emerald-500/30 rounded-full">
-                                        <svg className="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                                        </svg>
-                                        <span className="text-xs font-semibold text-emerald-300">ML-Validated</span>
-                                    </div>
-                                </div>
-                                <div className="grid grid-cols-2 gap-4 text-sm">
-                                    <div className="p-4 bg-dark-700/50 rounded-lg border border-yellow-500/20">
-                                        <p className="text-gray-400 mb-1">Predicted Overrun</p>
-                                        <p className="text-2xl font-bold text-yellow-400">
-                                            {overrunPct != null ? `${overrunPct.toFixed(2)}%` : 'N/A'}
-                                        </p>
-                                        {overrunPct != null && (
-                                            <p className="text-xs text-gray-500 mt-1">Precision: ±{(overrunPct * 0.12).toFixed(2)}%</p>
-                                        )}
-                                    </div>
-                                    <div className="p-4 bg-dark-700/50 rounded-lg border border-orange-500/20">
-                                        <p className="text-gray-400 mb-1">Risk Probability</p>
-                                        <p className="text-2xl font-bold text-orange-400">
-                                            {hasProbability ? `${(probabilityValue * 100).toFixed(1)}%` : 'N/A'}
-                                        </p>
-                                        {hasProbability && (
-                                            <p className="text-xs text-gray-500 mt-1">Confidence: {probabilityValue > 0.7 ? 'High' : probabilityValue > 0.4 ? 'Medium' : 'Low'}</p>
-                                        )}
-                                    </div>
-                                    <div className="p-4 bg-dark-700/50 rounded-lg border border-white/10">
-                                        <p className="text-gray-400 mb-1">Risk Classification</p>
-                                        <p className={`text-lg font-bold ${isHighRisk ? 'text-red-400' : 'text-green-400'}`}>
-                                            {isHighRisk ? 'HIGH RISK' : 'LOW RISK'}
-                                        </p>
-                                        <p className="text-xs text-gray-500 mt-1">Based on {topRiskFactors.length} factors</p>
-                                    </div>
-                                    <div className="p-4 bg-dark-700/50 rounded-lg border border-blue-500/20">
-                                        <p className="text-gray-400 mb-1">Top Risk Drivers</p>
-                                        <p className="text-lg font-bold text-blue-400">{topRiskFactors.length} Identified</p>
-                                        {topRiskFactors.length > 0 && (
-                                            <p className="text-xs text-gray-500 mt-1">See detailed breakdown below</p>
-                                        )}
-                                    </div>
+                            {/* 3. Risk Driver Section */}
+                            <div className="p-5 rounded-xl border border-white/5 bg-dark-800/80">
+                                <h4 className="text-sm font-semibold text-gray-300 mb-3 uppercase tracking-wider">Key Factors Influencing This Prediction</h4>
+                                <div className="flex flex-wrap gap-2">
+                                    {(topRiskFactors || []).slice(0, 3).map((factor, idx) => (
+                                        <span key={idx} className="px-3 py-1.5 rounded-lg bg-dark-700/80 border border-white/10 text-sm font-medium text-gray-200 flex items-center gap-2">
+                                            <span className={`w-1.5 h-1.5 rounded-full ${idx === 0 ? 'bg-red-400' : idx === 1 ? 'bg-orange-400' : 'bg-blue-400'}`}></span>
+                                            {factor.feature.replace(/_/g, ' ')}
+                                        </span>
+                                    ))}
+                                    {topRiskFactors.length === 0 && (
+                                        <span className="text-sm text-gray-500 italic">Drivers calculation not returned from model.</span>
+                                    )}
                                 </div>
                             </div>
 
@@ -1354,7 +1621,7 @@ const CostPredictionView = ({ project, onBack }) => {
                                                     <stop offset="100%" style={{ stopColor: '#be185d', stopOpacity: 1 }} />
                                                 </linearGradient>
                                             </defs>
-                                            
+
                                             {(() => {
                                                 // Categorize risk factors
                                                 const categories = {
@@ -1364,11 +1631,11 @@ const CostPredictionView = ({ project, onBack }) => {
                                                     Contractor: { count: 0, impact: 0, color: 'url(#contractorGradient)' },
                                                     Other: { count: 0, impact: 0, color: 'url(#otherGradient)' }
                                                 };
-                                                
+
                                                 topRiskFactors.forEach(factor => {
                                                     const feature = factor.feature.toLowerCase();
                                                     const impact = Number(factor.impact) || 0;
-                                                    
+
                                                     if (feature.includes('design') || feature.includes('complexity')) {
                                                         categories.Design.count++;
                                                         categories.Design.impact += impact;
@@ -1386,40 +1653,40 @@ const CostPredictionView = ({ project, onBack }) => {
                                                         categories.Other.impact += impact;
                                                     }
                                                 });
-                                                
+
                                                 const totalImpact = Object.values(categories).reduce((sum, cat) => sum + cat.impact, 0);
-                                                
+
                                                 let currentAngle = -90;
                                                 const centerX = 200;
                                                 const centerY = 160;
                                                 const radius = 100;
                                                 const innerRadius = 60;
-                                                
+
                                                 return (
                                                     <>
                                                         {Object.entries(categories).map(([name, data], idx) => {
                                                             if (data.impact === 0) return null;
-                                                            
+
                                                             const percentage = (data.impact / totalImpact) * 100;
                                                             const angle = (percentage / 100) * 360;
                                                             const endAngle = currentAngle + angle;
-                                                            
+
                                                             // Calculate arc path
                                                             const startRadians = (currentAngle * Math.PI) / 180;
                                                             const endRadians = (endAngle * Math.PI) / 180;
-                                                            
+
                                                             const x1Outer = centerX + radius * Math.cos(startRadians);
                                                             const y1Outer = centerY + radius * Math.sin(startRadians);
                                                             const x2Outer = centerX + radius * Math.cos(endRadians);
                                                             const y2Outer = centerY + radius * Math.sin(endRadians);
-                                                            
+
                                                             const x1Inner = centerX + innerRadius * Math.cos(startRadians);
                                                             const y1Inner = centerY + innerRadius * Math.sin(startRadians);
                                                             const x2Inner = centerX + innerRadius * Math.cos(endRadians);
                                                             const y2Inner = centerY + innerRadius * Math.sin(endRadians);
-                                                            
+
                                                             const largeArc = angle > 180 ? 1 : 0;
-                                                            
+
                                                             const path = `
                                                                 M ${x1Outer} ${y1Outer}
                                                                 A ${radius} ${radius} 0 ${largeArc} 1 ${x2Outer} ${y2Outer}
@@ -1427,14 +1694,14 @@ const CostPredictionView = ({ project, onBack }) => {
                                                                 A ${innerRadius} ${innerRadius} 0 ${largeArc} 0 ${x1Inner} ${y1Inner}
                                                                 Z
                                                             `;
-                                                            
+
                                                             // Label position
                                                             const midAngle = currentAngle + angle / 2;
                                                             const midRadians = (midAngle * Math.PI) / 180;
                                                             const labelRadius = (radius + innerRadius) / 2;
                                                             const labelX = centerX + labelRadius * Math.cos(midRadians);
                                                             const labelY = centerY + labelRadius * Math.sin(midRadians);
-                                                            
+
                                                             const result = (
                                                                 <g key={name}>
                                                                     <path
@@ -1458,11 +1725,11 @@ const CostPredictionView = ({ project, onBack }) => {
                                                                     )}
                                                                 </g>
                                                             );
-                                                            
+
                                                             currentAngle = endAngle;
                                                             return result;
                                                         })}
-                                                        
+
                                                         {/* Center text */}
                                                         <text x={centerX} y={centerY - 5} textAnchor="middle" fontSize="24" fontWeight="bold" fill="#fff">
                                                             {topRiskFactors.length}
@@ -1484,11 +1751,11 @@ const CostPredictionView = ({ project, onBack }) => {
                                                 Contractor: { count: 0, impact: 0, color: 'bg-purple-500' },
                                                 Other: { count: 0, impact: 0, color: 'bg-pink-500' }
                                             };
-                                            
+
                                             topRiskFactors.forEach(factor => {
                                                 const feature = factor.feature.toLowerCase();
                                                 const impact = Number(factor.impact) || 0;
-                                                
+
                                                 if (feature.includes('design') || feature.includes('complexity')) {
                                                     categories.Design.count++;
                                                     categories.Design.impact += impact;
@@ -1506,9 +1773,9 @@ const CostPredictionView = ({ project, onBack }) => {
                                                     categories.Other.impact += impact;
                                                 }
                                             });
-                                            
+
                                             const totalImpact = Object.values(categories).reduce((sum, cat) => sum + cat.impact, 0);
-                                            
+
                                             return Object.entries(categories).map(([name, data]) => {
                                                 if (data.count === 0) return null;
                                                 const percentage = totalImpact > 0 ? ((data.impact / totalImpact) * 100).toFixed(1) : 0;
@@ -1546,18 +1813,18 @@ const CostPredictionView = ({ project, onBack }) => {
                                                     <stop offset="100%" style={{ stopColor: '#0891b2', stopOpacity: 0.1 }} />
                                                 </radialGradient>
                                             </defs>
-                                            
+
                                             {(() => {
                                                 const centerX = 250;
                                                 const centerY = 200;
                                                 const maxRadius = 150;
                                                 const parameters = topRiskFactors.slice(0, 6);
                                                 const numParams = parameters.length;
-                                                
+
                                                 if (numParams === 0) return null;
-                                                
+
                                                 const angleStep = (2 * Math.PI) / numParams;
-                                                
+
                                                 return (
                                                     <>
                                                         {/* Background circles */}
@@ -1572,13 +1839,13 @@ const CostPredictionView = ({ project, onBack }) => {
                                                                 strokeWidth="1"
                                                             />
                                                         ))}
-                                                        
+
                                                         {/* Radar lines */}
                                                         {parameters.map((param, idx) => {
                                                             const angle = -Math.PI / 2 + idx * angleStep;
                                                             const x = centerX + maxRadius * Math.cos(angle);
                                                             const y = centerY + maxRadius * Math.sin(angle);
-                                                            
+
                                                             return (
                                                                 <line
                                                                     key={`line-${idx}`}
@@ -1591,7 +1858,7 @@ const CostPredictionView = ({ project, onBack }) => {
                                                                 />
                                                             );
                                                         })}
-                                                        
+
                                                         {/* Data polygon */}
                                                         <polygon
                                                             points={parameters.map((param, idx) => {
@@ -1608,7 +1875,7 @@ const CostPredictionView = ({ project, onBack }) => {
                                                             strokeWidth="3"
                                                             strokeLinejoin="round"
                                                         />
-                                                        
+
                                                         {/* Data points and labels */}
                                                         {parameters.map((param, idx) => {
                                                             const angle = -Math.PI / 2 + idx * angleStep;
@@ -1617,12 +1884,12 @@ const CostPredictionView = ({ project, onBack }) => {
                                                             const r = maxRadius * normalizedImpact;
                                                             const x = centerX + r * Math.cos(angle);
                                                             const y = centerY + r * Math.sin(angle);
-                                                            
+
                                                             // Label position (outside)
                                                             const labelR = maxRadius + 40;
                                                             const labelX = centerX + labelR * Math.cos(angle);
                                                             const labelY = centerY + labelR * Math.sin(angle);
-                                                            
+
                                                             return (
                                                                 <g key={`point-${idx}`}>
                                                                     <circle cx={x} cy={y} r="6" fill="#06b6d4" stroke="#fff" strokeWidth="2" />
@@ -1674,7 +1941,7 @@ const CostPredictionView = ({ project, onBack }) => {
                                                     <stop offset="100%" style={{ stopColor: '#f59e0b', stopOpacity: 0.2 }} />
                                                 </linearGradient>
                                             </defs>
-                                            
+
                                             {/* Grid */}
                                             {[0, 1, 2, 3, 4, 5].map((i) => (
                                                 <line
@@ -1688,15 +1955,15 @@ const CostPredictionView = ({ project, onBack }) => {
                                                     strokeDasharray="4"
                                                 />
                                             ))}
-                                            
+
                                             {(() => {
                                                 const mean = projectedFinalCost;
                                                 const stdDev = mean * 0.15; // 15% standard deviation
-                                                
+
                                                 const minCost = mean - 3 * stdDev;
                                                 const maxCost = mean + 3 * stdDev;
                                                 const range = maxCost - minCost;
-                                                
+
                                                 // Generate bell curve points
                                                 const points = [];
                                                 for (let i = 0; i <= 100; i++) {
@@ -1705,21 +1972,21 @@ const CostPredictionView = ({ project, onBack }) => {
                                                     const y = (1 / (stdDev * Math.sqrt(2 * Math.PI))) * Math.exp(exponent);
                                                     points.push({ x, y });
                                                 }
-                                                
+
                                                 const maxY = Math.max(...points.map(p => p.y));
-                                                
+
                                                 const pathData = points.map((p, idx) => {
                                                     const px = 80 + ((p.x - minCost) / range) * 640;
                                                     const py = 265 - ((p.y / maxY) * 220);
                                                     return `${idx === 0 ? 'M' : 'L'} ${px} ${py}`;
                                                 }).join(' ') + ' L 720 265 L 80 265 Z';
-                                                
+
                                                 // Confidence intervals
                                                 const confidence68 = { min: mean - stdDev, max: mean + stdDev };
                                                 const confidence95 = { min: mean - 2 * stdDev, max: mean + 2 * stdDev };
-                                                
+
                                                 const getX = (value) => 80 + ((value - minCost) / range) * 640;
-                                                
+
                                                 return (
                                                     <>
                                                         {/* 95% confidence band */}
@@ -1731,7 +1998,7 @@ const CostPredictionView = ({ project, onBack }) => {
                                                             fill="#3b82f6"
                                                             opacity="0.1"
                                                         />
-                                                        
+
                                                         {/* 68% confidence band */}
                                                         <rect
                                                             x={getX(confidence68.min)}
@@ -1741,7 +2008,7 @@ const CostPredictionView = ({ project, onBack }) => {
                                                             fill="#3b82f6"
                                                             opacity="0.15"
                                                         />
-                                                        
+
                                                         {/* Distribution curve */}
                                                         <path
                                                             d={pathData}
@@ -1749,7 +2016,7 @@ const CostPredictionView = ({ project, onBack }) => {
                                                             stroke="#fbbf24"
                                                             strokeWidth="2"
                                                         />
-                                                        
+
                                                         {/* Mean line */}
                                                         <line
                                                             x1={getX(mean)}
@@ -1760,12 +2027,12 @@ const CostPredictionView = ({ project, onBack }) => {
                                                             strokeWidth="3"
                                                             strokeDasharray="6"
                                                         />
-                                                        
+
                                                         {/* Labels */}
                                                         <text x={getX(mean)} y="30" textAnchor="middle" fontSize="12" fontWeight="600" fill="#ef4444">
                                                             Predicted: LKR {(mean / 1000000).toFixed(2)}M
                                                         </text>
-                                                        
+
                                                         <text x={getX(confidence68.min)} y="280" textAnchor="middle" fontSize="10" fill="#60a5fa">
                                                             -1σ
                                                         </text>
@@ -1778,7 +2045,7 @@ const CostPredictionView = ({ project, onBack }) => {
                                                         <text x={getX(confidence95.max)} y="295" textAnchor="middle" fontSize="10" fill="#60a5fa">
                                                             +2σ
                                                         </text>
-                                                        
+
                                                         {/* Initial budget marker */}
                                                         <line
                                                             x1={getX(initialBudget)}
@@ -1795,7 +2062,7 @@ const CostPredictionView = ({ project, onBack }) => {
                                                     </>
                                                 );
                                             })()}
-                                            
+
                                             {/* Axes */}
                                             <line x1="80" y1="265" x2="720" y2="265" stroke="#ffffff30" strokeWidth="2" />
                                             <line x1="80" y1="45" x2="80" y2="265" stroke="#ffffff30" strokeWidth="2" />
@@ -1957,8 +2224,8 @@ const CostPredictionView = ({ project, onBack }) => {
                                                             <p className="text-xs text-gray-400">{optimal.description}</p>
                                                         </div>
                                                         <span className={`text-xs px-2 py-1 rounded ${needsImprovement
-                                                                ? 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/40'
-                                                                : 'bg-green-500/20 text-green-300 border border-green-500/40'
+                                                            ? 'bg-yellow-500/20 text-yellow-300 border border-yellow-500/40'
+                                                            : 'bg-green-500/20 text-green-300 border border-green-500/40'
                                                             }`}>
                                                             {(Number(factor.impact) || 0).toFixed(4)} impact
                                                         </span>
@@ -1982,8 +2249,8 @@ const CostPredictionView = ({ project, onBack }) => {
                                                     {needsImprovement && (
                                                         <div className="mt-2 flex items-center gap-2 text-xs">
                                                             <span className={`px-2 py-1 rounded ${optimal.direction === 'increase'
-                                                                    ? 'bg-blue-500/20 text-blue-300'
-                                                                    : 'bg-purple-500/20 text-purple-300'
+                                                                ? 'bg-blue-500/20 text-blue-300'
+                                                                : 'bg-purple-500/20 text-purple-300'
                                                                 }`}>
                                                                 {optimal.direction === 'increase' ? '↑ Increase' : '↓ Decrease'}
                                                             </span>
@@ -2024,11 +2291,13 @@ const CostPredictionView = ({ project, onBack }) => {
                             </div>
                         </div>
                     ) : (
-                        <div className="h-full min-h-[420px] bg-dark-800/50 border border-dashed border-white/10 rounded-2xl flex flex-col items-center justify-center text-center p-10">
-                            <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-3xl text-amber-200">$</div>
-                            <p className="text-white text-xl font-semibold mt-3">Prediction Workspace Ready</p>
-                            <p className="text-gray-400 text-sm mt-2 max-w-md">Complete the input panel and click Predict Cost Overrun to view risk level, budget impact, top drivers, and optimization guidance.</p>
-                        </div>
+                        !monteCarloResult && (
+                            <div className="h-full min-h-[420px] bg-dark-800/50 border border-dashed border-white/10 rounded-2xl flex flex-col items-center justify-center text-center p-10">
+                                <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center text-3xl text-amber-200">$</div>
+                                <p className="text-white text-xl font-semibold mt-3">Prediction Workspace Ready</p>
+                                <p className="text-gray-400 text-sm mt-2 max-w-md">Complete the input panel and click Predict Cost Overrun to view risk level, budget impact, top drivers, and optimization guidance.</p>
+                            </div>
+                        )
                     )}
                 </div>
             </div>
