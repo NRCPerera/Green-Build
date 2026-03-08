@@ -115,6 +115,10 @@ export const costApi = {
         return api.post('/api/cost-prediction/pre-project', input);
     },
 
+    predictMonteCarlo: async (input) => {
+        return api.post('/api/cost-prediction/monte-carlo', input);
+    },
+
     getMarketIndices: (region) => {
         return api.get(`/api/cost-prediction/market-indices/${region}`);
     },

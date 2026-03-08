@@ -211,6 +211,268 @@ const handleInProgressPrediction = async (req, res) => {
 };
 
 /**
+ * Handle Monte Carlo Simulation for cost prediction
+ * POST /api/cost-prediction/monte-carlo
+ * 
+ * @param {Object} req - Express request object
+ * @param {Object} res - Express response object
+ */
+const handleMonteCarloPrediction = async (req, res) => {
+    try {
+        const { fixed_inputs, uncertain_ranges, num_simulations = 1000 } = req.body;
+
+        if (!fixed_inputs || typeof fixed_inputs !== 'object') {
+            return res.status(400).json({ success: false, error: 'Invalid request', message: 'Missing fixed_inputs' });
+        }
+        if (!uncertain_ranges || typeof uncertain_ranges !== 'object') {
+            return res.status(400).json({ success: false, error: 'Invalid request', message: 'Missing uncertain_ranges' });
+        }
+
+        const mlServiceUrl = process.env.COST_ML_SERVICE_URL || 'http://localhost:8085';
+        console.log(`[Monte Carlo Simulation] Starting ${num_simulations} simulations. ranges:`, uncertain_ranges);
+        console.log(`[Monte Carlo] Initial_Value received:`, fixed_inputs?.Initial_Value);
+
+        // Generate uniformly distributed samples
+        const randomUniform = (min, max) => Math.random() * (max - min) + min;
+
+        const results = [];
+        const sampledInputs = {};
+        const uncertainKeys = Object.keys(uncertain_ranges);
+        uncertainKeys.forEach(key => {
+            sampledInputs[key] = [];
+        });
+
+        const CHUNK_SIZE = 50;
+
+        for (let i = 0; i < num_simulations; i += CHUNK_SIZE) {
+            const chunk = Math.min(CHUNK_SIZE, num_simulations - i);
+            const promises = [];
+            const chunkInputsList = [];
+
+            for (let j = 0; j < chunk; j++) {
+                const simulationInput = { ...fixed_inputs };
+                const runSamplings = {};
+
+                uncertainKeys.forEach(key => {
+                    const range = uncertain_ranges[key];
+                    let val = randomUniform(range.min, Math.max(range.min, range.max));
+
+                    // Enforce integer types for Pydantic strict mode
+                    const intFields = [
+                        'Floors', 'Area_SQFT', 'Year_of_Tender', 'Contractor_Experience_Years',
+                        'Complexity_Score', 'Change_Order_Freq', 'Start_Month', 'Start_Quarter', 'Start_Weekday'
+                    ];
+                    if (intFields.includes(key)) {
+                        val = Math.round(val);
+                    }
+
+                    simulationInput[key] = val;
+                    runSamplings[key] = val;
+                });
+                chunkInputsList.push(runSamplings);
+
+                promises.push(
+                    axios.post(`${mlServiceUrl}/predict/pre-project`, simulationInput, {
+                        headers: { 'Content-Type': 'application/json' },
+                        timeout: 30000
+                    })
+                        .then(res => res.data)
+                        .catch(err => null)
+                );
+            }
+
+            const chunkResponses = await Promise.all(promises);
+
+            chunkResponses.forEach((response, idx) => {
+                if (response !== null) {
+                    const sanitized = buildPreProjectResponse(response);
+
+                    if (sanitized && sanitized.predicted_cost_overrun_pct !== null && sanitized.predicted_cost_overrun_pct !== undefined) {
+                        results.push(sanitized.predicted_cost_overrun_pct);
+
+                        // Only add to sampledInputs if the request succeeded
+                        const successfulSampling = chunkInputsList[idx];
+                        uncertainKeys.forEach(key => {
+                            sampledInputs[key].push(successfulSampling[key]);
+                        });
+                    }
+                }
+            });
+        }
+
+        if (results.length === 0) {
+            return res.status(500).json({ success: false, error: 'All simulations failed to return valid data' });
+        }
+
+        // Calculate statistics
+        results.sort((a, b) => a - b);
+
+        const sum = results.reduce((a, b) => a + b, 0);
+        const mean = sum / results.length;
+
+        const median = results[Math.floor(results.length / 2)];
+        const min = results[0];
+        const max = results[results.length - 1];
+
+        const variance = results.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / results.length;
+        const stdDev = Math.sqrt(variance);
+
+        const p10 = results[Math.floor(results.length * 0.1)];
+        const p50 = median;
+        const p90 = results[Math.floor(results.length * 0.9)];
+
+        const confidence_interval = [
+            results[Math.floor(results.length * 0.05)],
+            results[Math.floor(results.length * 0.95)]
+        ];
+
+        // Calculate sensitivities (Pearson correlation)
+        const calculateCorrelation = (x, y) => {
+            const n = x.length;
+            if (n === 0) return 0;
+            const sumX = x.reduce((a, b) => a + b, 0);
+            const sumY = y.reduce((a, b) => a + b, 0);
+            const sumX2 = x.reduce((a, b) => a + b * b, 0);
+            const sumY2 = y.reduce((a, b) => a + b * b, 0);
+
+            let sumXY = 0;
+            for (let i = 0; i < n; i++) {
+                sumXY += x[i] * y[i];
+            }
+
+            const numerator = (n * sumXY) - (sumX * sumY);
+            const denominator = Math.sqrt((n * sumX2 - sumX * sumX) * (n * sumY2 - sumY * sumY));
+
+            if (denominator === 0) return 0;
+            return numerator / denominator;
+        };
+
+        const sensitivities = {};
+        uncertainKeys.forEach(key => {
+            const arrX = sampledInputs[key];
+            if (arrX.length === results.length) {
+                sensitivities[key] = calculateCorrelation(arrX, results);
+            } else {
+                sensitivities[key] = 0;
+            }
+        });
+
+        // Generate histogram-ready data for UI
+        const binCount = 30;
+        const rangeSpan = Math.max(max - min, 0.001); // avoid div 0
+        const binSize = rangeSpan / binCount;
+        const histogramCounts = Array(binCount).fill(0);
+        const histogramBins = Array(binCount).fill(0).map((_, i) => min + (i * binSize));
+
+        results.forEach(val => {
+            let binIdx = Math.floor((val - min) / binSize);
+            if (binIdx >= binCount) binIdx = binCount - 1;
+            if (binIdx < 0) binIdx = 0;
+            histogramCounts[binIdx]++;
+        });
+
+        // Risk level determination
+        let risk_level = "Low Risk";
+        if (mean >= 15) risk_level = "High Risk";
+        else if (mean >= 8) risk_level = "Moderate Risk";
+
+        // Top risk drivers (sort by abs correlation)
+        const sortedDrivers = Object.entries(sensitivities)
+            .sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))
+            .slice(0, 3)
+            .map(entry => entry[0].replace(/_/g, ' '));
+
+        const explanation = `Based on the simulated project parameters and economic conditions, the system identifies a ${risk_level.toLowerCase()} of severe cost escalation. The most influential factors affecting this uncertainty are ${sortedDrivers.join(', ').toLowerCase()}.`;
+
+        // Calculate Cost Summaries
+        const initial_value = Number(fixed_inputs?.Initial_Value) || 0;
+        const expected_overrun_amount = initial_value * (mean / 100);
+        const expected_final_cost = initial_value + expected_overrun_amount;
+        const min_cost = initial_value * (1 + confidence_interval[0] / 100);
+        const max_cost = initial_value * (1 + confidence_interval[1] / 100);
+
+        const cost_summary = {
+            initial_contract_value: initial_value,
+            expected_overrun_percent: Number(mean.toFixed(2)),
+            expected_overrun_amount: Number(expected_overrun_amount.toFixed(0)),
+            expected_final_cost: Number(expected_final_cost.toFixed(0)),
+            confidence_range_cost: [Number(min_cost.toFixed(0)), Number(max_cost.toFixed(0))]
+        };
+
+        // Formulate Recommendations
+        const recommendations = [];
+        if (risk_level.includes('High')) {
+            recommendations.push("Immediate Action Required: Implement strict cost controls and increase financial contingency buffers.");
+        } else if (risk_level.includes('Moderate')) {
+            recommendations.push("Review key risk factors closely and prepare an active cost mitigation plan.");
+        } else {
+            recommendations.push("Cost outlook is stable. Proceed with standard financial monitoring.");
+        }
+
+        sortedDrivers.forEach(driver => {
+            const d = driver.toLowerCase();
+            if (d.includes('inflation') || d.includes('exchange') || d.includes('economic')) {
+                recommendations.push(`Lock in material prices and subcontracts early to hedge against ${driver} volatility.`);
+            } else if (d.includes('experience') || d.includes('contractor')) {
+                recommendations.push(`Ensure robust project management and strict performance milestones for ${driver}.`);
+            } else if (d.includes('complexity') || d.includes('design') || d.includes('area sqft') || d.includes('floors')) {
+                recommendations.push(`Conduct rigorous design and scope reviews to reduce change orders related to ${driver}.`);
+            } else if (d.includes('material') || d.includes('rate per sqft')) {
+                recommendations.push(`Identify alternative suppliers immediately to mitigate ${driver} unit rate fluctuations.`);
+            } else {
+                recommendations.push(`Proactively monitor ${driver} as it significantly impacts your cost boundary variance.`);
+            }
+        });
+
+        // Format outputs strictly
+        res.json({
+            success: true,
+            data: {
+                mean: Number(mean.toFixed(2)),
+                median: Number(median.toFixed(2)),
+                min: Number(min.toFixed(2)),
+                max: Number(max.toFixed(2)),
+                stdDev: Number(stdDev.toFixed(2)),
+                p10: Number(p10.toFixed(2)),
+                p50: Number(p50.toFixed(2)),
+                p90: Number(p90.toFixed(2)),
+                confidence_interval: confidence_interval.map(v => Number(v.toFixed(2))),
+                sensitivities,
+                histogram: {
+                    counts: histogramCounts,
+                    bins: histogramBins.map(v => Number(v.toFixed(2)))
+                },
+                cost_summary: cost_summary,
+                prediction_summary: {
+                    expected_overrun: `${mean.toFixed(2)}%`,
+                    confidence_range: `${confidence_interval[0].toFixed(2)}% – ${confidence_interval[1].toFixed(2)}%`,
+                    risk_level: risk_level
+                },
+                scenario_analysis: {
+                    best_case: `Cost overrun could be as low as ${p10.toFixed(2)}%`,
+                    most_likely: `Expected cost overrun around ${mean.toFixed(2)}%`,
+                    worst_case: `Cost overrun could reach up to ${p90.toFixed(2)}%`
+                },
+                risk_drivers: sortedDrivers,
+                recommendations: recommendations,
+                explanation: explanation,
+                raw_predictions: results, // Needed if UI recreates graph
+                num_successful_simulations: results.length
+            },
+            timestamp: new Date().toISOString()
+        });
+
+    } catch (error) {
+        console.error('[Monte Carlo Prediction] Error:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Monte Carlo simulation failed',
+            message: error.message
+        });
+    }
+};
+
+/**
  * Save a cost prediction to the database
  * POST /api/cost-prediction/save
  * 
@@ -221,10 +483,10 @@ const savePrediction = async (req, res) => {
     console.log('[savePrediction] Received request');
     console.log('[savePrediction] User ID:', req.userId);
     console.log('[savePrediction] Request body keys:', Object.keys(req.body));
-    
+
     try {
         const { projectId, input, prediction, topRiskFactors, riskScorecard, scenarioName, notes, tags, isBaseline } = req.body;
-        
+
         console.log('[savePrediction] Extracted data:', {
             projectId,
             hasInput: !!input,
@@ -246,10 +508,10 @@ const savePrediction = async (req, res) => {
         }
 
         console.log('[savePrediction] Searching for project:', { projectId, userId: req.userId });
-        
+
         // Verify project exists and user owns it
         const project = await Project.findOne({ _id: projectId, owner: req.userId });
-        
+
         if (!project) {
             console.error('[savePrediction] Project not found or unauthorized:', { projectId, userId: req.userId });
             return res.status(404).json({
@@ -258,7 +520,7 @@ const savePrediction = async (req, res) => {
                 message: 'Project not found or you do not have permission to access it'
             });
         }
-        
+
         console.log('[savePrediction] Project found:', project.name);
 
         // Create cost prediction document
@@ -274,11 +536,11 @@ const savePrediction = async (req, res) => {
             tags: tags || [],
             isBaseline: isBaseline || false
         });
-        
+
         console.log('[savePrediction] Saving prediction document...');
 
         await costPrediction.save();
-        
+
         console.log('[savePrediction] Prediction saved with ID:', costPrediction._id);
         console.log('[savePrediction] Updating project reference...');
 
@@ -287,7 +549,7 @@ const savePrediction = async (req, res) => {
             projectId,
             { $push: { costPredictions: costPrediction._id } }
         );
-        
+
         console.log('[savePrediction] Project updated');
 
         console.log(`[Cost Prediction] Successfully saved: ${costPrediction.scenarioName} for project ${project.name}`);
@@ -332,8 +594,8 @@ const getLatestPrediction = async (req, res) => {
             project: projectId,
             createdBy: req.userId
         })
-        .sort({ createdAt: -1 })
-        .limit(1);
+            .sort({ createdAt: -1 })
+            .limit(1);
 
         if (!latestPrediction) {
             return res.status(404).json({
@@ -638,7 +900,7 @@ const recordActualOutcome = async (req, res) => {
         res.json({
             success: true,
             message: 'Actual outcome recorded successfully',
-            data: { 
+            data: {
                 prediction,
                 predictionError: prediction.predictionError
             }
@@ -663,5 +925,6 @@ module.exports = {
     getPredictionById,
     updatePrediction,
     deletePrediction,
-    recordActualOutcome
+    recordActualOutcome,
+    handleMonteCarloPrediction
 };
