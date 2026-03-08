@@ -16,7 +16,19 @@ const config = {
     pythonServiceUrl: process.env.PYTHON_SERVICE_URL || 'http://localhost:8000',
     costMlServiceUrl: process.env.COST_ML_SERVICE_URL || 'http://localhost:8085',
     delayMlServiceUrl: process.env.DELAY_ML_SERVICE_URL || 'http://localhost:8081',
+    fredBaseUrl: process.env.FRED_BASE_URL || 'https://api.stlouisfed.org/fred',
+    fredApiKey: process.env.FRED_API_KEY || '',
     frontendUrl: process.env.FRONTEND_URL || '*',
+
+    economicIndicators: {
+        requestTimeoutMs: parseInt(process.env.ECONOMIC_API_TIMEOUT_MS || '15000', 10),
+        cacheTtlSeconds: parseInt(process.env.ECONOMIC_CACHE_TTL_SECONDS || '3600', 10),
+        series: {
+            inflation: process.env.FRED_SERIES_INFLATION || 'FPCPITOTLZGLKA',
+            exchangeRateLkr: process.env.FRED_SERIES_EXCHANGE_LKR || 'EXSLUS',
+            materialIndex: process.env.FRED_SERIES_MATERIAL_INDEX || 'DDOE01LKA086NWDB'
+        }
+    },
 
     // File upload settings
     uploadDir: process.env.UPLOAD_DIR || './uploads',
