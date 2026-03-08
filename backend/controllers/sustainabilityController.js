@@ -140,6 +140,60 @@ const handleRiskPrediction = async (req, res) => {
 };
 
 /**
+ * POST /api/sustainability/calculate
+ * New calculate proxy
+ */
+const calculateSustainability = async (req, res) => {
+    try {
+        const body = req.body;
+
+        const mlPayload = {
+            area: parseFloat(body.area) || 0,
+            lifespan: parseInt(body.lifespan, 10) || 50,
+            material: body.material || 'Concrete',
+            energyRating: body.energyRating || 'B',
+            renewablePercent: parseFloat(body.renewablePercent) || 0,
+        };
+
+        // We use config here, requiring it at top
+        const config = require('../config');
+        const mlServiceUrl = `${config.sustainabilityMlUrl}/api/sustainability/calculate`;
+        console.log(`[Sustainability Proxy] Forwarding request to ML Service: ${mlServiceUrl}`);
+
+        const response = await axios.post(mlServiceUrl, mlPayload);
+        console.log(`[Sustainability Proxy] Received ${response.status} from ML Service`);
+
+        const frontendResponse = {
+            success: true,
+            data: response.data,
+        };
+        console.log(`[Sustainability Proxy] Sending Response to Frontend:`, JSON.stringify(frontendResponse, null, 2));
+        return res.json(frontendResponse);
+
+    } catch (error) {
+        console.error('[Sustainability Proxy] Error:', error.message);
+        if (error.response) {
+            console.error('[Sustainability Proxy] ML Error Response Data:', JSON.stringify(error.response.data, null, 2));
+        }
+
+        if (error.code === 'ECONNREFUSED' || !error.response) {
+            return res.status(503).json({
+                success: false,
+                message: 'Python ML Service is offline or unreachable.',
+            });
+        }
+
+        const status = error.response.status || 500;
+        const detail = error.response.data?.detail;
+        const message = typeof detail === 'string'
+            ? detail
+            : (error.response.data?.message || 'Sustainability ML calculation failed');
+
+        return res.status(status).json({ success: false, message });
+    }
+};
+
+/**
  * Common error handler for ML service errors
  */
 const handleMLServiceError = (error, res, context) => {
@@ -176,5 +230,6 @@ module.exports = {
     handleSustainabilityPrediction,
     handleLifecycleCostPrediction,
     handleRiskPrediction,
-    handleFeatureImportance
+    handleFeatureImportance,
+    calculateSustainability
 };

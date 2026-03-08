@@ -16,6 +16,7 @@ const config = {
     pythonServiceUrl: process.env.PYTHON_SERVICE_URL || 'http://localhost:8000',
     costMlServiceUrl: process.env.COST_ML_SERVICE_URL || 'http://localhost:8085',
     delayMlServiceUrl: process.env.DELAY_ML_SERVICE_URL || 'http://localhost:8081',
+    sustainabilityMlUrl: process.env.SUSTAINABILITY_ML_URL || 'http://localhost:8003',
     frontendUrl: process.env.FRONTEND_URL || '*',
 
     // File upload settings

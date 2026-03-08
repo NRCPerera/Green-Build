@@ -6,38 +6,16 @@
 
 const express = require('express');
 const axios = require('axios');
-const {
-    handleFullAnalysis,
-    handleSustainabilityPrediction,
-    handleLifecycleCostPrediction,
-    handleRiskPrediction
-} = require('../controllers/sustainabilityController');
+const config = require('../config');
+const { calculateSustainability } = require('../controllers/sustainabilityController');
 
 const router = express.Router();
 
 /**
- * POST /api/sustainability/analyze
- * Full analysis with all 3 models
+ * POST /api/sustainability/calculate
+ * Calculate sustainability metrics
  */
-router.post('/api/sustainability/analyze', handleFullAnalysis);
-
-/**
- * POST /api/sustainability/predict-score
- * Sustainability score prediction only
- */
-router.post('/api/sustainability/predict-score', handleSustainabilityPrediction);
-
-/**
- * POST /api/sustainability/predict-lifecycle
- * Lifecycle cost prediction only
- */
-router.post('/api/sustainability/predict-lifecycle', handleLifecycleCostPrediction);
-
-/**
- * POST /api/sustainability/predict-risk
- * Risk prediction only
- */
-router.post('/api/sustainability/predict-risk', handleRiskPrediction);
+router.post('/api/sustainability/calculate', calculateSustainability);
 
 /**
  * GET /api/sustainability-ml-health
@@ -45,12 +23,12 @@ router.post('/api/sustainability/predict-risk', handleRiskPrediction);
  */
 router.get('/api/sustainability-ml-health', async (req, res) => {
     try {
-        const mlServiceUrl = process.env.SUSTAINABILITY_ML_SERVICE_URL || 'http://localhost:8003';
-        
+        const mlServiceUrl = config.sustainabilityMlUrl;
+
         const response = await axios.get(`${mlServiceUrl}/health`, {
             timeout: 5000
         });
-        
+
         res.json({
             success: true,
             mlService: {
@@ -65,7 +43,7 @@ router.get('/api/sustainability-ml-health', async (req, res) => {
             success: false,
             error: 'ML service unavailable',
             message: error.message,
-            mlServiceUrl: process.env.SUSTAINABILITY_ML_SERVICE_URL || 'http://localhost:8003'
+            mlServiceUrl: config.sustainabilityMlUrl
         });
     }
 });

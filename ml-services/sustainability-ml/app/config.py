@@ -1,45 +1,69 @@
-"""Application configuration"""
-
-import os
 from pathlib import Path
 
-# Base paths
-BASE_DIR = Path(__file__).resolve().parent.parent
-MODELS_DIR = BASE_DIR / "models"
-
-# API Configuration
-API_TITLE = "Sustainability Prediction API"
-API_DESCRIPTION = """
-## Sustainability Prediction API
-
-This API provides predictions for sustainability metrics in construction projects.
-
-### Available Models:
-1. **Sustainability Score Model** - Predicts overall sustainability score
-2. **Lifecycle Cost Model** - Estimates lifecycle costs
-3. **Risk Prediction Model** - Assesses sustainability risks
-
-### Features:
-- Real-time predictions
-- Batch processing support
-- Development mode with mock predictions
-"""
-API_VERSION = "1.0.0"
-
-# Model Paths
+APP_DIR = Path(__file__).parent
+MODELS_DIR = APP_DIR.parent / "models"
+SCALER_PATH = MODELS_DIR / "common_scaler.pkl"
+LCC_TARGET_SCALER_PATH = MODELS_DIR / "lcc_target_scaler.pkl"
+SUSTAIN_TARGET_SCALER_PATH = MODELS_DIR / "sustain_target_scaler.pkl"
+LIFECYCLE_MODEL_PATH = MODELS_DIR / "lifecycle_cost_model.keras"
 SUSTAINABILITY_MODEL_PATH = MODELS_DIR / "sustainability_model.keras"
-LIFECYCLE_COST_MODEL_PATH = MODELS_DIR / "lifecycle_cost_model.keras"
-RISK_PREDICTION_MODEL_PATH = MODELS_DIR / "risk_prediction_model.keras"
+RISK_MODEL_PATH = MODELS_DIR / "risk_prediction_model.keras"
 
-# Feature Scaler Path (if you have one)
-FEATURE_SCALER_PATH = MODELS_DIR / "feature_scaler.pkl"
+MATERIAL_COST_MAP: dict[str, float] = {
+    "concrete":     120.0, "steel":        180.0, "wood":          90.0,
+    "timber":        90.0, "brick":        100.0, "cement block": 110.0,
+    "pre-cast":     135.0, "glass":        160.0, "composite":    150.0,
+}
 
-# Feature Names Path (if you have one)
-FEATURE_NAMES_PATH = MODELS_DIR / "feature_names.pkl"
+CIDA_BASE_RATE_PER_SQFT = 18_500.0
+CIDA_MATERIAL_ADJUSTMENT: dict[str, float] = {
+    "brick": 1.08, "cement block": 0.97, "concrete": 1.08,
+    "pre-cast": 1.12, "steel": 1.25, "timber": 0.90,
+    "wood": 0.90, "glass": 1.30, "composite": 1.15,
+}
 
-# Categorical Mappings Path (if you have one)
-CATEGORICAL_MAPPINGS_PATH = MODELS_DIR / "categorical_mappings.pkl"
+CIDA_BOQ_ELEMENTS = [
+    ("Substructure (Foundation)", 0.15),
+    ("Superstructure (Walls/Roof)", 0.45),
+    ("Finishes", 0.25),
+    ("MEP (Electrical/Plumbing)", 0.15),
+]
 
-# Medians and Modes for preprocessing (if you have them)
-NUMERIC_MEDIANS_PATH = MODELS_DIR / "numeric_medians.pkl"
-CATEGORICAL_MODES_PATH = MODELS_DIR / "categorical_modes.pkl"
+ENERGY_RATING_MAP: dict[str, float] = {
+    "1.0": 1.0, "0.8": 0.8, "0.6": 0.6, "0.4": 0.4,
+    "A+": 0.98, "A": 1.0, "B": 0.8, "C": 0.6,
+    "D": 0.4, "E": 0.30, "F": 0.20, "G": 0.10,
+}
+
+MATERIAL_RISK_FACTOR: dict[str, float] = {
+    "concrete": 0.15, "steel": 0.20, "brick": 0.22,
+    "cement block": 0.18, "pre-cast": 0.16, "timber": 0.40,
+    "wood": 0.40, "glass": 0.50, "composite": 0.30,
+}
+
+MATERIAL_CO2_FACTOR: dict[str, float] = {
+    "concrete": 0.15, "steel": 0.20, "wood": 0.05,
+    "timber": 0.05, "brick": 0.12, "cement block": 0.13,
+    "pre-cast": 0.14, "glass": 0.18, "composite": 0.10,
+}
+
+FEATURE_ORDER = [
+    "Area_SQFT", "Floors", "Initial_period_construction",
+    "Project_Complexity_Score", "Inflation_Rate", "Material_Price_Index",
+    "Exchange_Rate", "Interest_Rate", "Contractor_Experience_Years",
+    "Contractor_Previous_Projects", "construction_cost_per_sqft",
+    "maintenance_cost_per_year", "energy_efficiency", "embodied_co2_tons",
+    "operational_co2_tons", "maintenance_interval_years"
+]
+
+MATERIAL_PRICE_INDEX: dict[str, float] = {
+    "cement block": 1.00, "brick": 1.08, "concrete": 1.15,
+    "pre-cast": 1.22, "steel": 1.45, "timber": 0.85,
+    "wood": 0.85, "glass": 1.55, "composite": 1.30,
+}
+
+MATERIAL_MAINTENANCE_INTERVAL: dict[str, float] = {
+    "brick": 5.0, "cement block": 7.0, "concrete": 10.0,
+    "pre-cast": 10.0, "steel": 15.0, "timber": 3.0,
+    "wood": 3.0, "glass": 5.0, "composite": 8.0,
+}

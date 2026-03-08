@@ -109,7 +109,7 @@ const startServer = async () => {
         console.log(`  Server:              http://localhost:${config.port}`);
         console.log(`  ML Service:          ${config.pythonServiceUrl}`);
         console.log(`  Cost ML Service:     ${config.costMlServiceUrl}`);
-        console.log(`  Sustainability ML:   http://localhost:8003`);
+        console.log(`  Sustainability ML:   ${config.sustainabilityMlUrl}`);
         console.log(`  Uploads:             ${config.uploadDir}`);
         console.log('----------------------------------------------------------------');
         console.log('  Features:');
