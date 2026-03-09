@@ -65,8 +65,8 @@ const ResultsCard = ({ result, formatCurrency, formatCarbon, inputs }) => {
             </div>
 
 
-            <div className="p-6 grid grid-cols-1 lg:grid-cols-2 gap-8">
-                {/* ── LEFT COLUMN: METRICS OVERVIEW ── */}
+            <div className="p-6 grid grid-cols-1 gap-8">
+                {/* ── METRICS OVERVIEW & HEATMAP ── */}
                 <div className="space-y-6">
                     {/* Score Ring */}
                     <div className="flex items-center gap-6 p-5 bg-dark-800 border border-white/5 rounded-2xl shadow-lg relative overflow-hidden">
@@ -184,19 +184,19 @@ const ResultsCard = ({ result, formatCurrency, formatCarbon, inputs }) => {
                             icon={<RobotOutlined className="text-indigo-400 text-lg" />}
                         />
                     )}
-                </div>
 
-                {/* ── RIGHT COLUMN: 3D HEATMAP ── */}
-                <div className="relative">
-                    <LccHeatmapTower
-                        cidaBoq={result.cidaBoq || []}
-                        optBoq={compareMode ? (optimalPoint?.optimizedCidaBoq || result.cidaBoq || []) : null}
-                        savedLkr={compareMode ? savedLkr : 0}
-                        savingsPct={compareMode && savedLkr > 0 ? ((savedLkr / baseLcc) * 100).toFixed(1) : 0}
-                        formatCurrency={formatCurrency}
-                        primaryMaterial={inputs.primaryMaterial}
-                        aiData={{ recommendedMaterial: optimalPoint?.recommendedMaterial || 'Unknown' }}
-                    />
+                    {/* ── FULL WIDTH HEATMAP (Below Metrics) ── */}
+                    <div className="relative mt-4">
+                        <LccHeatmapTower
+                            cidaBoq={result.cidaBoq || []}
+                            optBoq={compareMode ? (optimalPoint?.optimizedCidaBoq || result.cidaBoq || []) : null}
+                            savedLkr={compareMode ? savedLkr : 0}
+                            savingsPct={compareMode && savedLkr > 0 ? ((savedLkr / baseLcc) * 100).toFixed(1) : 0}
+                            formatCurrency={formatCurrency}
+                            primaryMaterial={inputs.primaryMaterial}
+                            aiData={{ recommendedMaterial: optimalPoint?.recommendedMaterial || 'Unknown' }}
+                        />
+                    </div>
                 </div>
             </div>
         </div>
