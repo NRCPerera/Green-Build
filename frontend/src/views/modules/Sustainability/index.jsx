@@ -11,12 +11,14 @@
  *  - Advice     → components/Recommendations.jsx
  */
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { calculateSustainability, optimizeMaterials, formatCarbon, formatCurrency } from '../../../services/sustainabilityService';
 import useProjectStore from '../../../models/useProjectStore';
 import ResultsCard from './components/ResultsCard';
 import ParetoChart from './components/ParetoChart';
 import Recommendations from './components/Recommendations';
+import jsPDF from 'jspdf';
+import { toPng } from 'html-to-image';
 
 // ── Constants ──────────────────────────────────
 const MATERIAL_OPTIONS = [
@@ -109,6 +111,8 @@ const SustainabilityView = () => {
     const [isOptimizing, setIsOptimizing] = useState(false);
     const [optimizationResult, setOptimizationResult] = useState(null);
     const [optError, setOptError] = useState(null);
+
+    const printRef = useRef(null);
 
     // Auto-fill projectArea from floor plan results
     useEffect(() => {
@@ -498,142 +502,190 @@ const SustainabilityView = () => {
                 {/* ════════════════════════════════════════════
                     RIGHT COLUMN — RESULTS
                    ════════════════════════════════════════════ */}
-                <div className="lg:col-span-2">
-                    {result ? (
-                        <div className="space-y-6">
-                            <ResultsCard
-                                result={result}
-                                formatCurrency={formatCurrency}
-                                formatCarbon={formatCarbon}
-                                inputs={{
-                                    projectArea,
-                                    buildingLifespan,
-                                    primaryMaterial,
-                                    energyRating,
-                                    renewablePct
-                                }}
-                            />
-                            <ParetoChart
-                                paretoFrontier={result.paretoFrontier}
-                                formatCurrency={formatCurrency}
-                                formatCarbon={formatCarbon}
-                            />
-                            <Recommendations
-                                recommendations={result.recommendations}
-                                brandSuggestions={BRAND_SUGGESTIONS}
-                            />
+                <div className="lg:col-span-2 space-y-4">
+                    {/* Utility Bar */}
+                    <div className="flex justify-end gap-3 items-center">
+                        <button
+                            onClick={async () => {
+                                if (printRef.current) {
+                                    try {
+                                        // Get exact dimensions of the target container
+                                        const width = printRef.current.offsetWidth;
+                                        const height = printRef.current.offsetHeight;
 
-                            {/* ── 50-Year Maintenance Plan ── */}
-                            {MAINTENANCE_PLANS[primaryMaterial] && (
-                                <div className="bg-dark-800/50 border border-white/5 rounded-2xl p-6">
-                                    <h3 className="text-lg font-semibold text-white mb-4">
-                                        🔧 50-Year Maintenance Plan — {primaryMaterial}
-                                    </h3>
-                                    <div className="space-y-2">
-                                        {MAINTENANCE_PLANS[primaryMaterial].map((item, idx) => (
-                                            <div key={idx} className="flex items-start gap-3 p-3 bg-dark-700/50 rounded-lg">
-                                                <span className="text-xs text-green-400 font-semibold whitespace-nowrap min-w-[100px]">
-                                                    {item.year}
-                                                </span>
-                                                <span className="text-sm text-gray-300">{item.task}</span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    ) : (
-                        <div className="flex flex-col gap-6">
-                            {/* AI Blueprint Rendering */}
-                            {optimizationResult && (
-                                <div className="bg-dark-800/80 border border-cyan-500/30 rounded-3xl overflow-hidden shadow-2xl">
-                                    <div className="bg-gradient-to-r from-cyan-900/60 to-blue-900/40 p-6 border-b border-cyan-500/20">
-                                        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-                                            <div>
-                                                <h2 className="text-2xl font-bold text-white flex items-center gap-2">
-                                                    <span className="text-3xl">✨</span>
-                                                    Optimal Material Blueprint
-                                                </h2>
-                                                <p className="text-cyan-300/80 mt-1">Minimum Carbon Configuration under {formatCurrency(maxBudget)}</p>
-                                            </div>
-                                            <div className="flex gap-4">
-                                                <div className="text-right">
-                                                    <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Total Cost</p>
-                                                    <p className={`text-xl font-bold ${optimizationResult.totalCost > maxBudget ? 'text-red-400' : 'text-green-400'}`}>
-                                                        {formatCurrency(optimizationResult.totalCost)}
-                                                    </p>
-                                                </div>
-                                                <div className="text-right">
-                                                    <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Total Carbon</p>
-                                                    <p className="text-xl font-bold text-cyan-400">
-                                                        {formatCarbon(optimizationResult.totalCarbon)}
-                                                    </p>
-                                                </div>
-                                            </div>
-                                        </div>
+                                        // toPng supports injecting styles temporarily without DOM mutation
+                                        const imgData = await toPng(printRef.current, {
+                                            pixelRatio: 2,
+                                            width: width + 40, // Account for custom padding 
+                                            height: height + 40,
+                                            backgroundColor: '#0b1120',
+                                            style: {
+                                                padding: '20px',
+                                                margin: '0'
+                                            }
+                                        });
 
-                                        {/* Budget Utilization Bar */}
-                                        <div className="mt-5">
-                                            <div className="flex justify-between text-xs mb-1">
-                                                <span className="text-gray-400">Budget Utilization</span>
-                                                <span className={optimizationResult.budgetUtilization > 100 ? 'text-red-400' : 'text-cyan-400 text-shadow-sm font-medium'}>
-                                                    {optimizationResult.budgetUtilization}%
-                                                </span>
-                                            </div>
-                                            <div className="h-2 w-full bg-dark-900 rounded-full overflow-hidden">
-                                                <div
-                                                    className={`h-full ${optimizationResult.budgetUtilization > 100 ? 'bg-red-500' : 'bg-gradient-to-r from-cyan-500 to-blue-500'}`}
-                                                    style={{ width: `${Math.min(100, optimizationResult.budgetUtilization)}%` }}
-                                                />
-                                            </div>
-                                        </div>
-                                    </div>
+                                        const pdf = new jsPDF({
+                                            orientation: 'portrait',
+                                            unit: 'px',
+                                            format: [width + 40, height + 40]
+                                        });
 
-                                    <div className="p-6">
-                                        <h3 className="text-sm font-medium text-gray-400 uppercase tracking-wider mb-4">Prescribed Selections</h3>
-                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                                            {optimizationResult.selections?.map((sel, idx) => (
-                                                <div key={idx} className="bg-dark-700/40 border border-white/5 rounded-xl p-4 hover:bg-dark-700/60 transition-colors">
-                                                    <div className="flex justify-between items-start mb-2">
-                                                        <span className="px-2 py-0.5 bg-dark-900 text-gray-400 text-[10px] rounded-md font-semibold uppercase tracking-wider border border-white/5">
-                                                            {sel.category}
-                                                        </span>
-                                                        <span className="text-green-400 font-bold text-sm">{formatCurrency(sel.totalCost)}</span>
-                                                    </div>
-                                                    <p className="text-lg font-bold text-white mb-2">{sel.material}</p>
-                                                    <div className="flex items-center gap-4 text-xs text-gray-400">
-                                                        <div className="flex items-center gap-1.5">
-                                                            <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 block" />
-                                                            {sel.quantity} {sel.unit}
-                                                        </div>
-                                                        <div className="flex items-center gap-1.5">
-                                                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 block" />
-                                                            {formatCarbon(sel.totalCarbon)}
-                                                        </div>
-                                                    </div>
+                                        pdf.addImage(imgData, 'PNG', 0, 0, width + 40, height + 40);
+                                        pdf.save(`Sustainability_Analysis_${new Date().toISOString().split('T')[0]}.pdf`);
+                                    } catch (err) {
+                                        console.error('Failed to generate PDF snapshot:', err);
+                                    }
+                                }
+                            }}
+                            disabled={!result && !optimizationResult}
+                            className={`px-4 py-2 rounded-xl text-sm font-semibold flex items-center gap-2 transition-all shadow-lg ${(!result && !optimizationResult)
+                                ? 'bg-gray-700 text-gray-400 cursor-not-allowed hidden'
+                                : 'bg-indigo-500/20 text-indigo-400 hover:bg-indigo-500/30 border border-indigo-500/30 text-shadow-sm'
+                                }`}
+                        >
+                            <span>📥</span> {optimizationResult ? 'Download AI Blueprint' : 'Download LCC Report'}
+                        </button>
+                    </div>
+
+                    {/* Report Content Container (Captured by PDF) */}
+                    <div ref={printRef} className="space-y-6 rounded-2xl">
+                        {result ? (
+                            <>
+                                <ResultsCard
+                                    result={result}
+                                    formatCurrency={formatCurrency}
+                                    formatCarbon={formatCarbon}
+                                    inputs={{
+                                        projectArea,
+                                        buildingLifespan,
+                                        primaryMaterial,
+                                        energyRating,
+                                        renewablePct
+                                    }}
+                                />
+                                <ParetoChart
+                                    paretoFrontier={result.paretoFrontier}
+                                    formatCurrency={formatCurrency}
+                                    formatCarbon={formatCarbon}
+                                />
+                                <Recommendations
+                                    recommendations={result.recommendations}
+                                    brandSuggestions={BRAND_SUGGESTIONS}
+                                />
+
+                                {/* ── 50-Year Maintenance Plan ── */}
+                                {MAINTENANCE_PLANS[primaryMaterial] && (
+                                    <div className="bg-dark-800/50 border border-white/5 rounded-2xl p-6">
+                                        <h3 className="text-lg font-semibold text-white mb-4">
+                                            🔧 50-Year Maintenance Plan — {primaryMaterial}
+                                        </h3>
+                                        <div className="space-y-2">
+                                            {MAINTENANCE_PLANS[primaryMaterial].map((item, idx) => (
+                                                <div key={idx} className="flex items-start gap-3 p-3 bg-dark-700/50 rounded-lg">
+                                                    <span className="text-xs text-green-400 font-semibold whitespace-nowrap min-w-[100px]">
+                                                        {item.year}
+                                                    </span>
+                                                    <span className="text-sm text-gray-300">{item.task}</span>
                                                 </div>
                                             ))}
                                         </div>
                                     </div>
-                                </div>
-                            )}
+                                )}
+                            </>
+                        ) : (
+                            <div className="flex flex-col gap-6">
+                                {/* AI Blueprint Rendering */}
+                                {optimizationResult && (
+                                    <div className="bg-dark-800/80 border border-cyan-500/30 rounded-3xl overflow-hidden shadow-2xl">
+                                        <div className="bg-gradient-to-r from-cyan-900/60 to-blue-900/40 p-6 border-b border-cyan-500/20">
+                                            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+                                                <div>
+                                                    <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                                                        <span className="text-3xl">✨</span>
+                                                        Optimal Material Blueprint
+                                                    </h2>
+                                                    <p className="text-cyan-300/80 mt-1">Minimum Carbon Configuration under {formatCurrency(maxBudget)}</p>
+                                                </div>
+                                                <div className="flex gap-4">
+                                                    <div className="text-right">
+                                                        <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Total Cost</p>
+                                                        <p className={`text-xl font-bold ${optimizationResult.totalCost > maxBudget ? 'text-red-400' : 'text-green-400'}`}>
+                                                            {formatCurrency(optimizationResult.totalCost)}
+                                                        </p>
+                                                    </div>
+                                                    <div className="text-right">
+                                                        <p className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">Total Carbon</p>
+                                                        <p className="text-xl font-bold text-cyan-400">
+                                                            {formatCarbon(optimizationResult.totalCarbon)}
+                                                        </p>
+                                                    </div>
+                                                </div>
+                                            </div>
 
-                            {!optimizationResult && (
-                                <div className="h-96 flex flex-col items-center justify-center bg-dark-800/50 border border-white/5 rounded-2xl">
-                                    <div className="w-20 h-20 mb-6 rounded-full bg-dark-700 flex items-center justify-center">
-                                        <span className="text-4xl">🌍</span>
+                                            {/* Budget Utilization Bar */}
+                                            <div className="mt-5">
+                                                <div className="flex justify-between text-xs mb-1">
+                                                    <span className="text-gray-400">Budget Utilization</span>
+                                                    <span className={optimizationResult.budgetUtilization > 100 ? 'text-red-400' : 'text-cyan-400 text-shadow-sm font-medium'}>
+                                                        {optimizationResult.budgetUtilization}%
+                                                    </span>
+                                                </div>
+                                                <div className="h-2 w-full bg-dark-900 rounded-full overflow-hidden">
+                                                    <div
+                                                        className={`h-full ${optimizationResult.budgetUtilization > 100 ? 'bg-red-500' : 'bg-gradient-to-r from-cyan-500 to-blue-500'}`}
+                                                        style={{ width: `${Math.min(100, optimizationResult.budgetUtilization)}%` }}
+                                                    />
+                                                </div>
+                                            </div>
+                                        </div>
+
+                                        <div className="p-6">
+                                            <h3 className="text-sm font-medium text-gray-400 uppercase tracking-wider mb-4">Prescribed Selections</h3>
+                                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                                {optimizationResult.selections?.map((sel, idx) => (
+                                                    <div key={idx} className="bg-dark-700/40 border border-white/5 rounded-xl p-4 hover:bg-dark-700/60 transition-colors">
+                                                        <div className="flex justify-between items-start mb-2">
+                                                            <span className="px-2 py-0.5 bg-dark-900 text-gray-400 text-[10px] rounded-md font-semibold uppercase tracking-wider border border-white/5">
+                                                                {sel.category}
+                                                            </span>
+                                                            <span className="text-green-400 font-bold text-sm">{formatCurrency(sel.totalCost)}</span>
+                                                        </div>
+                                                        <p className="text-lg font-bold text-white mb-2">{sel.material}</p>
+                                                        <div className="flex items-center gap-4 text-xs text-gray-400">
+                                                            <div className="flex items-center gap-1.5">
+                                                                <span className="w-1.5 h-1.5 rounded-full bg-cyan-500 block" />
+                                                                {sel.quantity} {sel.unit}
+                                                            </div>
+                                                            <div className="flex items-center gap-1.5">
+                                                                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 block" />
+                                                                {formatCarbon(sel.totalCarbon)}
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
                                     </div>
-                                    <h3 className="text-xl font-semibold text-white mb-2">No Analysis Yet</h3>
-                                    <p className="text-gray-400 text-center max-w-md">
-                                        Enter your project area, select materials, and click
-                                        <strong className="text-green-400"> "Run Sustainability Analysis" </strong>
-                                        to see lifecycle cost and carbon footprint results. OR try the
-                                        <strong className="text-cyan-400"> Auto-Optimizer</strong> to let AI prescribe the best materials.
-                                    </p>
-                                </div>
-                            )}
-                        </div>
-                    )}
+                                )}
+
+                                {!optimizationResult && (
+                                    <div className="h-96 flex flex-col items-center justify-center bg-dark-800/50 border border-white/5 rounded-2xl">
+                                        <div className="w-20 h-20 mb-6 rounded-full bg-dark-700 flex items-center justify-center">
+                                            <span className="text-4xl">🌍</span>
+                                        </div>
+                                        <h3 className="text-xl font-semibold text-white mb-2">No Analysis Yet</h3>
+                                        <p className="text-gray-400 text-center max-w-md">
+                                            Enter your project area, select materials, and click
+                                            <strong className="text-green-400"> "Run Sustainability Analysis" </strong>
+                                            to see lifecycle cost and carbon footprint results. OR try the
+                                            <strong className="text-cyan-400"> Auto-Optimizer</strong> to let AI prescribe the best materials.
+                                        </p>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
                 </div>
             </div>
         </div>
