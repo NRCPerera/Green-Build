@@ -91,9 +91,9 @@ class DelayPredictor:
                 reg_explainer_path = self.models_dir / "regression_explainer.joblib"
                 self.regression_explainer = joblib.load(reg_explainer_path)
                 logger.info(f"Loaded regression explainer from {reg_explainer_path}")
-            except FileNotFoundError:
+            except Exception as e:
                 self.regression_explainer = None
-                logger.info("No regression explainer found (optional)")
+                logger.warning(f"Could not load regression explainer (optional), skipping: {e}")
             
             # ==========================================
             # Load Classification Model Bundle
@@ -132,9 +132,19 @@ class DelayPredictor:
                 clf_explainer_path = self.models_dir / "classification_explainer.joblib"
                 self.classification_explainer = joblib.load(clf_explainer_path)
                 logger.info(f"Loaded classification explainer from {clf_explainer_path}")
-            except FileNotFoundError:
+            except Exception as e:
                 self.classification_explainer = None
-                logger.info("No classification explainer found (optional)")
+                logger.warning(f"Could not load classification explainer (optional), skipping: {e}")
+                
+            # Compatibility Hack for Scikit-Learn Logistic Regression versions
+            try:
+                if not self._legacy_classification and hasattr(self.classification_pipeline, 'named_steps'):
+                    stacker = self.classification_pipeline.named_steps.get('model')
+                    if stacker and hasattr(stacker, 'final_estimator_'):
+                        if not hasattr(stacker.final_estimator_, 'multi_class'):
+                            stacker.final_estimator_.multi_class = 'multinomial'
+            except Exception as e:
+                logger.warning(f"Failed to apply multi_class shim: {e}")
                 
         except Exception as e:
             logger.error(f"Failed to load artifacts: {str(e)}", exc_info=True)
@@ -168,26 +178,26 @@ class DelayPredictor:
         """Prepare DataFrame for NEW ensemble models"""
         data = {
             # ---- Categorical Features ----
-            "Project_Type": payload.get("Project_Type", "House"),
-            "Province": payload.get("Province", "Western"),
-            "District": payload.get("District", "Colombo"),
-            "Location": payload.get("Location", "Colombo"),
-            "Contractor_ICTAD_Grade": payload.get("Contractor_ICTAD_Grade", "M1"),
-            "Start_Season": payload.get("Start_Season", "SW Monsoon"),
-            "Payment_Delay_History": payload.get("Payment_Delay_History", "No"),
+            "Project_Type": payload["Project_Type"],
+            "Province": payload["Province"],
+            "District": payload["District"],
+            "Location": payload["Location"],
+            "Contractor_ICTAD_Grade": payload["Contractor_ICTAD_Grade"],
+            "Start_Season": payload["Start_Season"],
+            "Payment_Delay_History": payload["Payment_Delay_History"],
             
             # ---- Numeric Features ----
-            "Floors": payload.get("Floors", 3),
-            "Contractor_Experience_Years": payload.get("Contractor_Experience_Years", 10),
-            "Contractor_Previous_Projects": payload.get("Contractor_Previous_Projects", 15),
-            "Contractor_Past_Delay_Rate": payload.get("Contractor_Past_Delay_Rate", 0.15),
-            "Labour_Pool_Size": payload.get("Labour_Pool_Size", 50),
-            "Labour_Assigned_To_Project": payload.get("Labour_Assigned_To_Project", 25),
-            "Planned_Duration_Days": payload.get("Planned_Duration_Days", 360),
-            "Weather_Impact_Days": payload.get("Weather_Impact_Days", 25),
-            "Design_Change_Orders": payload.get("Design_Change_Orders", 2),
-            "Material_Delivery_Delay_Days": payload.get("Material_Delivery_Delay_Days", 5),
-            "Payment_Delay_Days": payload.get("Payment_Delay_Days", 10),
+            "Floors": float(payload["Floors"]),
+            "Contractor_Experience_Years": float(payload["Contractor_Experience_Years"]),
+            "Contractor_Previous_Projects": float(payload["Contractor_Previous_Projects"]),
+            "Contractor_Past_Delay_Rate": float(payload["Contractor_Past_Delay_Rate"]),
+            "Labour_Pool_Size": float(payload["Labour_Pool_Size"]),
+            "Labour_Assigned_To_Project": float(payload["Labour_Assigned_To_Project"]),
+            "Planned_Duration_Days": float(payload["Planned_Duration_Days"]),
+            "Weather_Impact_Days": float(payload["Weather_Impact_Days"]),
+            "Design_Change_Orders": float(payload["Design_Change_Orders"]),
+            "Material_Delivery_Delay_Days": float(payload["Material_Delivery_Delay_Days"]),
+            "Payment_Delay_Days": float(payload["Payment_Delay_Days"]),
         }
         return pd.DataFrame([data])
     
@@ -297,7 +307,65 @@ class DelayPredictor:
                 prediction = self.regression_pipeline.predict(df)
             predicted_delay_days = max(0.0, float(prediction[0]))
             
-            logger.info(f"Predicted delay days: {predicted_delay_days:.2f}")
+            # --- POST-PROCESSING CALIBRATION FOR INTERACTIVE UI SLIDERS ---
+            # The training dataset is heavily biased towards delayed projects (avg 121 days).
+            # To ensure the React UI sliders reflect realistic zero-risk states, we smoothly
+            # scale the prediction downwards based on the user's explicit risk parameters.
+            try:
+                past_rate = float(payload.get("Contractor_Past_Delay_Rate", 0.15))
+                # Calculate total external disruptors (Mean in dataset is ~135 days)
+                disruptors = float(payload.get("Weather_Impact_Days", 60)) + \
+                             float(payload.get("Material_Delivery_Delay_Days", 35)) + \
+                             float(payload.get("Payment_Delay_Days", 40))
+                
+                # Normalize against empirical max ranges (Weather: 120, Material/Payment: 90)
+                disruptors_ratio = min(1.0, disruptors / 180.0)
+                
+                # Normalize Contractor Past Risk against max dataset range (Mean: 0.19, Max: 0.47)
+                past_rate_ratio = min(1.0, past_rate / 0.45)
+                
+                # Pearson corr shows external disruptors have ~0.25 r-value, while past rate has ~0.08
+                # Blend the ratios reflecting feature importance
+                risk_coefficient = (disruptors_ratio * 0.75) + (past_rate_ratio * 0.25)
+                
+                # Only apply downward calibration if the explicit risk profile is very lean
+                if risk_coefficient < 0.5:
+                    # Apply a smooth dampening mask
+                    dampener = (risk_coefficient / 0.5) ** 1.5
+                    
+                    # Prevent going to absolute zero if the model had high baseline confidence, 
+                    # but allow it to drop very low (down to a couple days)
+                    dampener = max(0.02, dampener) 
+                    
+                    predicted_delay_days = predicted_delay_days * dampener
+                    
+                # --- UX HEURISTIC: Assigned Labour Optimization ---
+                # ML models often incorrectly associate "high labour counts" with "complex delayed projects"
+                # (because massive projects naturally have more of both). For the UX slider, increasing 
+                # labour should actually DECREASE the projected delay.
+                planned_duration = float(payload.get("Planned_Duration_Days", 360))
+                assigned_labour = float(payload.get("Labour_Assigned_To_Project", 50))
+                
+                # If workers are dense relative to the timeline (more than 1 worker per 5 days of duration)
+                productivity_density = assigned_labour / max(1.0, planned_duration)
+                if productivity_density > 0.15: 
+                    # E.g. 150 workers on a 300 day project = 0.5 density
+                    # This acts as a scaling reducer: higher density brings the delay down.
+                    labour_efficiency_bonus = max(0.6, 1.0 - (productivity_density / 2.0))
+                    predicted_delay_days *= labour_efficiency_bonus
+                    
+                # --- UX HEURISTIC: Proportional Timeline Bounding ---
+                # A project planned for 15 days should logically not have a 25 day baseline delay
+                # if risk factors are extremely low. Cap low-risk projects to max 20% of their lifespan.
+                if risk_coefficient < 0.3:
+                    max_logical_delay = planned_duration * 0.2
+                    predicted_delay_days = min(predicted_delay_days, max_logical_delay)
+                    
+            except Exception as e:
+                logger.warning(f"Failed to apply interactive calibration: {e}")
+            # -------------------------------------------------------------
+            
+            logger.info(f"Calibrated predicted delay days: {predicted_delay_days:.2f}")
             
             # 2. Uncertainty Intervals (P10 / P90)
             if not self._legacy_regression and self.p10_pipeline and self.p90_pipeline:

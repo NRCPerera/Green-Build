@@ -1,4 +1,9 @@
 import { useState, useEffect } from 'react';
+import {
+    BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Cell, ReferenceArea,
+    RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar,
+    PieChart, Pie
+} from 'recharts';
 import useDelayController from '../../../controllers/useDelayController';
 import useProjectStore from '../../../models/useProjectStore';
 
@@ -720,7 +725,7 @@ const DelayForecastView = ({ project, onBack }) => {
                                 <div className={`border rounded-xl p-5 text-center ${getCategoryBgColor(forecast.predictedCategory)}`}>
                                     <p className="text-sm text-gray-400 mb-2">Category</p>
                                     <p className={`text-lg font-bold ${getCategoryColor(forecast.predictedCategory)}`}>
-                                        {forecast.predictedCategory}
+                                        {forecast.predictedCategory == '1' ? 'Delayed' : forecast.predictedCategory == '0' ? 'On Time' : forecast.predictedCategory}
                                     </p>
                                     <p className="text-xs text-gray-500 mt-1">
                                         {(forecast.categoryConfidence * 100).toFixed(0)}% confidence
@@ -751,42 +756,79 @@ const DelayForecastView = ({ project, onBack }) => {
                                 </div>
                             </div>
 
-                            {/* Class Probabilities */}
-                            <div className="bg-dark-800/50 border border-white/5 rounded-2xl p-6">
-                                <h3 className="text-lg font-semibold text-white mb-4">📊 Category Probabilities</h3>
-                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                                    {Object.entries(forecast.classProbabilities || {}).map(([category, probability]) => (
-                                        <div key={category} className="text-center">
-                                            <div className="relative h-24 w-24 mx-auto">
-                                                <svg className="transform -rotate-90 w-24 h-24">
-                                                    <circle
-                                                        className="text-gray-700"
-                                                        strokeWidth="8"
-                                                        stroke="currentColor"
-                                                        fill="transparent"
-                                                        r="36"
-                                                        cx="48"
-                                                        cy="48"
-                                                    />
-                                                    <circle
-                                                        className={getCategoryColor(category).replace('text-', 'text-')}
-                                                        strokeWidth="8"
-                                                        strokeLinecap="round"
-                                                        stroke="currentColor"
-                                                        fill="transparent"
-                                                        r="36"
-                                                        cx="48"
-                                                        cy="48"
-                                                        strokeDasharray={`${probability * 226} 226`}
-                                                    />
-                                                </svg>
-                                                <span className={`absolute inset-0 flex items-center justify-center text-lg font-bold ${getCategoryColor(category)}`}>
-                                                    {(probability * 100).toFixed(0)}%
-                                                </span>
-                                            </div>
-                                            <p className="text-sm text-gray-400 mt-2">{category}</p>
+                            {/* Project Risk Profile & Delay Impact */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                {/* Radial Risk Profile */}
+                                <div className="bg-dark-800/50 border border-white/5 rounded-2xl p-6">
+                                    <h3 className="text-lg font-semibold text-white mb-4">🎯 Risk Factor Profile</h3>
+                                    <div className="h-64 w-full">
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <RadarChart
+                                                data={[
+                                                    { subject: 'Weather Risk', score: Math.min(100, (formValues.weatherImpactDays / 60) * 100) },
+                                                    { subject: 'Contractor Risk', score: Math.min(100, (formValues.contractorPastDelayRate / 0.3) * 100) },
+                                                    { subject: 'Design Changes', score: Math.min(100, (formValues.designChangeOrders / 20) * 100) },
+                                                    { subject: 'Material Delay', score: Math.min(100, (formValues.materialDeliveryDelay / 60) * 100) },
+                                                    { subject: 'Payment Issues', score: Math.min(100, (formValues.paymentDelayDays / 60) * 100) },
+                                                ]}
+                                                margin={{ top: 10, right: 30, bottom: 10, left: 30 }}
+                                            >
+                                                <PolarGrid stroke="#ffffff20" />
+                                                <PolarAngleAxis dataKey="subject" tick={{ fill: '#9ca3af', fontSize: 11 }} />
+                                                <PolarRadiusAxis angle={30} domain={[0, 100]} tick={false} axisLine={false} />
+                                                <Radar
+                                                    name="Risk Profile"
+                                                    dataKey="score"
+                                                    stroke="#8b5cf6"
+                                                    fill="#8b5cf6"
+                                                    fillOpacity={0.5}
+                                                />
+                                                <RechartsTooltip
+                                                    contentStyle={{ backgroundColor: '#1f2937', borderColor: '#374151', borderRadius: '0.5rem', color: '#fff' }}
+                                                    formatter={(value) => [`${Math.round(value)} / 100`, 'Relative Risk']}
+                                                />
+                                            </RadarChart>
+                                        </ResponsiveContainer>
+                                    </div>
+                                </div>
+
+                                {/* Delay Impact Gauge */}
+                                <div className="bg-dark-800/50 border border-white/5 rounded-2xl p-6 flex flex-col items-center">
+                                    <h3 className="text-lg font-semibold text-white mb-4 w-full text-left">⏱️ Schedule Overrun Impact</h3>
+                                    <div className="h-64 w-full relative flex items-center justify-center -mt-6">
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <PieChart>
+                                                <Pie
+                                                    data={[
+                                                        { name: 'Planned Duration', value: formValues.plannedDurationDays },
+                                                        { name: 'Predicted Delay', value: Math.max(0, forecast.predictedDelayDays) }
+                                                    ]}
+                                                    cx="50%"
+                                                    cy="75%"
+                                                    startAngle={180}
+                                                    endAngle={0}
+                                                    innerRadius="70%"
+                                                    outerRadius="100%"
+                                                    paddingAngle={2}
+                                                    dataKey="value"
+                                                    stroke="none"
+                                                >
+                                                    <Cell fill="#3b82f6" />
+                                                    <Cell fill={forecast.predictedDelayDays > 0 ? '#ef4444' : '#22c55e'} />
+                                                </Pie>
+                                                <RechartsTooltip
+                                                    contentStyle={{ backgroundColor: '#1f2937', borderColor: '#374151', borderRadius: '0.5rem', color: '#fff' }}
+                                                    formatter={(value) => [`${Math.round(value)} days`, '']}
+                                                />
+                                            </PieChart>
+                                        </ResponsiveContainer>
+                                        <div className="absolute top-[65%] left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-center">
+                                            <p className="text-4xl font-bold text-white">
+                                                {formValues.plannedDurationDays > 0 ? Math.round((forecast.predictedDelayDays / formValues.plannedDurationDays) * 100) : 0}%
+                                            </p>
+                                            <p className="text-sm text-gray-400 mt-1">Time Overrun</p>
                                         </div>
-                                    ))}
+                                    </div>
                                 </div>
                             </div>
 
@@ -895,12 +937,12 @@ const DelayForecastView = ({ project, onBack }) => {
                                                 <div className="flex-1 relative h-6">
                                                     <div className="absolute inset-0 bg-dark-700 rounded-full overflow-hidden">
                                                         <div
-                                                            className="h-full rounded-full transition-all duration-300"
+                                                            className="h-full rounded-full transition-all duration-300 shadow-[0_0_10px_rgba(0,0,0,0.3)]"
                                                             style={{
                                                                 width: `${Math.min(100, Math.max(2, pct))}%`,
-                                                                background: pct > 66 ? 'linear-gradient(90deg, #f59e0b, #ef4444)' :
-                                                                    pct > 33 ? 'linear-gradient(90deg, #3b82f6, #f59e0b)' :
-                                                                        'linear-gradient(90deg, #22c55e, #3b82f6)'
+                                                                background: pct > 66 ? 'linear-gradient(90deg, #6c3194ff, #40248bff)' :
+                                                                    pct > 33 ? 'linear-gradient(90deg, #695e83ff, #72279aff)' :
+                                                                        'linear-gradient(90deg, #09505dff, #3b82f6)'
                                                             }}
                                                         />
                                                     </div>
@@ -972,15 +1014,38 @@ const DelayForecastView = ({ project, onBack }) => {
                                     </div>
                                 </div>
 
-                                {/* Confidence Band visual */}
-                                <div className="mt-8 relative px-4">
-                                    <div className="h-2 w-full bg-gray-700 rounded-full" />
-                                    {/* P10 -> P90 band */}
-                                    <div className="absolute top-0 h-2 bg-blue-500/40 rounded-full" style={{ left: '10%', width: '80%' }} />
-                                    {/* Markers */}
-                                    <div className="absolute top-[-4px] w-4 h-4 rounded-full bg-green-400 border-2 border-dark-800" style={{ left: '10%' }} title="Best Case"></div>
-                                    <div className="absolute top-[-6px] w-5 h-5 rounded-full bg-blue-400 border-2 border-dark-800" style={{ left: '50%' }} title="Most Likely"></div>
-                                    <div className="absolute top-[-4px] w-4 h-4 rounded-full bg-red-400 border-2 border-dark-800" style={{ left: '90%' }} title="Worst Case"></div>
+                                {/* Confidence Band visual (Recharts) */}
+                                <div className="mt-8 h-32 w-full">
+                                    <ResponsiveContainer width="100%" height="100%">
+                                        <BarChart
+                                            layout="vertical"
+                                            data={[{
+                                                name: 'Scenarios',
+                                                P10: forecast.scenarios?.bestCase?.delayDays || 0,
+                                                Likely: (forecast.scenarios?.mostLikely?.delayDays || 0) - (forecast.scenarios?.bestCase?.delayDays || 0),
+                                                P90: (forecast.scenarios?.worstCase?.delayDays || 0) - (forecast.scenarios?.mostLikely?.delayDays || 0),
+                                            }]}
+                                            margin={{ top: 0, right: 20, left: 10, bottom: 0 }}
+                                        >
+                                            <XAxis type="number" hide domain={[0, 'dataMax + 20']} />
+                                            <YAxis dataKey="name" type="category" hide />
+                                            <RechartsTooltip
+                                                cursor={{ fill: 'transparent' }}
+                                                contentStyle={{ backgroundColor: '#1f2937', borderColor: '#374151', borderRadius: '0.5rem', color: '#fff' }}
+                                                formatter={(val, name) => {
+                                                    let realVal = val;
+                                                    let label = '';
+                                                    if (name === 'P10') { label = 'Best Case (P10)'; }
+                                                    if (name === 'Likely') { realVal = forecast.scenarios?.mostLikely?.delayDays || 0; label = 'Most Likely'; }
+                                                    if (name === 'P90') { realVal = forecast.scenarios?.worstCase?.delayDays || 0; label = 'Worst Case (P90)'; }
+                                                    return [`${Math.round(realVal)} days`, label];
+                                                }}
+                                            />
+                                            <Bar dataKey="P10" stackId="a" fill="#22c55e" radius={[4, 0, 0, 4]} barSize={24} />
+                                            <Bar dataKey="Likely" stackId="a" fill="#3b82f6" barSize={24} />
+                                            <Bar dataKey="P90" stackId="a" fill="#ef4444" radius={[0, 4, 4, 0]} barSize={24} />
+                                        </BarChart>
+                                    </ResponsiveContainer>
                                 </div>
                             </div>
 

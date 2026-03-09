@@ -37,26 +37,26 @@ const useDelayController = () => {
             // Build input matching the ML model's ACTUAL feature names from training
             const input = {
                 // ---- Categorical features (must match training script) ----
-                Project_Type: formValues.projectType || 'House',
-                Province: formValues.province || 'Western',
-                District: formValues.district || 'Colombo',
-                Location: formValues.location || 'Dehiwala',
-                Contractor_ICTAD_Grade: formValues.contractorGrade || 'C4',
-                Start_Season: formValues.startSeason || 'Dry Season',
-                Payment_Delay_History: formValues.paymentDelayHistory || 'Minor',
+                Project_Type: formValues.projectType,
+                Province: formValues.province,
+                District: formValues.district,
+                Location: formValues.location,
+                Contractor_ICTAD_Grade: formValues.contractorGrade,
+                Start_Season: formValues.startSeason,
+                Payment_Delay_History: formValues.paymentDelayHistory,
 
                 // ---- Numeric features (must match training script) ----
-                Floors: formValues.floors || 6,
-                Contractor_Experience_Years: formValues.contractorExperience || 12,
-                Contractor_Previous_Projects: formValues.contractorPreviousProjects || 23,
-                Contractor_Past_Delay_Rate: formValues.contractorPastDelayRate || 0.19,
-                Labour_Pool_Size: formValues.labourPoolSize || 108,
-                Labour_Assigned_To_Project: formValues.labourAssigned || 47,
-                Planned_Duration_Days: formValues.plannedDurationDays || 545,
-                Weather_Impact_Days: formValues.weatherImpactDays || 63,
-                Design_Change_Orders: formValues.designChangeOrders || 14,
-                Material_Delivery_Delay_Days: formValues.materialDeliveryDelay || 31,
-                Payment_Delay_Days: formValues.paymentDelayDays || 29,
+                Floors: formValues.floors,
+                Contractor_Experience_Years: formValues.contractorExperience,
+                Contractor_Previous_Projects: formValues.contractorPreviousProjects,
+                Contractor_Past_Delay_Rate: formValues.contractorPastDelayRate,
+                Labour_Pool_Size: formValues.labourPoolSize,
+                Labour_Assigned_To_Project: formValues.labourAssigned,
+                Planned_Duration_Days: formValues.plannedDurationDays,
+                Weather_Impact_Days: formValues.weatherImpactDays,
+                Design_Change_Orders: formValues.designChangeOrders,
+                Material_Delivery_Delay_Days: formValues.materialDeliveryDelay,
+                Payment_Delay_Days: formValues.paymentDelayDays,
             };
 
             console.log('📤 Delay Prediction Request:', input);
