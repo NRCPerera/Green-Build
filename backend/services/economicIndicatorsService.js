@@ -106,10 +106,30 @@ const applyMultiplier = (baseValue, multiplier, decimals = 2) => {
 };
 
 const fetchEconomicIndicators = async ({ year, province, district }) => {
-    if (!config.fredApiKey) {
-        const err = new Error('FRED_API_KEY is not configured on the backend');
-        err.code = 'MISSING_FRED_API_KEY';
-        throw err;
+    if (!config.fredApiKey || config.fredApiKey === 'your-fred-api-key') {
+        console.log('⚠️ [Economic Indicators] Using mock data because FRED_API_KEY is not configured or is the default placeholder.');
+        const multipliers = getCombinedMultiplier(province, district);
+        const multiplier = multipliers.totalMultiplier;
+
+        return {
+            Inflation_Rate: applyMultiplier(5.5, multiplier, 2),
+            Exchange_Rate_LKR: applyMultiplier(320.0, multiplier, 4),
+            Material_Index: applyMultiplier(150.0, multiplier, 2),
+            meta: {
+                source: 'MOCK_DATA',
+                year,
+                appliedMultiplier: {
+                    province: multipliers.provinceMultiplier,
+                    district: multipliers.districtMultiplier,
+                    total: roundTo(multiplier, 6)
+                },
+                series: {
+                    inflation: { id: config.economicIndicators.series.inflation, date: `${year}-01-01`, isEstimated: true },
+                    exchangeRateLkr: { id: config.economicIndicators.series.exchangeRateLkr, date: `${year}-01-01`, isEstimated: true },
+                    materialIndex: { id: config.economicIndicators.series.materialIndex, date: `${year}-01-01`, isEstimated: true }
+                }
+            }
+        };
     }
 
     const inflationSeriesId = config.economicIndicators.series.inflation;

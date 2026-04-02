@@ -450,7 +450,7 @@ const DelayForecastView = ({ project, onBack }) => {
                                          focus:outline-none focus:ring-2 focus:ring-blue-500"
                             />
                             <p className="text-xs text-gray-500 mt-1">
-                                Dataset range: 141–1589 days (~5–53 months)
+                                range: 141–1589 days (~5–53 months)
                             </p>
                         </div>
 
@@ -515,7 +515,7 @@ const DelayForecastView = ({ project, onBack }) => {
                                          focus:outline-none focus:ring-2 focus:ring-blue-500"
                             />
                             <p className="text-xs text-gray-500 mt-1">
-                                Dataset range: 3–60 projects
+                                range: 3–60 projects
                             </p>
                         </div>
 
@@ -582,7 +582,7 @@ const DelayForecastView = ({ project, onBack }) => {
                                          focus:outline-none focus:ring-2 focus:ring-blue-500"
                             />
                             <p className="text-xs text-gray-500 mt-1">
-                                Expected days of weather-related disruptions (dataset: 0–120)
+                                Expected days of weather-related disruptions 
                             </p>
                         </div>
 
@@ -595,13 +595,13 @@ const DelayForecastView = ({ project, onBack }) => {
                                 type="number"
                                 value={formValues.designChangeOrders}
                                 onChange={(e) => setFormValues({ ...formValues, designChangeOrders: parseInt(e.target.value) || 2 })}
-                                min="2"
+                                min="0"
                                 max="30"
                                 className="w-full px-4 py-3 bg-dark-700 border border-white/10 rounded-xl text-white 
                                          focus:outline-none focus:ring-2 focus:ring-blue-500"
                             />
                             <p className="text-xs text-gray-500 mt-1">
-                                Number of expected design change requests (dataset: 2–30)
+                                Number of expected design change requests 
                             </p>
                         </div>
 
@@ -614,13 +614,13 @@ const DelayForecastView = ({ project, onBack }) => {
                                 type="number"
                                 value={formValues.materialDeliveryDelay}
                                 onChange={(e) => setFormValues({ ...formValues, materialDeliveryDelay: parseInt(e.target.value) || 4 })}
-                                min="4"
+                                min="0"
                                 max="90"
                                 className="w-full px-4 py-3 bg-dark-700 border border-white/10 rounded-xl text-white 
                                          focus:outline-none focus:ring-2 focus:ring-blue-500"
                             />
                             <p className="text-xs text-gray-500 mt-1">
-                                Dataset range: 4–90 days
+                                range: 4–90 days
                             </p>
                         </div>
 
@@ -653,7 +653,7 @@ const DelayForecastView = ({ project, onBack }) => {
                                 type="number"
                                 value={formValues.paymentDelayDays}
                                 onChange={(e) => setFormValues({ ...formValues, paymentDelayDays: parseInt(e.target.value) || 4 })}
-                                min="4"
+                                min="0"
                                 max="90"
                                 className="w-full px-4 py-3 bg-dark-700 border border-white/10 rounded-xl text-white 
                                          focus:outline-none focus:ring-2 focus:ring-blue-500"

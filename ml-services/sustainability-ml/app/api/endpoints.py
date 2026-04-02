@@ -79,7 +79,7 @@ async def calculate_sustainability(payload: SustainabilityInput):
     lifecycle_cost = standard_compliant_lcc_lkr
 
     sustain_pred_scaled = sustain_model.predict(features_scaled, verbose=0)
-    sustainability_score = round(float(sustain_pred_scaled[0][0]) * 100.0, 2)
+    sustainability_score = round((1.0 - float(sustain_pred_scaled[0][0])) * 100.0, 2)
 
     risk_raw = float(risk_model.predict(features_scaled, verbose=0)[0][0])
     risk_probability = round(max(0.0, min(risk_raw * 100.0, 100.0)), 2)
@@ -145,7 +145,7 @@ async def calculate_sustainability(payload: SustainabilityInput):
             best_lcc = alt_std_lcc
             best_mat = alt_mat
             alt_sus_pred = sustain_model.predict(alt_scaled, verbose=0)
-            best_sustain = round(float(alt_sus_pred[0][0]) * 100.0, 2)
+            best_sustain = round((1.0 - float(alt_sus_pred[0][0])) * 100.0, 2)
             
     ai_optimization = None
     if best_mat != mat:
