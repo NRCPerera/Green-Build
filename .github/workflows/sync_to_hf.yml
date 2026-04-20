@@ -20,4 +20,31 @@ jobs:
           github_repo_id: ${{ github.repository }}
           huggingface_repo_id: RidmaChalana/quantity-takeoff-ml
           hf_token: ${{ secrets.HF_TOKEN }}
-          subdirectory: ml-services/quantity-takeoff-ml # Points to the specific folder
+          subdirectory: ml-services/quantity-takeoff-ml 
+
+      # Sync Service 1
+      - name: Push Service 2 to HF
+        uses: huggingface/hub-sync@v1.0
+        with:
+          github_repo_id: ${{ github.repository }}
+          huggingface_repo_id: RidmaChalana/cost-overrun-ml
+          hf_token: ${{ secrets.HF_TOKEN }}
+          subdirectory: ml-services/Cost-overrun-Prediction-ml 
+
+      # Sync Service 1
+      - name: Push Service 3 to HF
+        uses: huggingface/hub-sync@v1.0
+        with:
+          github_repo_id: ${{ github.repository }}
+          huggingface_repo_id: RidmaChalana/delay-prediction-ml
+          hf_token: ${{ secrets.HF_TOKEN }}
+          subdirectory: ml-services/delay-prediction-ml 
+
+      # Sync Service 1
+      - name: Push Service 4 to HF
+        uses: huggingface/hub-sync@v1.0
+        with:
+          github_repo_id: ${{ github.repository }}
+          huggingface_repo_id: RidmaChalana/sustainability-ml
+          hf_token: ${{ secrets.HF_TOKEN }}
+          subdirectory: ml-services/sustainability-ml 
