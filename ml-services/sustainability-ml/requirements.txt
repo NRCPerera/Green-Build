@@ -19,3 +19,6 @@ uvicorn>=0.27.0
 
 # Optimization (MILP Solver)
 pulp>=2.7.0
+
+# Form handling
+python-multipart>=0.0.6

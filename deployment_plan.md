@@ -615,13 +615,14 @@ dist/
 ## 8. Deployment Checklist
 
 ### Pre-Deployment
-- [ ] Create all 5 Dockerfiles (frontend, backend, 4 ML services)
-- [ ] Create `docker-compose.yml` at project root
-- [ ] Create `frontend/nginx.conf` for SPA routing
-- [ ] Create `.env.production` (keep out of Git)
-- [ ] Create `.dockerignore` files in each service
+- [x] Create all 5 Dockerfiles (frontend, backend, 4 ML services)
+- [x] Create `docker-compose.yml` at project root
+- [x] Create `frontend/nginx.conf` for SPA routing
+- [x] Create `.env.production` (keep out of Git)
+- [x] Create `.dockerignore` files in each service
 - [ ] Set up Git LFS for ML model files
-- [ ] Fix `DEV_MODE` in delay-prediction-ml to read from env
+- [x] Fix `DEV_MODE` in delay-prediction-ml to read from env
+- [x] Add `python-multipart` to cost-overrun and sustainability requirements
 - [ ] Test locally with `docker compose up --build`
 
 ### Cloud Deployment
@@ -637,7 +638,7 @@ dist/
 ### Post-Deployment
 - [ ] Set up monitoring (UptimeRobot / Railway metrics)
 - [ ] Enable application logging (structured JSON logs)
-- [ ] Set up GitHub Actions CI/CD pipeline
+- [x] Set up GitHub Actions CI/CD pipeline
 - [ ] Document deployment runbook for team
 
 ---
@@ -646,7 +647,7 @@ dist/
 
 | Phase | Task | Duration |
 |---|---|---|
-| **Phase 1** | Create Dockerfiles + docker-compose + nginx.conf | 1 day |
+| **Phase 1** ✅ | Create Dockerfiles + docker-compose + nginx.conf | 1 day |
 | **Phase 2** | Test full stack locally with `docker compose up` | 1 day |
 | **Phase 3** | Deploy to Railway / chosen platform | 1 day |
 | **Phase 4** | Configure domain, SSL, monitoring | 0.5 day |
@@ -656,4 +657,4 @@ dist/
 ---
 
 > [!TIP]
-> **Quick Start**: If you want to proceed, tell me to start with **Phase 1** and I'll create all the Dockerfiles, docker-compose.yml, nginx.conf, .dockerignore files, and make the necessary code changes right away.
+> **Phase 1 is complete!** All Dockerfiles, docker-compose.yml, nginx.conf, .dockerignore files, .env.production, and CI/CD pipeline have been created. Next step: run `docker compose up --build` to test locally.

@@ -1,0 +1,23 @@
+name: Sync to Hugging Face Hub
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  sync-to-hub:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          lfs: true
+
+      # Sync Service 1
+      - name: Push Service 1 to HF
+        uses: huggingface/hub-sync@v1.0
+        with:
+          github_repo_id: ${{ github.repository }}
+          huggingface_repo_id: RidmaChalana/quantity-takeoff-ml
+          hf_token: ${{ secrets.HF_TOKEN }}
+          subdirectory: ml-services/quantity-takeoff-ml # Points to the specific folder

@@ -1,0 +1,103 @@
+version: "3.9"
+
+services:
+  # ─── Frontend ────────────────────────────────────
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE_URL: http://localhost:5000
+        VITE_API_URL: http://localhost:5000
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+  # ─── API Gateway ─────────────────────────────────
+  backend:
+    build: ./backend
+    ports:
+      - "5000:5000"
+    env_file: ./backend/.env.production
+    depends_on:
+      - quantity-takeoff-ml
+      - cost-overrun-ml
+      - delay-prediction-ml
+      - sustainability-ml
+    volumes:
+      - backend-uploads:/app/uploads
+    restart: unless-stopped
+
+  # ─── Quantity Takeoff ML (PyTorch) ───────────────
+  quantity-takeoff-ml:
+    build: ./ml-services/quantity-takeoff-ml
+    ports:
+      - "8000:8000"
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # ─── Cost Overrun Prediction ML (TensorFlow) ────
+  cost-overrun-ml:
+    build: ./ml-services/Cost-overrrun-Prediction-ml
+    ports:
+      - "8085:8085"
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8085/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # ─── Delay Prediction ML (TensorFlow) ───────────
+  delay-prediction-ml:
+    build: ./ml-services/delay-prediction-ml
+    ports:
+      - "8002:8002"
+    environment:
+      - DEV_MODE=false
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8002/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # ─── Sustainability ML (TensorFlow) ─────────────
+  sustainability-ml:
+    build: ./ml-services/sustainability-ml
+    ports:
+      - "8003:8003"
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8003/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+volumes:
+  backend-uploads:

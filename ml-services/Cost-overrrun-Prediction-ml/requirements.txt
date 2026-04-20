@@ -7,3 +7,4 @@ tensorflow==2.18.0
 python-dotenv==1.0.1
 shap==0.45.1
 scikit-learn>=1.0.0
+python-multipart>=0.0.6
