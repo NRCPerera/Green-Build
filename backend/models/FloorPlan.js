@@ -48,11 +48,14 @@ const floorPlanSchema = new mongoose.Schema({
     mimeType: {
         type: String
     },
-    imageWidth: {
-        type: Number
-    },
-    imageHeight: {
-        type: Number
+    // Cloudinary cloud storage metadata
+    cloudinary: {
+        publicId: { type: String },
+        url: { type: String },
+        width: { type: Number },
+        height: { type: Number },
+        format: { type: String },
+        bytes: { type: Number }
     },
     scale: {
         pixelsPerMeter: { type: Number, default: 50 },

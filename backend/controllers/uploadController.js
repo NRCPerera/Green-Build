@@ -1,6 +1,7 @@
 const { deleteFile } = require('../models/fileModel');
 const { calculateCosts } = require('../models/costModel');
 const pythonService = require('../services/pythonService');
+const cloudinaryService = require('../services/cloudinaryService');
 const config = require('../config');
 
 /**
@@ -9,9 +10,10 @@ const config = require('../config');
  * 
  * The processing flow:
  * 1. Validate the uploaded file and input parameters
- * 2. Send the image to the Python ML service for analysis
- * 3. Calculate costs based on the extracted quantities
- * 4. Return the combined results to the client
+ * 2. Upload the image to Cloudinary for persistent cloud storage
+ * 3. Send the image to the Python ML service for analysis
+ * 4. Calculate costs based on the extracted quantities
+ * 5. Return the combined results (including Cloudinary URL) to the client
  * 
  * @param {Object} req - Express request object with uploaded file and form data
  * @param {Object} res - Express response object
@@ -19,6 +21,7 @@ const config = require('../config');
 const processFloorPlan = async (req, res) => {
     const startTime = Date.now();
     let uploadedFilePath = null;
+    let cloudinaryResult = null;
 
     try {
         // Validate that a file was included in the request
@@ -57,6 +60,28 @@ const processFloorPlan = async (req, res) => {
         }
 
         console.log(`[Upload] Parameters: Scale=${scale} ppm, Wall Height=${wallHeight}m`);
+
+        // Upload the image to Cloudinary for persistent cloud storage
+        if (cloudinaryService.isConfigured()) {
+            try {
+                console.log('[Upload] Uploading to Cloudinary...');
+                cloudinaryResult = await cloudinaryService.uploadImage(uploadedFilePath, {
+                    folder: config.cloudinary.folder,
+                    tags: ['floor-plan', 'upload'],
+                    context: {
+                        originalName: req.file.originalname,
+                        scale: scale.toString(),
+                        wallHeight: wallHeight.toString()
+                    }
+                });
+                console.log(`[Upload] Cloudinary upload successful: ${cloudinaryResult.url}`);
+            } catch (cloudinaryError) {
+                console.warn('[Upload] Cloudinary upload failed, continuing with local file:', cloudinaryError.message);
+                // Non-fatal — continue with local file for ML processing
+            }
+        } else {
+            console.log('[Upload] Cloudinary not configured, skipping cloud upload');
+        }
 
         // Send the image to the Python ML service for quantity extraction
         console.log('[Upload] Sending to Python ML service for analysis...');
@@ -127,6 +152,15 @@ const processFloorPlan = async (req, res) => {
             success: true,
             message: 'Floor plan analyzed. Please review detections before generating BOQ.',
             data: {
+                // Cloudinary cloud storage info (if uploaded)
+                cloudinary: cloudinaryResult ? {
+                    publicId: cloudinaryResult.publicId,
+                    url: cloudinaryResult.url,
+                    width: cloudinaryResult.width,
+                    height: cloudinaryResult.height,
+                    format: cloudinaryResult.format,
+                    bytes: cloudinaryResult.bytes
+                } : null,
                 // Raw ML detections (for user to review/edit)
                 detections: {
                     walls: {
@@ -165,7 +199,8 @@ const processFloorPlan = async (req, res) => {
             },
             meta: {
                 processing_time_ms: processingTime,
-                timestamp: new Date().toISOString()
+                timestamp: new Date().toISOString(),
+                cloud_stored: !!cloudinaryResult
             }
         };
 
@@ -179,6 +214,16 @@ const processFloorPlan = async (req, res) => {
     } catch (error) {
         console.error('[Upload] Unexpected error:', error.message);
         console.error('[Upload] Error stack:', error.stack);
+
+        // If we uploaded to Cloudinary but encountered an error, clean up the cloud image
+        if (cloudinaryResult) {
+            try {
+                await cloudinaryService.deleteImage(cloudinaryResult.publicId);
+                console.log('[Upload] Cleaned up Cloudinary image after error');
+            } catch (cleanupError) {
+                console.error('[Upload] Failed to clean up Cloudinary image:', cleanupError.message);
+            }
+        }
 
         // Always clean up temporary files when an error occurs
         if (uploadedFilePath) {

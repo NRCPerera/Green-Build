@@ -42,6 +42,14 @@ const config = {
         'image/bmp'
     ],
 
+    // Cloudinary configuration for cloud image storage
+    cloudinary: {
+        cloudName: process.env.CLOUDINARY_CLOUD_NAME || '',
+        apiKey: process.env.CLOUDINARY_API_KEY || '',
+        apiSecret: process.env.CLOUDINARY_API_SECRET || '',
+        folder: process.env.CLOUDINARY_FOLDER || 'green-build/floor-plans'
+    },
+
     // Cost estimation rates for ML-detected items (in LKR - Sri Lankan Rupees)
     costRates: {
         wallPaintRatePerSqm: 450.00,       // Basic wall painting per sq.m

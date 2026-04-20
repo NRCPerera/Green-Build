@@ -3,6 +3,7 @@
  * 
  * Handles floor plan uploads and ML analysis within projects.
  * Stores all analysis results in the database.
+ * Uses Cloudinary for persistent cloud image storage.
  */
 
 const FloorPlan = require('../models/FloorPlan');
@@ -14,6 +15,7 @@ const fs = require('fs');
 const path = require('path');
 const config = require('../config');
 const { calculateCosts } = require('../models/costModel');
+const cloudinaryService = require('../services/cloudinaryService');
 
 /**
  * Upload and analyze a floor plan
@@ -49,6 +51,28 @@ const uploadFloorPlan = async (req, res) => {
 
         console.log(`[FloorPlan] Processing: ${floorPlanName} for project ${project.name}`);
 
+        // Upload to Cloudinary for persistent cloud storage
+        let cloudinaryData = null;
+        if (cloudinaryService.isConfigured()) {
+            try {
+                console.log('[FloorPlan] Uploading to Cloudinary...');
+                cloudinaryData = await cloudinaryService.uploadImage(tempFilePath, {
+                    folder: `${config.cloudinary.folder}/${projectId}`,
+                    tags: ['floor-plan', 'project', projectId],
+                    context: {
+                        projectId,
+                        originalName: req.file.originalname,
+                        floorNumber: floorNumber.toString()
+                    }
+                });
+                console.log(`[FloorPlan] Cloudinary upload successful: ${cloudinaryData.url}`);
+            } catch (cloudinaryError) {
+                console.warn('[FloorPlan] Cloudinary upload failed, continuing with local file:', cloudinaryError.message);
+            }
+        } else {
+            console.log('[FloorPlan] Cloudinary not configured, using local storage');
+        }
+
         // Create floor plan record
         const floorPlan = new FloorPlan({
             project: projectId,
@@ -58,9 +82,17 @@ const uploadFloorPlan = async (req, res) => {
             floorNumber: parseInt(floorNumber),
             originalFilename: req.file.originalname,
             storedFilename: req.file.filename,
-            filePath: req.file.path,
+            filePath: cloudinaryData ? cloudinaryData.url : req.file.path,
             fileSize: req.file.size,
             mimeType: req.file.mimetype,
+            cloudinary: cloudinaryData ? {
+                publicId: cloudinaryData.publicId,
+                url: cloudinaryData.url,
+                width: cloudinaryData.width,
+                height: cloudinaryData.height,
+                format: cloudinaryData.format,
+                bytes: cloudinaryData.bytes
+            } : undefined,
             scale: {
                 pixelsPerMeter: parseFloat(scale),
                 userDefined: true
@@ -284,8 +316,13 @@ const uploadFloorPlan = async (req, res) => {
 
         await project.save();
 
-        // Note: Keep the uploaded file in uploads/ — it's referenced by floorPlan.filePath
-        // and needed for reanalysis, serving to frontend, etc.
+        // If Cloudinary is configured, clean up the local temp file since the image
+        // is now stored in the cloud. Otherwise, keep the local file.
+        if (cloudinaryData && tempFilePath && fs.existsSync(tempFilePath)) {
+            fs.unlinkSync(tempFilePath);
+            console.log('[FloorPlan] Cleaned up local temp file (stored in Cloudinary)');
+            tempFilePath = null; // Prevent double-delete in catch block
+        }
 
         const processingTime = Date.now() - startTime;
         console.log(`[FloorPlan] Complete in ${processingTime}ms`);
@@ -509,11 +546,21 @@ const deleteFloorPlan = async (req, res) => {
         );
         await project.save();
 
-        // Delete floor plan
+        // Delete from Cloudinary if stored there
+        if (floorPlan.cloudinary?.publicId) {
+            try {
+                await cloudinaryService.deleteImage(floorPlan.cloudinary.publicId);
+                console.log(`[FloorPlan] Deleted from Cloudinary: ${floorPlan.cloudinary.publicId}`);
+            } catch (cloudError) {
+                console.error('[FloorPlan] Cloudinary delete failed:', cloudError.message);
+            }
+        }
+
+        // Delete floor plan from database
         await FloorPlan.findByIdAndDelete(id);
 
-        // Delete stored file if exists
-        if (floorPlan.filePath && fs.existsSync(floorPlan.filePath)) {
+        // Delete local stored file if exists (fallback / legacy)
+        if (floorPlan.filePath && !floorPlan.cloudinary?.publicId && fs.existsSync(floorPlan.filePath)) {
             fs.unlinkSync(floorPlan.filePath);
         }
 
