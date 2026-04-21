@@ -8,6 +8,8 @@ segmentation-models-pytorch>=0.3.3
 
 # Scientific Computing
 scikit-image>=0.21.0
+scipy>=1.11.0
+pandas>=2.0.0
 
 # Image Processing
 opencv-python>=4.8.0
@@ -26,6 +28,4 @@ numpy<2.0.0
 matplotlib>=3.7.0
 tqdm>=4.65.0
 
-# Optional: Development
-# pytest>=7.4.0
-# black>=23.0.0
+shapely>=2.0.0

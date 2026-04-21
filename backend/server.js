@@ -32,6 +32,7 @@ const allowedOrigins = [
     'http://127.0.0.1:3000',
     'http://127.0.0.1:5173',
     'http://localhost:5174',
+    'https://green-build-beryl.vercel.app',
     config.frontendUrl
 ].filter(Boolean);
 
