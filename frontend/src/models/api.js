@@ -1,7 +1,7 @@
 import axios from 'axios';
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
-const API_TIMEOUT = parseInt(import.meta.env.VITE_API_TIMEOUT || '120000', 10);
+const API_BASE_URL = import.meta.env.apiBaseUrl || 'https://green-build-i4ml.onrender.com';
+const API_TIMEOUT = parseInt(import.meta.env.requestTimeout || '120000', 10);
 
 const api = axios.create({
     baseURL: API_BASE_URL,
