@@ -6,7 +6,7 @@
 
 const config = {
     // Backend server URL
-    apiBaseUrl: 'http://localhost:5000',
+    apiBaseUrl: 'https://green-build-i4ml.onrender.com',
 
     // Request timeout in milliseconds (2 minutes for ML processing)
     requestTimeout: 120000,
