@@ -14,5 +14,6 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY app/ ./app/
 COPY models/ ./models/
 
-EXPOSE 8000
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
+# IMPORTANT: Remove EXPOSE 8000 (Cloud Run ignores this)
+# Update CMD to use the $PORT variable provided by Google
+CMD ["sh", "-c", "uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1"]
