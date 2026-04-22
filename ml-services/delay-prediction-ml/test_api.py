@@ -1,7 +1,12 @@
 import urllib.request as r, json
+import os
+
+# Set API_URL in your environment to test the deployed service
+# Example: export API_URL="https://delay-prediction-ml-xyz.run.app/predict"
+API_URL = os.environ.get('API_URL', 'http://localhost:8002/predict')
 
 def predict(data):
-    req = r.Request('http://localhost:8002/predict', data=json.dumps({'data': data}).encode(), headers={'Content-Type': 'application/json'})
+    req = r.Request(API_URL, data=json.dumps({'data': data}).encode(), headers={'Content-Type': 'application/json'})
     res = json.loads(r.urlopen(req).read().decode())
     return f"{res['regression_result']['predicted_delay_days']:.1f} days"
 

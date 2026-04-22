@@ -71,7 +71,8 @@ async def lifespan(app: FastAPI):
         
     except Exception as e:
         logger.error(f"Failed to initialize application: {str(e)}", exc_info=True)
-        raise
+        # DO NOT RAISE here so the container can still start and listen on the port
+        # This allows us to see the exact error in the logs without Cloud Run killing it
     
     finally:
         # Cleanup on shutdown
