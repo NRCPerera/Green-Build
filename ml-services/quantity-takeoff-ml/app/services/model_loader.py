@@ -11,6 +11,22 @@ from ..config import NUM_RCNN_CLASSES
 logger = logging.getLogger(__name__)
 
 
+def safe_load_state_dict(model, state_dict):
+    """Safely loads a state dict, handling nested dicts and DataParallel wrappers."""
+    if "model_state_dict" in state_dict:
+        state_dict = state_dict["model_state_dict"]
+    elif "state_dict" in state_dict:
+        state_dict = state_dict["state_dict"]
+    
+    if isinstance(state_dict, dict) and len(state_dict) > 0:
+        first_key = list(state_dict.keys())[0]
+        if first_key.startswith("module."):
+            state_dict = {k.replace("module.", ""): v for k, v in state_dict.items()}
+            
+    model.load_state_dict(state_dict, strict=False)
+    return model
+
+
 def load_unet_model(model_path: str, device: torch.device) -> nn.Module:
     logger.info(f"Loading U-Net++ model from {model_path}")
     
@@ -24,12 +40,9 @@ def load_unet_model(model_path: str, device: torch.device) -> nn.Module:
     )
     
     try:
-        state_dict = torch.load(model_path, map_location=device, weights_only=True)
-        
-        if list(state_dict.keys())[0].startswith("module."):
-            state_dict = {k.replace("module.", ""): v for k, v in state_dict.items()}
-        
-        model.load_state_dict(state_dict)
+        # Disable weights_only=True to prevent UnpicklingError with custom objects
+        state_dict = torch.load(model_path, map_location=device, weights_only=False)
+        model = safe_load_state_dict(model, state_dict)
         model.to(device)
         model.eval()
         logger.info("U-Net++ model loaded successfully")
@@ -68,12 +81,8 @@ def load_rcnn_model(model_path: str, device: torch.device) -> nn.Module:
     model = get_mask_rcnn_model(NUM_RCNN_CLASSES)
     
     try:
-        state_dict = torch.load(model_path, map_location=device, weights_only=True)
-        
-        if list(state_dict.keys())[0].startswith("module."):
-            state_dict = {k.replace("module.", ""): v for k, v in state_dict.items()}
-        
-        model.load_state_dict(state_dict)
+        state_dict = torch.load(model_path, map_location=device, weights_only=False)
+        model = safe_load_state_dict(model, state_dict)
         model.to(device)
         model.eval()
         logger.info("Mask R-CNN model loaded successfully")
@@ -106,13 +115,8 @@ def load_room_model(model_path: str, device: torch.device) -> nn.Module:
     )
     
     try:
-        state_dict = torch.load(model_path, map_location=device, weights_only=True)
-        
-        # Handle DataParallel wrapper if present
-        if list(state_dict.keys())[0].startswith("module."):
-            state_dict = {k.replace("module.", ""): v for k, v in state_dict.items()}
-        
-        model.load_state_dict(state_dict)
+        state_dict = torch.load(model_path, map_location=device, weights_only=False)
+        model = safe_load_state_dict(model, state_dict)
         model.to(device)
         model.eval()
         logger.info("Room Segmentation model loaded successfully")
