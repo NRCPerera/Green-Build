@@ -35,6 +35,17 @@ async def lifespan(app: FastAPI):
     logger.info(f"Starting Quantity Takeoff Engine on {DEVICE}")
     logger.info("Loading ML models...")
     
+    # Log model file sizes to detect Git LFS pointer files vs real weights
+    import os
+    for name, path in [("UNet++", UNET_MODEL_PATH), ("MaskRCNN", RCNN_MODEL_PATH), ("Room", ROOM_MODEL_PATH)]:
+        if os.path.exists(path):
+            size_mb = os.path.getsize(path) / (1024 * 1024)
+            logger.info(f"Model file {name}: {path} ({size_mb:.1f} MB)")
+            if size_mb < 1.0:
+                logger.error(f"WARNING: {name} model file is only {size_mb:.2f} MB — likely a Git LFS pointer, not real weights!")
+        else:
+            logger.error(f"Model file {name}: {path} — FILE NOT FOUND")
+    
     try:
         models["unet"] = load_unet_model(str(UNET_MODEL_PATH), DEVICE)
         models["rcnn"] = load_rcnn_model(str(RCNN_MODEL_PATH), DEVICE)
@@ -45,9 +56,8 @@ async def lifespan(app: FastAPI):
         
         logger.info("All models loaded successfully!")
     except Exception as e:
-        logger.error(f"Failed to load models: {e}")
-        # DO NOT RAISE here so the container can still start and listen on the port
-        # This allows us to see the exact error in the logs without Cloud Run killing it
+        logger.error(f"Failed to load models: {e}", exc_info=True)
+        raise
     
     yield  # Application runs here
     
