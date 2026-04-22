@@ -67,16 +67,15 @@ async def lifespan(app: FastAPI):
         logger.info("Application startup complete - Ready to serve requests")
         logger.info("=" * 60)
         
-        yield
-        
     except Exception as e:
         logger.error(f"Failed to initialize application: {str(e)}", exc_info=True)
-        # DO NOT RAISE here so the container can still start and listen on the port
-        # This allows us to see the exact error in the logs without Cloud Run killing it
+        logger.warning("Server will start but predictions will fail until models are loaded")
     
-    finally:
-        # Cleanup on shutdown
-        logger.info("Shutting down application...")
+    # yield MUST be outside try/except — asynccontextmanager requires exactly one yield
+    yield
+    
+    # Cleanup on shutdown
+    logger.info("Shutting down application...")
 
 
 # Create FastAPI application

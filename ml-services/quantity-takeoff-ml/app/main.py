@@ -57,9 +57,10 @@ async def lifespan(app: FastAPI):
         logger.info("All models loaded successfully!")
     except Exception as e:
         logger.error(f"Failed to load models: {e}", exc_info=True)
-        raise
+        logger.warning("Server will start but inference will fail until models are loaded")
     
-    yield  # Application runs here
+    # yield MUST be outside try/except — asynccontextmanager requires exactly one yield
+    yield
     
     # Shutdown: Cleanup
     logger.info("Shutting down Quantity Takeoff Engine...")
