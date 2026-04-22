@@ -24,7 +24,8 @@ async def lifespan(app: FastAPI):
         app.state.model_registry = load_model_registry(config)
     except ArtifactLoadError as exc:
         logger.exception("Startup failed: %s", exc)
-        raise RuntimeError(str(exc)) from exc
+        # DO NOT RAISE here so the container can still start and listen on the port
+        # This allows us to see the exact error in the logs without Cloud Run killing it
     yield
 
 
