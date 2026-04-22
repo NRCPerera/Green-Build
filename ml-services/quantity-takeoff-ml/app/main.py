@@ -46,7 +46,8 @@ async def lifespan(app: FastAPI):
         logger.info("All models loaded successfully!")
     except Exception as e:
         logger.error(f"Failed to load models: {e}")
-        raise
+        # DO NOT RAISE here so the container can still start and listen on the port
+        # This allows us to see the exact error in the logs without Cloud Run killing it
     
     yield  # Application runs here
     
