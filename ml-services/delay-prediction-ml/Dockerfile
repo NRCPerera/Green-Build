@@ -18,4 +18,4 @@ ENV DEV_MODE=false
 
 # Use the shell form to allow $PORT expansion
 # This will use the port Google gives you, or default to 8002 locally
-CMD uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8002} --workers 1
+CMD uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1

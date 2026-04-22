@@ -2,19 +2,15 @@
 fastapi==0.109.0
 uvicorn[standard]==0.27.0
 pydantic>=2.9.2
+python-multipart==0.0.6
 
-# Machine Learning
-tensorflow==2.19.1
+# Machine Learning (required by joblib-loaded model bundles)
 scikit-learn==1.5.2
 joblib==1.4.2
 xgboost>=2.0.0
 lightgbm>=4.0.0
 shap>=0.44.0
-openpyxl>=3.1.0
 
 # Data processing
 pandas==2.2.3
 numpy==1.26.4
-
-# Additional utilities
-python-multipart==0.0.6

@@ -16,4 +16,4 @@ COPY models/ ./models/
 
 # Use shell form to expand the $PORT variable provided by Google
 # This uses the port Google gives it, or defaults to 8003 for your local testing
-CMD uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8003} --workers 1
+CMD uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 1
