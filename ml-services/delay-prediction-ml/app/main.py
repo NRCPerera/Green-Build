@@ -39,37 +39,41 @@ async def lifespan(app: FastAPI):
     logger.info("=" * 60)
     logger.info("Starting Construction Delay Prediction API")
     logger.info("=" * 60)
+    app.state.model_status = {
+        "dev_mode": DEV_MODE,
+        "real_models_loaded": False,
+        "predictor_backend": "mock",
+        "startup_error": None,
+    }
     
-    try:
-        if DEV_MODE:
-            # Development mode - use mock predictions
-            logger.warning("RUNNING IN DEVELOPMENT MODE - MOCK PREDICTIONS ONLY")
-            logger.warning("To use real models, set DEV_MODE=False in app/dev_config.py")
-            logger.warning("and ensure all model files are in the models/ folder")
-            logger.info("=" * 60)
-            
-            # Use mock inference service
-            predictor = MockInferenceService()
-            
-        else:
-            # Production mode - load real models
-            logger.info("PRODUCTION MODE - Loading trained ANN models")
-            logger.info(f"Models directory: {MODELS_DIR}")
-            
-            # Initialize the DelayPredictor
+    if DEV_MODE:
+        # Development mode - use mock predictions
+        logger.warning("RUNNING IN DEVELOPMENT MODE - MOCK PREDICTIONS ONLY")
+        predictor = MockInferenceService()
+    else:
+        # Production mode - try to load real models, fall back to mock if it fails
+        logger.info("PRODUCTION MODE - Loading trained models")
+        logger.info(f"Models directory: {MODELS_DIR}")
+        try:
             predictor = DelayPredictor(models_dir=MODELS_DIR)
-        
-        # Set the predictor in endpoints module
-        from app.api import endpoints
-        endpoints.set_predictor(predictor)
-        
-        logger.info("=" * 60)
-        logger.info("Application startup complete - Ready to serve requests")
-        logger.info("=" * 60)
-        
-    except Exception as e:
-        logger.error(f"Failed to initialize application: {str(e)}", exc_info=True)
-        logger.warning("Server will start but predictions will fail until models are loaded")
+            logger.info("Models loaded successfully!")
+            app.state.model_status.update({
+                "real_models_loaded": True,
+                "predictor_backend": "real",
+            })
+        except Exception as e:
+            logger.error(f"Failed to load models: {str(e)}", exc_info=True)
+            logger.warning("FALLING BACK TO MOCK PREDICTIONS - real models unavailable")
+            app.state.model_status["startup_error"] = str(e)
+            predictor = MockInferenceService()
+    
+    # Always set the predictor so endpoints never get None
+    from app.api import endpoints
+    endpoints.set_predictor(predictor)
+    
+    logger.info("=" * 60)
+    logger.info("Application startup complete - Ready to serve requests")
+    logger.info("=" * 60)
     
     # yield MUST be outside try/except — asynccontextmanager requires exactly one yield
     yield
@@ -107,5 +111,6 @@ async def health_check():
     return {
         "status": "healthy",
         "mode": "development (mock predictions)" if DEV_MODE else "production (real models)",
-        "predictor_loaded": predictor is not None
+        "predictor_loaded": predictor is not None,
+        "model_status": getattr(app.state, "model_status", {}),
     }

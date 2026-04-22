@@ -8,6 +8,7 @@ from typing import Any
 import joblib
 
 from app.config import AppConfig
+from app.keras_compat import load_keras_model_compat
 
 logger = logging.getLogger(__name__)
 
@@ -84,8 +85,7 @@ def load_in_progress_artifacts(config: AppConfig) -> InProgressArtifacts | None:
     logger.info("Loading in-progress artifacts from %s", config.in_progress_dir)
 
     try:
-        import keras
-        ann_reg_model = keras.saving.load_model(config.in_progress_ann_reg_model)
+        ann_reg_model = load_keras_model_compat(config.in_progress_ann_reg_model)
     except Exception as e:
         logger.warning("Failed to load in-progress keras model: %s", e)
         return None

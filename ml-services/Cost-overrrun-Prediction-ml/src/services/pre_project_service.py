@@ -98,65 +98,65 @@ def predict_pre_project(payload: dict[str, Any], artifacts: PreProjectArtifacts)
     # proba returns [[prob_class_0, prob_class_1]], so we get the prob of class 1
     clf_pred_prob = float(clf_pred_proba[0][1])
     
-    # Compute SHAP values for explainability
-    shap_values = artifacts.shap_explainer.shap_values(df_aligned)
-    
-    # Handle different SHAP output formats
-    if isinstance(shap_values, list):
-        # For binary classification, shap_values is a list with 2 elements
-        # shap_values[1] corresponds to class 1 (high risk)
-        shap_values_class1 = shap_values[1]
-    else:
-        # If SHAP values are 3D or 2D array, handle appropriately
-        if len(shap_values.shape) == 3:
-            # 3D array: [sample, feature, class] - use class 1
-            shap_values_class1 = shap_values[:, :, 1]
-        else:
-            # 2D array: [sample, feature]
-            shap_values_class1 = shap_values
-    
-    # Extract SHAP values for the single sample (first row)
-    sample_shap_values = shap_values_class1[0] if isinstance(shap_values_class1, np.ndarray) else shap_values_class1
-    
-    # Get absolute values and find top features
-    abs_shap_values = np.abs(sample_shap_values)
-    top_indices = np.argsort(abs_shap_values)[::-1][:10]  # Top 10 for risk factors
-    top_5_indices = np.argsort(abs_shap_values)[::-1][:5]  # Top 5 for scorecard
-    
-    # Build top risk factors list (based on top 10)
     top_risk_factors = []
-    for idx in top_indices:
-        if idx < len(artifacts.feature_names):
-            feature_name = artifacts.feature_names[idx]
-            impact = float(abs_shap_values[idx])
-            top_risk_factors.append({
-                "feature": feature_name,
-                "impact": impact,
-            })
-    
-    # Build risk scorecard (based on top 5)
     risk_scorecard = []
-    for idx in top_5_indices:
-        if idx < len(artifacts.feature_names):
-            feature_name = artifacts.feature_names[idx]
-            shap_value = float(sample_shap_values[idx])
-            abs_shap_value = float(abs_shap_values[idx])
-            
-            # Get feature value from original payload or encoded dataframe
-            feature_value = _get_original_feature_value(feature_name, payload, df_aligned)
-            
-            # Categorize impact level
-            impact_level = _get_impact_level(shap_value)
-            
-            # Get status recommendation
-            status = _get_status_recommendation(feature_name)
-            
-            risk_scorecard.append({
-                "feature": feature_name,
-                "feature_value": feature_value,
-                "impact": impact_level,
-                "status": status,
-            })
+
+    if artifacts.shap_explainer is not None:
+        shap_values = artifacts.shap_explainer.shap_values(df_aligned)
+
+        # Handle different SHAP output formats
+        if isinstance(shap_values, list):
+            # For binary classification, shap_values is a list with 2 elements
+            # shap_values[1] corresponds to class 1 (high risk)
+            shap_values_class1 = shap_values[1]
+        else:
+            # If SHAP values are 3D or 2D array, handle appropriately
+            if len(shap_values.shape) == 3:
+                # 3D array: [sample, feature, class] - use class 1
+                shap_values_class1 = shap_values[:, :, 1]
+            else:
+                # 2D array: [sample, feature]
+                shap_values_class1 = shap_values
+
+        # Extract SHAP values for the single sample (first row)
+        sample_shap_values = shap_values_class1[0] if isinstance(shap_values_class1, np.ndarray) else shap_values_class1
+
+        # Get absolute values and find top features
+        abs_shap_values = np.abs(sample_shap_values)
+        top_indices = np.argsort(abs_shap_values)[::-1][:10]  # Top 10 for risk factors
+        top_5_indices = np.argsort(abs_shap_values)[::-1][:5]  # Top 5 for scorecard
+
+        # Build top risk factors list (based on top 10)
+        for idx in top_indices:
+            if idx < len(artifacts.feature_names):
+                feature_name = artifacts.feature_names[idx]
+                impact = float(abs_shap_values[idx])
+                top_risk_factors.append({
+                    "feature": feature_name,
+                    "impact": impact,
+                })
+
+        # Build risk scorecard (based on top 5)
+        for idx in top_5_indices:
+            if idx < len(artifacts.feature_names):
+                feature_name = artifacts.feature_names[idx]
+                shap_value = float(sample_shap_values[idx])
+
+                # Get feature value from original payload or encoded dataframe
+                feature_value = _get_original_feature_value(feature_name, payload, df_aligned)
+
+                # Categorize impact level
+                impact_level = _get_impact_level(shap_value)
+
+                # Get status recommendation
+                status = _get_status_recommendation(feature_name)
+
+                risk_scorecard.append({
+                    "feature": feature_name,
+                    "feature_value": feature_value,
+                    "impact": impact_level,
+                    "status": status,
+                })
     
     return {
         "predicted_cost_overrun_pct": reg_pred,
