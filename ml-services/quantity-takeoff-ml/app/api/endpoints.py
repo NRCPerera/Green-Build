@@ -10,7 +10,7 @@ import torch
 
 import cv2
 import numpy as np
-from fastapi import APIRouter, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 
 import shapely.geometry
 from shapely.geometry import Polygon, MultiPolygon
@@ -44,19 +44,20 @@ def set_models(model_dict: dict):
 
 
 @router.get("/", tags=["Health"])
-async def root():
+async def root(request: Request):
     """Health check endpoint."""
     from ..config import DEVICE
     return {
         "status": "healthy",
         "service": "Quantity Takeoff Engine",
         "device": str(DEVICE),
-        "models_loaded": list(models.keys())
+        "models_loaded": list(models.keys()),
+        "model_status": getattr(request.app.state, "model_status", {}),
     }
 
 
 @router.get("/health", tags=["Health"])
-async def health_check():
+async def health_check(request: Request):
     """Detailed health check."""
     from ..config import DEVICE
     return {
@@ -64,7 +65,9 @@ async def health_check():
         "cuda_available": torch.cuda.is_available(),
         "device": str(DEVICE),
         "unet_loaded": "unet" in models,
-        "rcnn_loaded": "rcnn" in models
+        "rcnn_loaded": "rcnn" in models,
+        "room_loaded": "room" in models and models.get("room") is not None,
+        "model_status": getattr(request.app.state, "model_status", {}),
     }
 
 
