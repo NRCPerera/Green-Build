@@ -3,6 +3,7 @@ from .preprocessing import preprocess_image, preprocess_for_rcnn, get_preprocess
 from .inference import run_unet_inference, run_rcnn_inference, run_room_inference
 from .room_detection import detect_rooms
 from .visualization import create_detection_overlay
+from .artifact_fetcher import ensure_model_file, ModelDownloadError
 from .quantity_takeoff import (
     validate_floor_plan_mask,
     calculate_wall_length,
@@ -28,6 +29,9 @@ __all__ = [
     "detect_rooms",
     # Visualization
     "create_detection_overlay",
+    # Artifact preparation
+    "ensure_model_file",
+    "ModelDownloadError",
     # Quantity takeoff
     "validate_floor_plan_mask",
     "calculate_wall_length",

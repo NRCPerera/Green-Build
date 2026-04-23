@@ -107,6 +107,7 @@ wandb/
 mlruns/
 .ipynb_checkpoints/
 *.ipynb_checkpoints
+ml-services/quantity-takeoff-ml/models/*.pth
 
 # ===========================
 # Testing
