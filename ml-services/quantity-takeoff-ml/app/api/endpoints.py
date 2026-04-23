@@ -43,6 +43,18 @@ def set_models(model_dict: dict):
     models = model_dict
 
 
+def _assert_models_ready(request: Request) -> None:
+    model_status = getattr(request.app.state, "model_status", {})
+    if "unet" in models and "rcnn" in models:
+        return
+
+    detail = {
+        "message": "Quantity models are still loading or failed to load.",
+        "model_status": model_status,
+    }
+    raise HTTPException(status_code=503, detail=detail)
+
+
 @router.get("/", tags=["Health"])
 async def root(request: Request):
     """Health check endpoint."""
@@ -79,12 +91,14 @@ async def health_check(request: Request):
     description="Upload a construction drawing image to calculate wall areas and deductions."
 )
 async def calculate_quantities(
+    request: Request,
     file: UploadFile = File(..., description="Construction drawing image file"),
     scale_ppm: float = Form(..., description="Scale: Pixels Per Meter", gt=0),
     wall_height: float = Form(..., description="Wall height in meters", gt=0)
 ):
     """Calculate quantity takeoff from a construction drawing."""
     logger.info(f"Processing image: {file.filename}")
+    _assert_models_ready(request)
     
     allowed_types = ["image/jpeg", "image/png", "image/jpg", "image/tiff", "image/bmp"]
     if file.content_type not in allowed_types:
@@ -151,11 +165,13 @@ async def calculate_quantities(
     summary="Generate 3D Floor Plan Geometry"
 )
 async def generate_3d_geometry(
+    request: Request,
     file: UploadFile = File(..., description="Construction drawing image file"),
     scale_ppm: float = Form(..., description="Scale: Pixels Per Meter", gt=0),
     wall_height: float = Form(2.5, description="Wall height in meters", gt=0)
 ):
     logger.info(f"Generating 3D geometry for: {file.filename}")
+    _assert_models_ready(request)
     
     allowed_types = ["image/jpeg", "image/png", "image/jpg", "image/tiff", "image/bmp"]
     if file.content_type not in allowed_types:
