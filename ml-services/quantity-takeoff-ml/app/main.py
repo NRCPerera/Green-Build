@@ -8,6 +8,7 @@ import logging
 import os
 import threading
 from contextlib import asynccontextmanager
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import torch
 from fastapi import FastAPI
@@ -34,15 +35,28 @@ load_lock = threading.Lock()
 
 
 def _prepare_model_artifacts(app: FastAPI) -> None:
+    artifacts = [
+        ("unet", UNET_MODEL_PATH, "QUANTITY_UNET_MODEL_URL"),
+        ("rcnn", RCNN_MODEL_PATH, "QUANTITY_RCNN_MODEL_URL"),
+        ("room", ROOM_MODEL_PATH, "QUANTITY_ROOM_MODEL_URL"),
+    ]
+
+    def prepare_one(label: str, model_path, env_var: str) -> str:
+        logger.info("Preparing %s artifact", label)
+        ensure_model_file(model_path, env_var)
+        return label
+
     try:
-        ensure_model_file(UNET_MODEL_PATH, "QUANTITY_UNET_MODEL_URL")
-        ensure_model_file(RCNN_MODEL_PATH, "QUANTITY_RCNN_MODEL_URL")
-        ensure_model_file(ROOM_MODEL_PATH, "QUANTITY_ROOM_MODEL_URL")
-        app.state.model_status.update({
-            "unet_artifact_ready": True,
-            "rcnn_artifact_ready": True,
-            "room_artifact_ready": True,
-        })
+        with ThreadPoolExecutor(max_workers=3, thread_name_prefix="artifact-fetch") as executor:
+            future_map = {
+                executor.submit(prepare_one, label, model_path, env_var): label
+                for label, model_path, env_var in artifacts
+            }
+            for future in as_completed(future_map):
+                label = future_map[future]
+                future.result()
+                app.state.model_status[f"{label}_artifact_ready"] = True
+                logger.info("%s artifact is ready", label)
     except ModelDownloadError as exc:
         app.state.model_status["startup_error"] = str(exc)
         app.state.model_status["phase"] = "artifact_error"
