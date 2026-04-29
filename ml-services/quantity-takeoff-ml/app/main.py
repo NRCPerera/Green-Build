@@ -6,9 +6,7 @@ Main application factory and lifespan management.
 
 import logging
 import os
-import threading
 from contextlib import asynccontextmanager
-from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import torch
 from fastapi import FastAPI
@@ -31,37 +29,27 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 models = {}
-load_lock = threading.Lock()
 
 
 def _prepare_model_artifacts(app: FastAPI) -> None:
+    """Download model artifacts sequentially to reduce peak memory usage."""
     artifacts = [
         ("unet", UNET_MODEL_PATH, "QUANTITY_UNET_MODEL_URL"),
         ("rcnn", RCNN_MODEL_PATH, "QUANTITY_RCNN_MODEL_URL"),
         ("room", ROOM_MODEL_PATH, "QUANTITY_ROOM_MODEL_URL"),
     ]
 
-    def prepare_one(label: str, model_path, env_var: str) -> str:
+    for label, model_path, env_var in artifacts:
         logger.info("Preparing %s artifact", label)
-        ensure_model_file(model_path, env_var)
-        return label
-
-    try:
-        with ThreadPoolExecutor(max_workers=3, thread_name_prefix="artifact-fetch") as executor:
-            future_map = {
-                executor.submit(prepare_one, label, model_path, env_var): label
-                for label, model_path, env_var in artifacts
-            }
-            for future in as_completed(future_map):
-                label = future_map[future]
-                future.result()
-                app.state.model_status[f"{label}_artifact_ready"] = True
-                logger.info("%s artifact is ready", label)
-    except ModelDownloadError as exc:
-        app.state.model_status["startup_error"] = str(exc)
-        app.state.model_status["phase"] = "artifact_error"
-        logger.error("Model artifact preparation failed: %s", exc)
-        raise
+        try:
+            ensure_model_file(model_path, env_var)
+            app.state.model_status[f"{label}_artifact_ready"] = True
+            logger.info("%s artifact is ready", label)
+        except ModelDownloadError as exc:
+            app.state.model_status["startup_error"] = str(exc)
+            app.state.model_status["phase"] = "artifact_error"
+            logger.error("Model artifact preparation failed for %s: %s", label, exc)
+            raise
 
 
 def _log_model_files() -> None:
@@ -75,53 +63,54 @@ def _log_model_files() -> None:
             logger.error("Model file %s: %s - FILE NOT FOUND", name, path)
 
 
-def _background_load_models(app: FastAPI) -> None:
-    with load_lock:
-        logger.info("Starting background model preparation for Quantity Takeoff Engine")
-        app.state.model_status["phase"] = "downloading"
-        app.state.model_status["loading"] = True
-        app.state.model_status["startup_error"] = None
+def _load_all_models(app: FastAPI) -> None:
+    """
+    Download artifacts and load all models synchronously.
+    Runs during lifespan startup so the server does NOT accept traffic
+    until every model is ready — eliminating the 503 race condition.
+    """
+    logger.info("Starting model preparation for Quantity Takeoff Engine")
+    app.state.model_status["phase"] = "downloading"
+    app.state.model_status["loading"] = True
+    app.state.model_status["startup_error"] = None
 
-        try:
-            _prepare_model_artifacts(app)
-            _log_model_files()
+    try:
+        # Phase 1: Download artifacts sequentially
+        _prepare_model_artifacts(app)
+        _log_model_files()
 
-            app.state.model_status["phase"] = "loading_models"
-            models["unet"] = load_unet_model(str(UNET_MODEL_PATH), DEVICE)
-            models["rcnn"] = load_rcnn_model(str(RCNN_MODEL_PATH), DEVICE)
-            models["room"] = load_room_model(str(ROOM_MODEL_PATH), DEVICE)
-            set_models(models)
+        # Phase 2: Load models into memory
+        app.state.model_status["phase"] = "loading_models"
+        logger.info("Loading unet model into memory...")
+        models["unet"] = load_unet_model(str(UNET_MODEL_PATH), DEVICE)
+        logger.info("Loading rcnn model into memory...")
+        models["rcnn"] = load_rcnn_model(str(RCNN_MODEL_PATH), DEVICE)
+        logger.info("Loading room model into memory...")
+        models["room"] = load_room_model(str(ROOM_MODEL_PATH), DEVICE)
+        set_models(models)
 
-            app.state.model_status.update({
-                "phase": "ready",
-                "loading": False,
-                "unet_loaded": "unet" in models,
-                "rcnn_loaded": "rcnn" in models,
-                "room_loaded": models.get("room") is not None,
-            })
-            logger.info("All models loaded successfully!")
-        except Exception as exc:
-            app.state.model_status["startup_error"] = str(exc)
-            app.state.model_status["phase"] = "load_error"
-            app.state.model_status["loading"] = False
-            logger.error("Failed to load models: %s", exc, exc_info=True)
-            logger.warning("Server is up, but inference will return 503 until model loading succeeds")
-
-
-def _start_background_loader(app: FastAPI) -> None:
-    loader = threading.Thread(
-        target=_background_load_models,
-        args=(app,),
-        daemon=True,
-        name="quantity-model-loader",
-    )
-    loader.start()
+        app.state.model_status.update({
+            "phase": "ready",
+            "loading": False,
+            "unet_loaded": "unet" in models,
+            "rcnn_loaded": "rcnn" in models,
+            "room_loaded": models.get("room") is not None,
+        })
+        logger.info("All models loaded successfully!")
+    except Exception as exc:
+        app.state.model_status["startup_error"] = str(exc)
+        app.state.model_status["phase"] = "load_error"
+        app.state.model_status["loading"] = False
+        logger.error("Failed to load models: %s", exc, exc_info=True)
+        # Re-raise so the lifespan fails and the server does not start
+        raise
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
     Application lifespan manager for loading/unloading models.
+    Models are loaded synchronously before the server starts accepting traffic.
     """
     logger.info("Starting Quantity Takeoff Engine on %s", DEVICE)
     app.state.model_status = {
@@ -135,7 +124,12 @@ async def lifespan(app: FastAPI):
         "room_loaded": False,
         "startup_error": None,
     }
-    _start_background_loader(app)
+
+    # Block startup until all models are downloaded and loaded.
+    # The server will NOT bind to the port until this completes,
+    # so Cloud Run's startup probe won't pass prematurely.
+    _load_all_models(app)
+
     yield
 
     logger.info("Shutting down Quantity Takeoff Engine...")
