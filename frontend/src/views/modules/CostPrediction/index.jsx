@@ -6,6 +6,14 @@ import CostImpactCard from './components/CostImpactCard';
 
 const INDICATOR_KEYS = ['Inflation_Rate', 'Exchange_Rate_LKR', 'Material_Index'];
 
+const CONTRACTOR_PROFILES = {
+    C1: { avg_overrun_pct: 10.35, high_risk_rate: 29, avg_change_order_freq: 7.03 },
+    C2: { avg_overrun_pct: 10.65, high_risk_rate: 28, avg_change_order_freq: 6.88 },
+    C3: { avg_overrun_pct: 11.53, high_risk_rate: 35, avg_change_order_freq: 7.09 },
+    C4: { avg_overrun_pct: 15.08, high_risk_rate: 67, avg_change_order_freq: 8.04 },
+    C5: { avg_overrun_pct: 18.55, high_risk_rate: 89, avg_change_order_freq: 9.19 },
+};
+
 const provinceDistrictMap = {
     'Western': ['Colombo', 'Gampaha', 'Kalutara'],
     'Central': ['Kandy', 'Matale', 'Nuwara Eliya'],
@@ -141,8 +149,12 @@ const CostPredictionView = ({ project, onBack }) => {
         monteCarloLoading
     } = useCostController();
 
-    // Monte Carlo State
+    // Prediction Mode State ('single' or 'monte-carlo')
+    const [predictionMode, setPredictionMode] = useState('single');
+    const [scenarioName, setScenarioName] = useState(''); // User defined name for saving prediction
     const [mcEnabled, setMcEnabled] = useState(false);
+
+    // Monte Carlo State
     const [mcRanges, setMcRanges] = useState({
         Inflation_Rate: { min: Math.max((formValues.Inflation_Rate || 5) - 2, -10), max: Math.min((formValues.Inflation_Rate || 5) + 5, 50) },
         Exchange_Rate_LKR: { min: Math.max((formValues.Exchange_Rate_LKR || 300) - 10, 100), max: Math.min((formValues.Exchange_Rate_LKR || 300) + 20, 500) },
@@ -202,6 +214,21 @@ const CostPredictionView = ({ project, onBack }) => {
         : null;
     const projectedOverrunAmount = projectedFinalCost != null ? projectedFinalCost - initialBudget : null;
     const predictionTimestamp = hasPrediction ? new Date() : null;
+    const histogramChartData = monteCarloResult?.histogram?.counts?.map((count, i) => {
+        const start = Number(monteCarloResult.histogram.bins?.[i]);
+        const end = Number(monteCarloResult.histogram.bins?.[i + 1]);
+        const fallbackEnd = Number.isFinite(start) ? start + 0.1 : null;
+        const safeEnd = Number.isFinite(end) ? end : fallbackEnd;
+
+        return {
+            count,
+            val: start,
+            binLabel: Number.isFinite(start) ? start.toFixed(2) : '-',
+            binRange: Number.isFinite(start) && Number.isFinite(safeEnd)
+                ? `${start.toFixed(2)}% - ${safeEnd.toFixed(2)}%`
+                : 'N/A'
+        };
+    }) || [];
 
     // Format currency with proper separators
     const formatCurrency = (amount, decimals = 2) => {
@@ -696,6 +723,24 @@ const CostPredictionView = ({ project, onBack }) => {
                             </div>
                         </div>
 
+                        {/* Mode Selector Tabs */}
+                        <div className="flex bg-dark-700/50 p-1 rounded-xl border border-white/5 backdrop-blur-md mb-2">
+                            <button
+                                type="button"
+                                onClick={() => setPredictionMode('single')}
+                                className={`flex-1 py-2.5 text-sm font-semibold rounded-lg transition-all duration-300 ${predictionMode === 'single' ? 'bg-gradient-to-r from-amber-500/20 to-orange-500/20 text-amber-300 border border-amber-500/30 shadow-lg' : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'}`}
+                            >
+                                🎯 Point Estimate
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setPredictionMode('monte-carlo')}
+                                className={`flex-1 py-2.5 text-sm font-semibold rounded-lg transition-all duration-300 ${predictionMode === 'monte-carlo' ? 'bg-gradient-to-r from-emerald-500/20 to-teal-500/20 text-emerald-300 border border-emerald-500/30 shadow-lg' : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'}`}
+                            >
+                                🎲 Risk Analysis (Sim)
+                            </button>
+                        </div>
+
                         {/* ── Section: Project Classification ── */}
                         <div className="border-t border-white/[0.06] pt-4">
                             <p className="text-[11px] uppercase tracking-widest text-amber-400/70 font-semibold mb-3 flex items-center gap-1.5"><span>🏗️</span> Project Classification</p>
@@ -791,6 +836,33 @@ const CostPredictionView = ({ project, onBack }) => {
                                     <option value="C5">C5 - Up to 25M</option>
                                     <option value="C6">C6 - Up to 10M</option>
                                     <option value="C7">C7 - Up to 3M</option>
+
+                                                        {/* ── Contractor Profile Info Box ── */}
+                                                        {formValues.CIDA_Grade && CONTRACTOR_PROFILES[formValues.CIDA_Grade] && (
+                                                            <div className={`mt-3 p-3 rounded-lg border text-xs ${
+                                                                ['C4', 'C5'].includes(formValues.CIDA_Grade)
+                                                                  ? 'bg-red-500/10 border-red-500/30 text-red-300'
+                                                                  : formValues.CIDA_Grade === 'C3'
+                                                                  ? 'bg-amber-500/10 border-amber-500/30 text-amber-300'
+                                                                  : 'bg-green-500/10 border-green-500/30 text-green-300'
+                                                            }`}>
+                                                                <div className="font-semibold mb-1">📊 Based on historical data:</div>
+                                                                <div className="flex gap-4">
+                                                                    <div>
+                                                                        <span className="opacity-70">Historical avg overrun: </span>
+                                                                        <span className="font-semibold">{CONTRACTOR_PROFILES[formValues.CIDA_Grade].avg_overrun_pct}%</span>
+                                                                    </div>
+                                                                    <div>
+                                                                        <span className="opacity-70">High risk rate: </span>
+                                                                        <span className="font-semibold">{CONTRACTOR_PROFILES[formValues.CIDA_Grade].high_risk_rate}%</span>
+                                                                    </div>
+                                                                    <div>
+                                                                        <span className="opacity-70">Avg change orders: </span>
+                                                                        <span className="font-semibold">{CONTRACTOR_PROFILES[formValues.CIDA_Grade].avg_change_order_freq.toFixed(1)}</span>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        )}
                                 </select>
                             </div>
                         </div>
@@ -827,7 +899,7 @@ const CostPredictionView = ({ project, onBack }) => {
                             </div>
                             <div>
                                 <label className="block text-xs font-medium text-gray-400 mb-1">
-                                    Area (SQFT)
+                                    Total Floor Area (SQFT)
                                     {floorPlanAutoFilled.Area_SQFT && (
                                         <span className="ml-1.5 inline-flex items-center gap-1 px-1.5 py-0.5 bg-cyan-500/15 text-cyan-300 text-[9px] font-medium rounded-full border border-cyan-500/30 animate-[fadeIn_0.5s_ease-in]">
                                             ✨ Auto-filled from Floor Plan
@@ -846,12 +918,13 @@ const CostPredictionView = ({ project, onBack }) => {
                                     }}
                                     className={`w-full px-3 py-2 bg-dark-700 border rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500 ${floorPlanAutoFilled.Area_SQFT ? 'border-cyan-500/40' : 'border-white/10'
                                         }`}
+                                    placeholder="e.g., 15000"
                                     required
                                 />
                                 <p className="text-[10px] text-gray-500 mt-0.5">Range: 500-200,000 SQFT</p>
                             </div>
                             <div>
-                                <label className="block text-xs font-medium text-gray-400 mb-1">Rate per SQFT (LKR)</label>
+                                <label className="block text-xs font-medium text-gray-400 mb-1">Estimated Cost Rate per SQFT (LKR)</label>
                                 <input
                                     type="number"
                                     min="2000"
@@ -860,13 +933,14 @@ const CostPredictionView = ({ project, onBack }) => {
                                     value={formValues.Rate_per_SQFT}
                                     onChange={handleChange('Rate_per_SQFT', parseFloatOrEmpty)}
                                     className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                                    placeholder="e.g., 12000"
                                     required
                                 />
                                 <p className="text-[10px] text-gray-500 mt-0.5">Range: 2,000-100,000 LKR</p>
                             </div>
                             <div>
                                 <div className="flex items-center justify-between mb-1">
-                                    <label className="block text-xs font-medium text-gray-400">Initial Value (LKR)</label>
+                                    <label className="block text-xs font-medium text-gray-400">Total Initial Budget (LKR)</label>
                                     <button
                                         type="button"
                                         onClick={() => setInitialValueMode(initialValueMode === 'auto' ? 'manual' : 'auto')}
@@ -887,6 +961,7 @@ const CostPredictionView = ({ project, onBack }) => {
                                     onChange={handleChange('Initial_Value', parseFloatOrEmpty)}
                                     onFocus={() => setInitialValueMode('manual')}
                                     className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                                    placeholder="e.g., 50000000"
                                     required
                                 />
                                 <p className="text-[10px] text-gray-500 mt-0.5">
@@ -901,7 +976,7 @@ const CostPredictionView = ({ project, onBack }) => {
                         </div>
                         <div className={`grid ${isFormExpanded ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4' : 'grid-cols-2'} gap-3`}>
                             <div>
-                                <label className="block text-xs font-medium text-gray-400 mb-1">Initial Duration (months)</label>
+                                <label className="block text-xs font-medium text-gray-400 mb-1">Estimated Construction Duration (Months)</label>
                                 <input
                                     type="number"
                                     min="1"
@@ -910,6 +985,7 @@ const CostPredictionView = ({ project, onBack }) => {
                                     value={formValues.Initial_Period_Months}
                                     onChange={handleChange('Initial_Period_Months', parseFloatOrEmpty)}
                                     className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                                    placeholder="e.g., 24"
                                     required
                                 />
                                 <p className="text-[10px] text-gray-500 mt-0.5">Range: 1-100 months</p>
@@ -937,7 +1013,7 @@ const CostPredictionView = ({ project, onBack }) => {
                         </div>
                         <div className={`grid ${isFormExpanded ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4' : 'grid-cols-2'} gap-3`}>
                             <div>
-                                <label className="block text-xs font-medium text-gray-400 mb-1">Inflation Rate (%)</label>
+                                <label className="block text-xs font-medium text-gray-400 mb-1">Current Economic Inflation Rate (%)</label>
                                 <input
                                     type="number"
                                     min="-10"
@@ -946,11 +1022,12 @@ const CostPredictionView = ({ project, onBack }) => {
                                     value={formValues.Inflation_Rate}
                                     onChange={handleChange('Inflation_Rate', parseFloatOrEmpty)}
                                     className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                                    placeholder="e.g., 5.5"
                                 />
                                 <p className="text-[10px] text-gray-500 mt-0.5">Range: -10 to 50%</p>
                             </div>
                             <div>
-                                <label className="block text-xs font-medium text-gray-400 mb-1">Material Price Index</label>
+                                <label className="block text-xs font-medium text-gray-400 mb-1">Construction Material Price Index</label>
                                 <input
                                     type="number"
                                     min="50"
@@ -959,11 +1036,12 @@ const CostPredictionView = ({ project, onBack }) => {
                                     value={formValues.Material_Index}
                                     onChange={handleChange('Material_Index', parseFloatOrEmpty)}
                                     className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                                    placeholder="e.g., 120.5"
                                 />
                                 <p className="text-[10px] text-gray-500 mt-0.5">Range: 50-500</p>
                             </div>
                             <div>
-                                <label className="block text-xs font-medium text-gray-400 mb-1">Exchange Rate (LKR/USD)</label>
+                                <label className="block text-xs font-medium text-gray-400 mb-1">USD to LKR Exchange Rate</label>
                                 <input
                                     type="number"
                                     min="100"
@@ -974,11 +1052,12 @@ const CostPredictionView = ({ project, onBack }) => {
                                         : formValues.Exchange_Rate_LKR}
                                     onChange={handleChange('Exchange_Rate_LKR', parseFloatTwoDecimals)}
                                     className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                                    placeholder="e.g., 320.00"
                                 />
                                 <p className="text-[10px] text-gray-500 mt-0.5">Range: 100-500</p>
                             </div>
                             <div>
-                                <label className="block text-xs font-medium text-gray-400 mb-1">Project Size Index</label>
+                                <label className="block text-xs font-medium text-gray-400 mb-1">Scale & Scope Factor (0-10)</label>
                                 <input
                                     type="number"
                                     min="0"
@@ -987,6 +1066,7 @@ const CostPredictionView = ({ project, onBack }) => {
                                     value={formValues.Project_Size_Index}
                                     onChange={handleChange('Project_Size_Index', parseFloatOrEmpty)}
                                     className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                                    placeholder="e.g., 4.5"
                                 />
                                 <p className="text-[10px] text-gray-500 mt-0.5">Range: 0-10</p>
                             </div>
@@ -997,7 +1077,7 @@ const CostPredictionView = ({ project, onBack }) => {
                                     {indicatorsLoading && 'Fetching economic indicators from FRED...'}
                                     {!indicatorsLoading && indicatorMetadata && (
                                         <span>
-                                            Source: {indicatorMetadata.source} | Year: {indicatorMetadata.year}
+                                            Year: {indicatorMetadata.year}
                                             {indicatorMetadata.fetchedAt ? ` | Updated: ${new Date(indicatorMetadata.fetchedAt).toLocaleTimeString()}` : ''}
                                         </span>
                                     )}
@@ -1026,7 +1106,7 @@ const CostPredictionView = ({ project, onBack }) => {
                         </div>
                         <div className={`grid ${isFormExpanded ? 'grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4' : 'grid-cols-2'} gap-3`}>
                             <div>
-                                <label className="block text-xs font-medium text-gray-400 mb-1">Contractor Experience (Years)</label>
+                                <label className="block text-xs font-medium text-gray-400 mb-1">Contractor's Years of Experience</label>
                                 <input
                                     type="number"
                                     min="0"
@@ -1035,11 +1115,12 @@ const CostPredictionView = ({ project, onBack }) => {
                                     value={formValues.Contractor_Experience_Years}
                                     onChange={handleChange('Contractor_Experience_Years', parseIntOrEmpty)}
                                     className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                                    placeholder="e.g., 10"
                                 />
                                 <p className="text-[10px] text-gray-500 mt-0.5">Range: 0-50 years</p>
                             </div>
                             <div>
-                                <label className="block text-xs font-medium text-gray-400 mb-1">Economic Risk Index</label>
+                                <label className="block text-xs font-medium text-gray-400 mb-1">Market Instability Risk (0-10)</label>
                                 <input
                                     type="number"
                                     min="0"
@@ -1048,11 +1129,12 @@ const CostPredictionView = ({ project, onBack }) => {
                                     value={formValues.Economic_Risk_Index}
                                     onChange={handleChange('Economic_Risk_Index', parseFloatOrEmpty)}
                                     className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                                    placeholder="e.g., 3.2"
                                 />
                                 <p className="text-[10px] text-gray-500 mt-0.5">Range: 0-10</p>
                             </div>
                             <div>
-                                <label className="block text-xs font-medium text-gray-400 mb-1">Change Order Frequency</label>
+                                <label className="block text-xs font-medium text-gray-400 mb-1">Expected Number of Design Changes</label>
                                 <input
                                     type="number"
                                     min="0"
@@ -1061,11 +1143,12 @@ const CostPredictionView = ({ project, onBack }) => {
                                     value={formValues.Change_Order_Freq}
                                     onChange={handleChange('Change_Order_Freq', parseIntOrEmpty)}
                                     className="w-full px-3 py-2 bg-dark-700 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-yellow-500"
+                                    placeholder="e.g., 2"
                                 />
                                 <p className="text-[10px] text-gray-500 mt-0.5">Range: 0-50</p>
                             </div>
                             <div>
-                                <label className="block text-xs font-medium text-gray-400 mb-1">Project Complexity Score (1-10)</label>
+                                <label className="block text-xs font-medium text-gray-400 mb-1">Overall Project Complexity (1-10)</label>
                                 <div className="flex items-center gap-3">
                                     <input
                                         type="range"
@@ -1093,7 +1176,7 @@ const CostPredictionView = ({ project, onBack }) => {
                         </div>
                         <div className={`grid ${isFormExpanded ? 'grid-cols-1 sm:grid-cols-2' : 'grid-cols-1'} gap-4`}>
                             <div>
-                                <label className="block text-xs font-medium text-gray-400 mb-1">Design Completeness (%)</label>
+                                <label className="block text-xs font-medium text-gray-400 mb-1">Current Design Completeness (%)</label>
                                 <div className="flex items-center gap-3">
                                     <input
                                         type="range"
@@ -1114,7 +1197,7 @@ const CostPredictionView = ({ project, onBack }) => {
                                 <p className="text-[10px] text-gray-500 mt-1">0% = Not started, 100% = Fully complete</p>
                             </div>
                             <div>
-                                <label className="block text-xs font-medium text-gray-400 mb-1">Design Risk Score (1-10)</label>
+                                <label className="block text-xs font-medium text-gray-400 mb-1">Design Uncertainty Risk (1-10)</label>
                                 <div className="flex items-center gap-3">
                                     <input
                                         type="range"
@@ -1195,26 +1278,39 @@ const CostPredictionView = ({ project, onBack }) => {
                             </div>
                         )}
 
-                        {/* ── Section: Monte Carlo ── */}
-                        <div className="border-t border-white/[0.06] pt-4 mt-6">
-                            <div className="flex items-center justify-between mb-3">
-                                <p className="text-[11px] uppercase tracking-widest text-emerald-400/70 font-semibold flex items-center gap-1.5"><span>🎲</span> Uncertainty Simulation</p>
-                                <label className="flex items-center cursor-pointer gap-2">
-                                    <div className="relative">
-                                        <input type="checkbox" className="sr-only" checked={mcEnabled} onChange={() => setMcEnabled(!mcEnabled)} />
-                                        <div className={`block w-10 h-6 rounded-full transition-colors ${mcEnabled ? 'bg-emerald-500' : 'bg-dark-600'}`}></div>
-                                        <div className={`dot absolute left-1 top-1 bg-white w-4 h-4 rounded-full transition-transform ${mcEnabled ? 'transform translate-x-4' : ''}`}></div>
-                                    </div>
-                                    <span className="text-xs text-gray-400">Enable</span>
-                                </label>
+                        {/* ── Section: Monte Carlo Configuration ── */}
+                        {predictionMode === 'monte-carlo' && (
+                            <div className="border-t border-white/[0.06] pt-4 mt-6">
+                                <div className="flex items-center justify-between mb-3">
+                                    <p className="text-[11px] uppercase tracking-widest text-emerald-400/70 font-semibold flex items-center gap-1.5"><span>🎲</span> Uncertainty Simulation Configurations</p>
+                                </div>
                             </div>
-                        </div>
+                        )}
 
-                        {mcEnabled && (
+                        {predictionMode === 'monte-carlo' && !mcEnabled && (
+                            <div className="flex items-center justify-end mb-3">
+                                <button
+                                    type="button"
+                                    onClick={() => setMcEnabled(true)}
+                                    className="px-3 py-1 text-xs font-medium rounded bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/30 transition-all"
+                                >
+                                    Show Uncertainty Config
+                                </button>
+                            </div>
+                        )}
+
+                        {predictionMode === 'monte-carlo' && mcEnabled && (
                             <div className="space-y-4 p-4 rounded-xl border border-emerald-500/20 bg-emerald-500/5 transition-all">
                                 <div className="flex justify-between items-start">
                                     <p className="text-xs text-emerald-200/70 max-w-[70%]">Define ranges for uncertain variables. The system will run simulations to predict probabilistic outcomes.</p>
-                                    <div className="flex flex-col items-end gap-1">
+                                    <div className="flex flex-col items-end gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => setMcEnabled(false)}
+                                            className="px-3 py-1 text-xs font-medium rounded bg-red-500/20 border border-red-500/40 text-red-300 hover:bg-red-500/30 transition-all"
+                                        >
+                                            Hide
+                                        </button>
                                         <label className="text-[10px] text-gray-400">Number of Simulations</label>
                                         <select
                                             value={numSimulations}
@@ -1268,31 +1364,39 @@ const CostPredictionView = ({ project, onBack }) => {
                                         </div>
                                     ))}
                                 </div>
+                            </div>
+                        )}
+                        <div className="pt-3">
+                            {predictionMode === 'single' ? (
+                                <button
+                                    type="submit"
+                                    disabled={loading}
+                                    className={`w-full px-6 py-3.5 rounded-xl font-bold text-sm tracking-wide transition-all duration-300 ${loading
+                                        ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                                        : 'bg-gradient-to-r from-amber-500 via-orange-500 to-amber-500 text-white hover:shadow-lg hover:shadow-amber-500/25 hover:scale-[1.01] active:scale-[0.99]'
+                                        }`}
+                                    style={loading ? {} : { backgroundSize: '200% 100%', animation: 'gradientShift 3s ease infinite' }}
+                                >
+                                    {loading ? (
+                                        <span className="flex items-center justify-center gap-2"><svg className="animate-spin h-4 w-4" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" /></svg> Predicting...</span>
+                                    ) : '🚀 Predict Cost Overrun (Point Estimate)'}
+                                </button>
+                            ) : (
                                 <button
                                     type="button"
                                     onClick={handleRunMonteCarlo}
                                     disabled={monteCarloLoading}
-                                    className="w-full mt-2 py-2.5 rounded-xl font-bold transition-all border border-emerald-500/40 bg-emerald-600/20 text-emerald-400 hover:bg-emerald-600/30"
+                                    className={`w-full px-6 py-3.5 rounded-xl font-bold text-sm tracking-wide transition-all duration-300 ${monteCarloLoading
+                                        ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                                        : 'bg-gradient-to-r from-emerald-500 via-teal-500 to-emerald-500 text-white hover:shadow-lg hover:shadow-emerald-500/25 hover:scale-[1.01] active:scale-[0.99]'
+                                        }`}
+                                    style={monteCarloLoading ? {} : { backgroundSize: '200% 100%', animation: 'gradientShift 3s ease infinite' }}
                                 >
-                                    {monteCarloLoading ? 'Running Simulations...' : '🎲 Run Monte Carlo Simulation'}
+                                    {monteCarloLoading ? (
+                                        <span className="flex items-center justify-center gap-2"><svg className="animate-spin h-4 w-4" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" /></svg> Running Simulations...</span>
+                                    ) : '🎲 Run Monte Carlo Risk Analysis'}
                                 </button>
-                            </div>
-                        )}
-
-                        <div className="pt-3">
-                            <button
-                                type="submit"
-                                disabled={loading}
-                                className={`w-full px-6 py-3.5 rounded-xl font-bold text-sm tracking-wide transition-all duration-300 ${loading
-                                    ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
-                                    : 'bg-gradient-to-r from-amber-500 via-orange-500 to-amber-500 text-white hover:shadow-lg hover:shadow-amber-500/25 hover:scale-[1.01] active:scale-[0.99]'
-                                    }`}
-                                style={loading ? {} : { backgroundSize: '200% 100%', animation: 'gradientShift 3s ease infinite' }}
-                            >
-                                {loading ? (
-                                    <span className="flex items-center justify-center gap-2"><svg className="animate-spin h-4 w-4" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" /><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" /></svg> Predicting...</span>
-                                ) : '🚀 Predict Cost Overrun'}
-                            </button>
+                            )}
                         </div>
                     </form>
                 </div>
@@ -1405,23 +1509,31 @@ const CostPredictionView = ({ project, onBack }) => {
                                 <h4 className="text-sm font-semibold text-gray-300 mb-6 uppercase tracking-wider">Distribution of Predicted Outcomes</h4>
                                 <div className="w-full h-64">
                                     <ResponsiveContainer width="100%" height="100%">
-                                        <BarChart data={monteCarloResult.histogram.counts.map((c, i) => ({
-                                            bin: `${monteCarloResult.histogram.bins[i]}%`,
-                                            count: c,
-                                            val: monteCarloResult.histogram.bins[i]
-                                        }))} margin={{ top: 20, right: 30, left: 0, bottom: 0 }}>
-                                            <XAxis dataKey="val" tickFormatter={(v) => Number(v).toFixed(1)} stroke="#64748b" fontSize={11} tickLine={false} axisLine={{ stroke: '#334155' }} />
+                                        <BarChart data={histogramChartData} margin={{ top: 20, right: 30, left: 0, bottom: 12 }}>
+                                            <XAxis
+                                                dataKey="binLabel"
+                                                interval="preserveStartEnd"
+                                                minTickGap={32}
+                                                tickFormatter={(v) => v}
+                                                stroke="#64748b"
+                                                fontSize={11}
+                                                tickLine={false}
+                                                axisLine={{ stroke: '#334155' }}
+                                            />
                                             <YAxis stroke="#64748b" fontSize={11} tickLine={false} axisLine={{ stroke: '#334155' }} />
                                             <RechartsTooltip
                                                 contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', borderRadius: '8px', color: '#f8fafc' }}
                                                 itemStyle={{ color: '#60a5fa' }}
                                                 formatter={(val) => [val, 'Simulations']}
-                                                labelFormatter={(label) => `Overrun: ${Number(label).toFixed(2)}%`}
+                                                labelFormatter={(_, payload) => {
+                                                    const range = payload?.[0]?.payload?.binRange;
+                                                    return `Overrun Range: ${range || 'N/A'}`;
+                                                }}
                                                 cursor={{ fill: '#334155', opacity: 0.4 }}
                                             />
                                             <Bar dataKey="count" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                                            <ReferenceLine x={monteCarloResult.p50} stroke="#60a5fa" strokeDasharray="3 3" label={{ position: 'top', value: `Expected (P50)`, fill: '#93c5fd', fontSize: 11 }} />
-                                            <ReferenceLine x={monteCarloResult.p90} stroke="#f87171" strokeDasharray="3 3" label={{ position: 'top', value: `Worst Case (P90)`, fill: '#fca5a5', fontSize: 11 }} />
+                                            <ReferenceLine x={`${Number(monteCarloResult.p50).toFixed(2)}`} stroke="#60a5fa" strokeDasharray="3 3" label={{ position: 'top', value: `Expected (P50)`, fill: '#93c5fd', fontSize: 11 }} />
+                                            <ReferenceLine x={`${Number(monteCarloResult.p90).toFixed(2)}`} stroke="#f87171" strokeDasharray="3 3" label={{ position: 'top', value: `Worst Case (P90)`, fill: '#fca5a5', fontSize: 11 }} />
                                         </BarChart>
                                     </ResponsiveContainer>
                                 </div>
@@ -1449,6 +1561,95 @@ const CostPredictionView = ({ project, onBack }) => {
                                             </li>
                                         ))}
                                     </ul>
+                                </div>
+                            )}
+
+                            {/* Save Monte Carlo Prediction Button */}
+                            {project && (
+                                <div className="bg-gradient-to-r from-emerald-600/20 via-teal-500/15 to-cyan-500/20 border border-emerald-500/30 rounded-xl p-4">
+                                    <div className="flex items-center justify-between gap-4 flex-wrap">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 rounded-lg bg-emerald-500/20 flex items-center justify-center">
+                                                <svg className="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+                                                </svg>
+                                            </div>
+                                            <div>
+                                                <h4 className="text-sm font-semibold text-white">Save This Simulation Scenario</h4>
+                                                <p className="text-xs text-emerald-200/70">Store Monte Carlo results for historical tracking</p>
+                                            </div>
+                                        </div>
+                                        <div className="flex items-center gap-3 w-full md:w-auto mt-2 md:mt-0">
+                                            <input
+                                                type="text"
+                                                value={scenarioName}
+                                                onChange={(e) => setScenarioName(e.target.value)}
+                                                className="px-3 py-2 bg-dark-700/80 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-500 w-full md:w-64"
+                                                placeholder="Scenario Name (e.g., Worst Case Inflation)"
+                                            />
+                                            <button
+                                                onClick={async () => {
+                                                    try {
+                                                        if (!projectId) {
+                                                            alert('❌ Error: No project selected.');
+                                                            return;
+                                                        }
+
+                                                        if (!monteCarloResult) {
+                                                            alert('❌ Error: No simulation result available to save.');
+                                                            return;
+                                                        }
+
+                                                        const timestamp = new Date().toLocaleString('en-US', {
+                                                            month: 'short',
+                                                            day: 'numeric',
+                                                            year: 'numeric',
+                                                            hour: '2-digit',
+                                                            minute: '2-digit'
+                                                        });
+                                                        const finalScenarioName = scenarioName.trim() || `Simulation - ${timestamp}`;
+
+                                                        const isMCHighRisk = (monteCarloResult.prediction_summary?.risk_level || '').includes('High');
+                                                        
+                                                        const result = await savePrediction(projectId, formValues, {
+                                                            scenarioName: finalScenarioName,
+                                                            notes: `Monte Carlo (${monteCarloResult.num_successful_simulations} sims), ${isMCHighRisk ? 'HIGH' : 'LOW'} Risk, ${monteCarloResult.mean}% Expected Overrun`,
+                                                            tags: ['monte-carlo', isMCHighRisk ? 'high-risk' : 'low-risk']
+                                                        }, monteCarloResult);
+
+                                                        if (result.success) {
+                                                            alert('✅ Simulation saved successfully!');
+                                                            setScenarioName(''); // clear input after saving
+                                                        } else {
+                                                            alert(`❌ Failed to save: ${result.error || 'Unknown error'}`);
+                                                        }
+                                                    } catch (error) {
+                                                        console.error('❌ Save error:', error);
+                                                        alert(`❌ Error saving simulation: ${error.message || 'Unknown error'}`);
+                                                    }
+                                                }}
+                                                disabled={savingPrediction}
+                                                className="px-5 py-2.5 bg-gradient-to-r from-emerald-500 to-teal-600 text-white font-semibold rounded-lg hover:shadow-lg hover:shadow-emerald-500/25 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 whitespace-nowrap"
+                                            >
+                                                {savingPrediction ? (
+                                                    <>
+                                                        <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                                        </svg>
+                                                        Saving...
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+                                                        </svg>
+                                                        Save
+                                                    </>
+                                                )}
+                                            </button>
+                                        </div>
+                                    </div>
                                 </div>
                             )}
                         </div>
@@ -1527,64 +1728,74 @@ const CostPredictionView = ({ project, onBack }) => {
                                                 <p className="text-xs text-green-200/70">Store for historical tracking and scenario comparison</p>
                                             </div>
                                         </div>
-                                        <button
-                                            onClick={async () => {
-                                                try {
-                                                    if (!projectId) {
-                                                        alert('❌ Error: No project selected.');
-                                                        return;
+                                        <div className="flex items-center gap-3 w-full md:w-auto mt-2 md:mt-0">
+                                            <input
+                                                type="text"
+                                                value={scenarioName}
+                                                onChange={(e) => setScenarioName(e.target.value)}
+                                                className="px-3 py-2 bg-dark-700/80 border border-white/10 rounded-lg text-sm text-white focus:outline-none focus:ring-2 focus:ring-green-500 w-full md:w-64"
+                                                placeholder="Scenario Name (e.g., Best Case Design)"
+                                            />
+                                            <button
+                                                onClick={async () => {
+                                                    try {
+                                                        if (!projectId) {
+                                                            alert('❌ Error: No project selected.');
+                                                            return;
+                                                        }
+
+                                                        if (!hasPrediction) {
+                                                            alert('❌ Error: No prediction available to save.');
+                                                            return;
+                                                        }
+
+                                                        const timestamp = new Date().toLocaleString('en-US', {
+                                                            month: 'short',
+                                                            day: 'numeric',
+                                                            year: 'numeric',
+                                                            hour: '2-digit',
+                                                            minute: '2-digit'
+                                                        });
+                                                        const finalScenarioName = scenarioName.trim() || `Prediction - ${timestamp}`;
+
+                                                        const result = await savePrediction(projectId, formValues, {
+                                                            scenarioName: finalScenarioName,
+                                                            notes: `${isHighRisk ? 'HIGH' : 'LOW'} Risk, ${overrunPct?.toFixed(1)}% Overrun`,
+                                                            tags: [isHighRisk ? 'high-risk' : 'low-risk']
+                                                        });
+
+                                                        if (result.success) {
+                                                            alert('✅ Prediction saved successfully!');
+                                                            setScenarioName(''); // clear input after saving
+                                                        } else {
+                                                            alert(`❌ Failed to save: ${result.error || 'Unknown error'}`);
+                                                        }
+                                                    } catch (error) {
+                                                        console.error('❌ Save error:', error);
+                                                        alert(`❌ Error saving prediction: ${error.message || 'Unknown error'}`);
                                                     }
-
-                                                    if (!hasPrediction) {
-                                                        alert('❌ Error: No prediction available to save.');
-                                                        return;
-                                                    }
-
-                                                    const timestamp = new Date().toLocaleString('en-US', {
-                                                        month: 'short',
-                                                        day: 'numeric',
-                                                        year: 'numeric',
-                                                        hour: '2-digit',
-                                                        minute: '2-digit'
-                                                    });
-                                                    const scenarioName = `Prediction - ${timestamp}`;
-
-                                                    const result = await savePrediction(projectId, formValues, {
-                                                        scenarioName,
-                                                        notes: `${isHighRisk ? 'HIGH' : 'LOW'} Risk, ${overrunPct?.toFixed(1)}% Overrun`,
-                                                        tags: [isHighRisk ? 'high-risk' : 'low-risk']
-                                                    });
-
-                                                    if (result.success) {
-                                                        alert('✅ Prediction saved successfully!');
-                                                    } else {
-                                                        alert(`❌ Failed to save: ${result.error || 'Unknown error'}`);
-                                                    }
-                                                } catch (error) {
-                                                    console.error('❌ Save error:', error);
-                                                    alert(`❌ Error saving prediction: ${error.message || 'Unknown error'}`);
-                                                }
-                                            }}
-                                            disabled={savingPrediction}
-                                            className="px-5 py-2.5 bg-gradient-to-r from-green-500 to-emerald-600 text-white font-semibold rounded-lg hover:shadow-lg hover:shadow-green-500/25 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
-                                        >
-                                            {savingPrediction ? (
-                                                <>
-                                                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                                                    </svg>
-                                                    Saving...
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
-                                                    </svg>
-                                                    Save Prediction
-                                                </>
-                                            )}
-                                        </button>
+                                                }}
+                                                disabled={savingPrediction}
+                                                className="px-5 py-2.5 bg-gradient-to-r from-green-500 to-emerald-600 text-white font-semibold rounded-lg hover:shadow-lg hover:shadow-green-500/25 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 whitespace-nowrap"
+                                            >
+                                                {savingPrediction ? (
+                                                    <>
+                                                        <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                                                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                                                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                                        </svg>
+                                                        Saving...
+                                                    </>
+                                                ) : (
+                                                    <>
+                                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4" />
+                                                        </svg>
+                                                        Save
+                                                    </>
+                                                )}
+                                            </button>
+                                        </div>
                                     </div>
                                 </div>
                             )}

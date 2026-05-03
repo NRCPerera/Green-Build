@@ -20,6 +20,7 @@ const {
     recordActualOutcome,
     handleMonteCarloPrediction
 } = require('../controllers/costPredictionController');
+const { getAllContractorProfiles } = require('../controllers/costPredictionController');
 const { authenticate } = require('../middleware/authMiddleware');
 
 const router = express.Router();
@@ -191,5 +192,12 @@ router.get('/health', async (req, res, next) => {
         });
     }
 });
+
+/**
+ * GET /api/cost-prediction/contractor-profiles
+ * 
+ * Get all contractor profiles with historical performance metrics
+ */
+router.get('/contractor-profiles', getAllContractorProfiles);
 
 module.exports = router;

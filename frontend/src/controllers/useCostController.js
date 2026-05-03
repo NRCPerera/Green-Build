@@ -227,12 +227,13 @@ const useCostController = () => {
     const [predictionHistory, setPredictionHistory] = useState([]);
     const [loadingHistory, setLoadingHistory] = useState(false);
 
-    const savePrediction = useCallback(async (projectId, formValues, metadata = {}) => {
+    const savePrediction = useCallback(async (projectId, formValues, metadata = {}, predictionDataOverride = null) => {
         console.log('🔄 [savePrediction] Called with:', { projectId, metadata });
-        console.log('🔄 [savePrediction] Form values:', formValues);
-        console.log('🔄 [savePrediction] Current prediction:', costPrediction);
+        
+        // Use override if provided, otherwise default to single cost prediction
+        const targetPrediction = predictionDataOverride || costPrediction;
 
-        if (!costPrediction) {
+        if (!targetPrediction) {
             console.error('❌ [savePrediction] No prediction available');
             return { success: false, error: 'No prediction to save' };
         }
@@ -248,26 +249,40 @@ const useCostController = () => {
             });
 
             console.log('📦 [savePrediction] ML Payload:', mlPayload);
-            console.log('📦 [savePrediction] Prediction object:', {
-                predicted_cost_overrun_pct: costPrediction.predicted_cost_overrun_pct,
-                predicted_high_risk_class: costPrediction.predicted_high_risk_class,
-                predicted_high_risk_probability: costPrediction.predicted_high_risk_probability,
-                model_version: costPrediction.model_version
-            });
-            console.log('📦 [savePrediction] Top risk factors count:', (costPrediction.top_risk_factors || []).length);
-            console.log('📦 [savePrediction] Risk scorecard count:', (costPrediction.risk_scorecard || []).length);
+
+            // Determine if we are saving a single prediction or Monte Carlo
+            const isMonteCarlo = !!targetPrediction.num_successful_simulations;
+            let predictionToSave = {};
+            let topRiskFactors = [];
+            let riskScorecard = [];
+
+            if (isMonteCarlo) {
+                // Map Monte Carlo results to the expected schema
+                predictionToSave = {
+                    predicted_cost_overrun_pct: targetPrediction.mean,
+                    predicted_high_risk_class: (targetPrediction.prediction_summary?.risk_level || '').includes('High') ? 1 : 0,
+                    predicted_high_risk_probability: null, // or use some confidence metric
+                    model_version: 'monte_carlo_batch_v1'
+                };
+                topRiskFactors = targetPrediction.risk_drivers?.map(feature => ({ feature, impact: 1 })) || 
+                                 Object.entries(targetPrediction.sensitivities || {}).map(([feature, impact]) => ({ feature, impact }));
+            } else {
+                predictionToSave = {
+                    predicted_cost_overrun_pct: targetPrediction.predicted_cost_overrun_pct,
+                    predicted_high_risk_class: targetPrediction.predicted_high_risk_class,
+                    predicted_high_risk_probability: targetPrediction.predicted_high_risk_probability,
+                    model_version: targetPrediction.model_version
+                };
+                topRiskFactors = targetPrediction.top_risk_factors || [];
+                riskScorecard = targetPrediction.risk_scorecard || [];
+            }
 
             const response = await costApi.savePrediction(
                 projectId,
                 mlPayload,
-                {
-                    predicted_cost_overrun_pct: costPrediction.predicted_cost_overrun_pct,
-                    predicted_high_risk_class: costPrediction.predicted_high_risk_class,
-                    predicted_high_risk_probability: costPrediction.predicted_high_risk_probability,
-                    model_version: costPrediction.model_version
-                },
-                costPrediction.top_risk_factors || [],
-                costPrediction.risk_scorecard || [],
+                predictionToSave,
+                topRiskFactors,
+                riskScorecard,
                 metadata
             );
 
@@ -281,7 +296,7 @@ const useCostController = () => {
         } finally {
             setSavingPrediction(false);
         }
-    }, [costPrediction]);
+    }, [costPrediction, monteCarloResult]);
 
     const fetchPredictionHistory = useCallback(async (projectId, filters = {}) => {
         setLoadingHistory(true);

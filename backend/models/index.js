@@ -1,8 +1,4 @@
-/**
- * Models Index
- * 
- * Central export point for all MongoDB models.
- */
+
 
 const User = require('./User');
 const Project = require('./Project');
@@ -12,6 +8,7 @@ const Rate = require('./Rate');
 const DelayPrediction = require('./DelayPrediction');
 const SustainabilityAnalysis = require('./SustainabilityAnalysis');
 const CostPrediction = require('./CostPrediction');
+const ContractorProfile = require('./ContractorProfile');
 
 // Legacy models (keeping for backward compatibility)
 const { calculateCosts } = require('./costModel');
@@ -27,6 +24,7 @@ module.exports = {
     DelayPrediction,
     SustainabilityAnalysis,
     CostPrediction,
+    ContractorProfile,
 
     // Legacy utility functions
     calculateCosts,
