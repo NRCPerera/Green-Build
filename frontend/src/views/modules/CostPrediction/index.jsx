@@ -1077,7 +1077,7 @@ const CostPredictionView = ({ project, onBack }) => {
                                     {indicatorsLoading && 'Fetching economic indicators from FRED...'}
                                     {!indicatorsLoading && indicatorMetadata && (
                                         <span>
-                                            Source: {indicatorMetadata.source} | Year: {indicatorMetadata.year}
+                                            Year: {indicatorMetadata.year}
                                             {indicatorMetadata.fetchedAt ? ` | Updated: ${new Date(indicatorMetadata.fetchedAt).toLocaleTimeString()}` : ''}
                                         </span>
                                     )}
