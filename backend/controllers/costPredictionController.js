@@ -10,6 +10,7 @@
 const axios = require('axios');
 const CostPrediction = require('../models/CostPrediction');
 const Project = require('../models/Project');
+const ContractorProfile = require('../models/ContractorProfile');
 
 const buildPreProjectResponse = (raw = {}) => {
     const predictedCostOverrunPct =
@@ -53,8 +54,38 @@ const buildPreProjectResponse = (raw = {}) => {
     );
 };
 
-/**
- * Handle pre-project cost overrun prediction
+/** * Enrich contractor data with historical averages
+ * 
+ * Looks up the contractor's CIDA grade and replaces Contractor_Risk_Score
+ * and Change_Order_Freq with historical averages from the database.
+ * If lookup fails, uses original values (fail-safe).
+ * 
+ * @param {Object} inputData - Request features object
+ */
+async function enrichContractorData(inputData) {
+    try {
+        if (!inputData.CIDA_Grade) {
+            return; // No grade provided, skip enrichment
+        }
+        const profile = await ContractorProfile.findOne({
+            cida_grade: inputData.CIDA_Grade
+        });
+        if (profile) {
+            inputData.Contractor_Risk_Score = profile.avg_overrun_pct;
+            inputData.Change_Order_Freq = Math.round(
+                profile.avg_change_order_freq
+            );
+            console.log(`[Enrichment] Enhanced with profile for ${inputData.CIDA_Grade}:`, {
+                Contractor_Risk_Score: inputData.Contractor_Risk_Score,
+                Change_Order_Freq: inputData.Change_Order_Freq
+            });
+        }
+    } catch (err) {
+        console.error('Contractor enrichment failed, using original values:', err.message);
+    }
+}
+
+/** * Handle pre-project cost overrun prediction
  * POST /api/cost-prediction/pre-project
  * 
  * @param {Object} req - Express request object
@@ -72,6 +103,9 @@ const handlePreProjectPrediction = async (req, res) => {
                 message: 'Request body must contain project features'
             });
         }
+
+        // Enrich contractor data with historical averages
+        await enrichContractorData(features);
 
         // Get ML service URL from environment or use default
         const mlServiceUrl = process.env.COST_ML_SERVICE_URL || 'http://localhost:8085';
@@ -242,62 +276,76 @@ const handleMonteCarloPrediction = async (req, res) => {
             sampledInputs[key] = [];
         });
 
-        const CHUNK_SIZE = 50;
+        // Generate all simulation inputs
+        const allSimulationInputs = [];
+        const allRunSamplings = [];
 
-        for (let i = 0; i < num_simulations; i += CHUNK_SIZE) {
-            const chunk = Math.min(CHUNK_SIZE, num_simulations - i);
-            const promises = [];
-            const chunkInputsList = [];
+        for (let i = 0; i < num_simulations; i++) {
+            const simulationInput = { ...fixed_inputs };
+            const runSamplings = {};
 
-            for (let j = 0; j < chunk; j++) {
-                const simulationInput = { ...fixed_inputs };
-                const runSamplings = {};
+            uncertainKeys.forEach(key => {
+                const range = uncertain_ranges[key];
+                let val = randomUniform(range.min, Math.max(range.min, range.max));
 
-                uncertainKeys.forEach(key => {
-                    const range = uncertain_ranges[key];
-                    let val = randomUniform(range.min, Math.max(range.min, range.max));
+                // Enforce integer types for Pydantic strict mode
+                const intFields = [
+                    'Floors', 'Area_SQFT', 'Year_of_Tender', 'Contractor_Experience_Years',
+                    'Complexity_Score', 'Change_Order_Freq', 'Start_Month', 'Start_Quarter', 'Start_Weekday'
+                ];
+                if (intFields.includes(key)) {
+                    val = Math.round(val);
+                }
 
-                    // Enforce integer types for Pydantic strict mode
-                    const intFields = [
-                        'Floors', 'Area_SQFT', 'Year_of_Tender', 'Contractor_Experience_Years',
-                        'Complexity_Score', 'Change_Order_Freq', 'Start_Month', 'Start_Quarter', 'Start_Weekday'
-                    ];
-                    if (intFields.includes(key)) {
-                        val = Math.round(val);
-                    }
+                simulationInput[key] = val;
+                runSamplings[key] = val;
+            });
+            allSimulationInputs.push(simulationInput);
+            allRunSamplings.push(runSamplings);
+        }
 
-                    simulationInput[key] = val;
-                    runSamplings[key] = val;
-                });
-                chunkInputsList.push(runSamplings);
+        // Send a single batch request
+        console.log(`[Monte Carlo] Sending batch request of size ${allSimulationInputs.length}...`);
+        
+        try {
+            const response = await axios.post(
+                `${mlServiceUrl}/predict/batch`,
+                allSimulationInputs,
+                {
+                    headers: { 'Content-Type': 'application/json' },
+                    timeout: 60000 // Increased timeout for batch processing
+                }
+            );
 
-                promises.push(
-                    axios.post(`${mlServiceUrl}/predict/pre-project`, simulationInput, {
-                        headers: { 'Content-Type': 'application/json' },
-                        timeout: 30000
-                    })
-                        .then(res => res.data)
-                        .catch(err => null)
-                );
+            const batchData = response.data;
+            const validResults = batchData.results || [];
+            const errors = batchData.errors || [];
+
+            if (errors.length > 0) {
+                console.warn(`[Monte Carlo] Batch prediction had ${errors.length} validation errors. Samples:`, errors.slice(0, 3));
             }
 
-            const chunkResponses = await Promise.all(promises);
+            validResults.forEach(item => {
+                const idx = item.index;
+                const sanitized = buildPreProjectResponse(item.data);
 
-            chunkResponses.forEach((response, idx) => {
-                if (response !== null) {
-                    const sanitized = buildPreProjectResponse(response);
+                if (sanitized && sanitized.predicted_cost_overrun_pct !== null && sanitized.predicted_cost_overrun_pct !== undefined) {
+                    results.push(sanitized.predicted_cost_overrun_pct);
 
-                    if (sanitized && sanitized.predicted_cost_overrun_pct !== null && sanitized.predicted_cost_overrun_pct !== undefined) {
-                        results.push(sanitized.predicted_cost_overrun_pct);
-
-                        // Only add to sampledInputs if the request succeeded
-                        const successfulSampling = chunkInputsList[idx];
-                        uncertainKeys.forEach(key => {
-                            sampledInputs[key].push(successfulSampling[key]);
-                        });
-                    }
+                    // Only add to sampledInputs if the request succeeded
+                    const successfulSampling = allRunSamplings[idx];
+                    uncertainKeys.forEach(key => {
+                        sampledInputs[key].push(successfulSampling[key]);
+                    });
                 }
             });
+            
+        } catch (err) {
+            console.error('[Monte Carlo] Batch request failed:', err.message);
+            if (err.response) {
+                console.error('[Monte Carlo] Batch request error details:', err.response.data);
+            }
+            return res.status(500).json({ success: false, error: 'Batch simulation failed', message: err.message });
         }
 
         if (results.length === 0) {
@@ -926,5 +974,13 @@ module.exports = {
     updatePrediction,
     deletePrediction,
     recordActualOutcome,
-    handleMonteCarloPrediction
+    handleMonteCarloPrediction,
+    getAllContractorProfiles: async (req, res) => {
+        try {
+            const profiles = await ContractorProfile.find().sort({ cida_grade: 1 });
+            res.json({ success: true, data: profiles });
+        } catch (error) {
+            res.status(500).json({ success: false, error: error.message });
+        }
+    }
 };

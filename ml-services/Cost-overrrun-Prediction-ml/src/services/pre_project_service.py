@@ -166,3 +166,85 @@ def predict_pre_project(payload: dict[str, Any], artifacts: PreProjectArtifacts)
         "risk_scorecard": risk_scorecard,
         "model_version": "pre_project_v2_sklearn",
     }
+
+
+def predict_many(payloads: list[dict[str, Any]], artifacts: PreProjectArtifacts) -> list[dict[str, Any]]:
+    """
+    Predict cost overrun for multiple pre-projects using trained models efficiently in batch.
+    """
+    if not payloads:
+        return []
+        
+    categorical_features = ["Project_Type", "Province", "District", "CIDA_Grade", "Season"]
+    
+    df_original = pd.DataFrame(payloads)
+    df_encoded = pd.get_dummies(df_original, columns=categorical_features, drop_first=False)
+    df_aligned = df_encoded.reindex(columns=artifacts.feature_names, fill_value=0)
+    
+    missing_cols = [col for col in artifacts.feature_names if col not in df_aligned.columns]
+    if missing_cols:
+        raise ValueError(f"Missing required features after alignment: {missing_cols}")
+        
+    reg_preds = artifacts.regressor_model.predict(df_aligned)
+    clf_pred_classes = artifacts.classifier_model.predict(df_aligned)
+    clf_pred_probas = artifacts.classifier_model.predict_proba(df_aligned)
+    clf_pred_probs = clf_pred_probas[:, 1]
+    
+    # Calculate SHAP for all
+    shap_values_class1 = None
+    if artifacts.shap_explainer is not None:
+        shap_values = artifacts.shap_explainer.shap_values(df_aligned)
+        if isinstance(shap_values, list):
+            shap_values_class1 = shap_values[1]
+        else:
+            if len(shap_values.shape) == 3:
+                shap_values_class1 = shap_values[:, :, 1]
+            else:
+                shap_values_class1 = shap_values
+                
+    results = []
+    for i, payload in enumerate(payloads):
+        top_risk_factors = []
+        risk_scorecard = []
+        
+        if shap_values_class1 is not None:
+            sample_shap_values = shap_values_class1[i] if isinstance(shap_values_class1, np.ndarray) else shap_values_class1[i]
+            abs_shap_values = np.abs(sample_shap_values)
+            top_indices = np.argsort(abs_shap_values)[::-1][:10]
+            top_5_indices = np.argsort(abs_shap_values)[::-1][:5]
+            
+            for idx in top_indices:
+                if idx < len(artifacts.feature_names):
+                    feature_name = artifacts.feature_names[idx]
+                    impact = float(abs_shap_values[idx])
+                    top_risk_factors.append({
+                        "feature": feature_name,
+                        "impact": impact,
+                    })
+                    
+            for idx in top_5_indices:
+                if idx < len(artifacts.feature_names):
+                    feature_name = artifacts.feature_names[idx]
+                    shap_value = float(sample_shap_values[idx])
+                    # Pass a 1-row DataFrame mimicking the original df_aligned for this sample
+                    feature_value = _get_original_feature_value(feature_name, payload, df_aligned.iloc[[i]])
+                    impact_level = _get_impact_level(shap_value)
+                    status = _get_status_recommendation(feature_name)
+                    
+                    risk_scorecard.append({
+                        "feature": feature_name,
+                        "feature_value": feature_value,
+                        "impact": impact_level,
+                        "status": status,
+                    })
+
+        results.append({
+            "predicted_cost_overrun_pct": float(reg_preds[i]),
+            "predicted_high_risk_class": int(clf_pred_classes[i]),
+            "predicted_high_risk_probability": float(clf_pred_probs[i]),
+            "top_risk_factors": top_risk_factors,
+            "risk_scorecard": risk_scorecard,
+            "model_version": "pre_project_v2_sklearn",
+        })
+        
+    return results

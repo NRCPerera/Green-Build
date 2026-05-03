@@ -79,3 +79,16 @@ class PreProjectResponse(BaseModel):
         description="Top 5 risk factors with categorized impact levels and action recommendations."
     )
     model_version: str = Field(..., description="Model version identifier.")
+
+
+class BatchItemResult(BaseModel):
+    index: int
+    data: PreProjectResponse
+
+class BatchItemError(BaseModel):
+    index: int
+    error: str
+
+class PreProjectBatchResponse(BaseModel):
+    results: list[BatchItemResult]
+    errors: list[BatchItemError]
