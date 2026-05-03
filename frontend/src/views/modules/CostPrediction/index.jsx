@@ -152,6 +152,7 @@ const CostPredictionView = ({ project, onBack }) => {
     // Prediction Mode State ('single' or 'monte-carlo')
     const [predictionMode, setPredictionMode] = useState('single');
     const [scenarioName, setScenarioName] = useState(''); // User defined name for saving prediction
+    const [mcEnabled, setMcEnabled] = useState(false);
 
     // Monte Carlo State
     const [mcRanges, setMcRanges] = useState({
@@ -1286,11 +1287,30 @@ const CostPredictionView = ({ project, onBack }) => {
                             </div>
                         )}
 
-                        {predictionMode === 'monte-carlo' && (
+                        {predictionMode === 'monte-carlo' && !mcEnabled && (
+                            <div className="flex items-center justify-end mb-3">
+                                <button
+                                    type="button"
+                                    onClick={() => setMcEnabled(true)}
+                                    className="px-3 py-1 text-xs font-medium rounded bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 hover:bg-emerald-500/30 transition-all"
+                                >
+                                    Show Uncertainty Config
+                                </button>
+                            </div>
+                        )}
+
+                        {predictionMode === 'monte-carlo' && mcEnabled && (
                             <div className="space-y-4 p-4 rounded-xl border border-emerald-500/20 bg-emerald-500/5 transition-all">
                                 <div className="flex justify-between items-start">
                                     <p className="text-xs text-emerald-200/70 max-w-[70%]">Define ranges for uncertain variables. The system will run simulations to predict probabilistic outcomes.</p>
-                                    <div className="flex flex-col items-end gap-1">
+                                    <div className="flex flex-col items-end gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => setMcEnabled(false)}
+                                            className="px-3 py-1 text-xs font-medium rounded bg-red-500/20 border border-red-500/40 text-red-300 hover:bg-red-500/30 transition-all"
+                                        >
+                                            Hide
+                                        </button>
                                         <label className="text-[10px] text-gray-400">Number of Simulations</label>
                                         <select
                                             value={numSimulations}
