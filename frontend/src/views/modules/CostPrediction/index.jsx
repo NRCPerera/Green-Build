@@ -154,6 +154,7 @@ const CostPredictionView = ({ project, onBack }) => {
     const [scenarioName, setScenarioName] = useState(''); // User defined name for saving prediction
 
     // Monte Carlo State
+    const [mcRanges, setMcRanges] = useState({
         Inflation_Rate: { min: Math.max((formValues.Inflation_Rate || 5) - 2, -10), max: Math.min((formValues.Inflation_Rate || 5) + 5, 50) },
         Exchange_Rate_LKR: { min: Math.max((formValues.Exchange_Rate_LKR || 300) - 10, 100), max: Math.min((formValues.Exchange_Rate_LKR || 300) + 20, 500) },
         Material_Index: { min: Math.max((formValues.Material_Index || 120) - 10, 50), max: Math.min((formValues.Material_Index || 120) + 20, 500) },
@@ -1343,6 +1344,8 @@ const CostPredictionView = ({ project, onBack }) => {
                                         </div>
                                     ))}
                                 </div>
+                            </div>
+                        )}
                         <div className="pt-3">
                             {predictionMode === 'single' ? (
                                 <button
